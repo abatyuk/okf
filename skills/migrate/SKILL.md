@@ -1,6 +1,6 @@
 ---
-name: okf-migrate
-description: Use this when the user wants to migrate existing documentation into an OKF bundle — "migrate this spec/plan/README into okf", "convert our docs to concepts", "import this markdown as OKF concepts", "turn these design docs into a bundle". Classifies each source document into an ontology concept type, writes conformant frontmatter, attributes the original as typed sources[], and validates the result. For raw-repo research/ingest use okf-ingest; for fresh bundles use okf-init.
+name: migrate
+description: Use this when the user wants to migrate existing documentation into an OKF bundle — "migrate this spec/plan/README into okf", "convert our docs to concepts", "import this markdown as OKF concepts", "turn these design docs into a bundle". Classifies each source document into an ontology concept type, writes conformant frontmatter, attributes the original as typed sources[], and validates the result. For raw-repo research/ingest use okf:ingest; for fresh bundles use okf:init.
 ---
 
 # Migrate existing documentation into an OKF bundle
@@ -32,7 +32,7 @@ applies to anything already in the bundle.
 
 1. **Locate the target bundle and ontology.** Ensure a bundle exists (`okf init <bundle>` if
    not) and inspect the concept types available: `okf ontology list`, `okf ontology show
-   <name>`. If no ontology fits the docs, pause and run `okf-ontology` (or `okf-infer-ontology`)
+   <name>`. If no ontology fits the docs, pause and run `okf:ontology` (or `okf:infer-ontology`)
    first — you classify against real types.
 
 2. **Inventory the source docs.** For each markdown/text file to migrate, read it and decide:
@@ -73,5 +73,5 @@ applies to anything already in the bundle.
   guessing — OKF permits missing optional fields.
 - Every migrated concept should carry at least one `sources[]` entry pointing back at its
   origin, so future drift is detectable.
-- Trust tier stays `unverified` after migration; raising it is the job of `okf-review-attest`.
+- Trust tier stays `unverified` after migration; raising it is the job of `okf:review-attest`.
 - Prefer `--json` output when parsing lint/validate results programmatically.

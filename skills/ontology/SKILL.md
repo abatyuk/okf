@@ -1,6 +1,6 @@
 ---
-name: okf-ontology
-description: Use this when the user wants to manage the OKF ontology — "add a concept type", "define a new type with these fields", "update the ontology", "add a reference rule between types", "remove a concept type", "change field requirements". Shapes concept types (typed fields + typed reference rules with cardinality) and commits them via okf ontology add/update/remove so ontology.yaml stays valid and lossless. To reverse-engineer an ontology from an existing bundle, use okf-infer-ontology instead.
+name: ontology
+description: Use this when the user wants to manage the OKF ontology — "add a concept type", "define a new type with these fields", "update the ontology", "add a reference rule between types", "remove a concept type", "change field requirements". Shapes concept types (typed fields + typed reference rules with cardinality) and commits them via okf ontology add/update/remove so ontology.yaml stays valid and lossless. To reverse-engineer an ontology from an existing bundle, use okf:infer-ontology instead.
 ---
 
 # Manage the ontology (ontology.yaml)

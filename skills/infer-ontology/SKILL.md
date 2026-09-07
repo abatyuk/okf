@@ -1,6 +1,6 @@
 ---
-name: okf-infer-ontology
-description: Use this when the user wants to derive an ontology from an existing OKF bundle — "infer an ontology from this bundle", "propose an ontology.yaml", "what types/fields does this bundle actually use?", "reverse-engineer the schema", "bootstrap an ontology from existing concepts". Analyzes observed types, common fields, and reference patterns across the bundle, proposes an ontology.yaml, and commits it via okf ontology. The reverse of authoring an ontology by hand; a fast on-ramp for okf-migrate/okf-ingest. To author types from scratch, use okf-ontology.
+name: infer-ontology
+description: Use this when the user wants to derive an ontology from an existing OKF bundle — "infer an ontology from this bundle", "propose an ontology.yaml", "what types/fields does this bundle actually use?", "reverse-engineer the schema", "bootstrap an ontology from existing concepts". Analyzes observed types, common fields, and reference patterns across the bundle, proposes an ontology.yaml, and commits it via okf ontology. The reverse of authoring an ontology by hand; a fast on-ramp for okf:migrate/okf:ingest. To author types from scratch, use okf:ontology.
 ---
 
 # Infer an ontology from an existing bundle

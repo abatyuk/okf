@@ -7,7 +7,8 @@ deterministic "hands" beneath a set of agent skills that do the judgment work.
 
 - **Deterministic core** (`okf-core`) — parse, validate, lint, query, graph, fingerprint, render.
 - **Thin CLI** (`okf-cli`) — 28 commands, grouped by verb, with a machine-discoverable schema.
-- **Agent skills** (`.claude/skills/`) — migrate, ingest, update, retrieve, manage ontology, etc.
+- **Agent skills** (`skills/`) — packaged as the **`okf` Claude Code plugin**: migrate, ingest,
+  update, retrieve, manage ontology, etc. (see [Claude Code plugin](#claude-code-plugin)).
 
 See `INTENT.md` for the design rationale and `ARCHITECTURE.md` for the crate/module layout.
 
@@ -36,7 +37,7 @@ Requires a recent stable Rust. `git` on `PATH` is needed only for git-based sour
 ### Generated references
 
 Two doc surfaces are generated from `okf schema` and must be regenerated when the CLI changes:
-the per-skill CLI reference (`.claude/skills/*/okf-cli-reference.md`) and the `## Arguments`
+the per-skill CLI reference (`skills/*/okf-cli-reference.md`) and the `## Arguments`
 section of each command concept (`knowledge/commands/*.md`). `cargo xtask install` / `cargo
 xtask build` do this for you; `cargo xtask docs` runs it on its own, and `cargo xtask docs
 --check` fails (exit 1) if anything is stale — wire that into CI. A bare `cargo build` /
@@ -150,6 +151,37 @@ re-records them after you've reconciled a change.
 A project-local `ontology.yaml` (outside the bundle, so the bundle stays spec-pure) defines
 concept types, their typed fields, and typed reference rules with cardinality. `lint` enforces
 it advisorily; `add` scaffolds from it. Manage it with `okf ontology add/update/remove`.
+
+## Claude Code plugin
+
+The agent skills ship as a [Claude Code](https://code.claude.com) plugin named **`okf`**, served
+from this repo as a single-plugin marketplace. Manifests live in `.claude-plugin/`
+(`marketplace.json` + `plugin.json`); the skills are auto-discovered from `skills/`.
+
+Install:
+
+```text
+/plugin marketplace add <owner>/<repo>   # this repo on GitHub, or a full git URL / local path
+/plugin install okf
+```
+
+The skills are then invokable namespaced by the plugin:
+
+| Skill | Invoke |
+|-------|--------|
+| Start a new bundle | `/okf:init` |
+| Migrate existing docs | `/okf:migrate` |
+| Ingest a repo | `/okf:ingest` |
+| Answer questions (retrieval) | `/okf:retrieval` |
+| Manage the ontology | `/okf:ontology` |
+| Infer an ontology | `/okf:infer-ontology` |
+| Sync docs after changes | `/okf:update` |
+| Review & attest | `/okf:review-attest` |
+| Reorganize the tree | `/okf:reorganize` |
+
+The skills drive the `okf` CLI, so install the binary too (`cargo install --path crates/okf-cli`,
+or `cargo xtask install`). Each skill bundles a generated `okf-cli-reference.md` it reads from its
+own directory, so it never has to probe the CLI to learn arguments.
 
 ## Development
 

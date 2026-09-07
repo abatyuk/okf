@@ -11,8 +11,8 @@
 //! deadlock re-entering cargo. So the regenerate step is bolted onto the build/install commands
 //! here instead: use `cargo xtask install` (not bare `cargo install`) to keep references current.
 //!
-//! "Schema-derived docs" = the CLI argument reference bundled into every skill
-//! (`.claude/skills/*/okf-cli-reference.md`) and the `## Arguments` section of every command
+//! "Schema-derived docs" = the CLI argument reference bundled into every plugin skill
+//! (`skills/*/okf-cli-reference.md`) and the `## Arguments` section of every command
 //! concept (`knowledge/commands/*.md`). Both are generated from `okf schema --json`, so this is
 //! the single command that keeps them in lockstep with the CLI. Type `## Schema` sections are
 //! curated (they mix real Rust items with serialized-shape docs) and are not regenerated here.
@@ -129,9 +129,9 @@ fn rel(root: &Path, p: &Path) -> String {
     p.strip_prefix(root).unwrap_or(p).display().to_string()
 }
 
-/// The skill directories that bundle the CLI reference (those containing a `SKILL.md`).
+/// The plugin skill directories that bundle the CLI reference (those containing a `SKILL.md`).
 fn skill_dirs(root: &Path) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = std::fs::read_dir(root.join(".claude/skills"))
+    let mut dirs: Vec<PathBuf> = std::fs::read_dir(root.join("skills"))
         .expect("skills dir")
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.join("SKILL.md").exists())

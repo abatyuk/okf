@@ -1,6 +1,6 @@
 ---
-name: okf-reorganize
-description: Use this when the user wants to restructure an OKF bundle's layout — "reorganize the bundle", "move these concepts into a new folder", "rename this concept", "restructure the directory tree", "regroup concepts by type/domain", "clean up the bundle structure". Restructures the tree using okf mv so every inbound link is rewritten and nothing dangles. Because a concept id IS its file path, a naive move silently breaks references — always go through okf mv. For editing content or ontology, use okf-update / okf-ontology.
+name: reorganize
+description: Use this when the user wants to restructure an OKF bundle's layout — "reorganize the bundle", "move these concepts into a new folder", "rename this concept", "restructure the directory tree", "regroup concepts by type/domain", "clean up the bundle structure". Restructures the tree using okf mv so every inbound link is rewritten and nothing dangles. Because a concept id IS its file path, a naive move silently breaks references — always go through okf mv. For editing content or ontology, use okf:update / okf:ontology.
 ---
 
 # Reorganize / refactor a bundle (links stay intact)
@@ -60,7 +60,7 @@ know its exact path** (from `okf resolve` or an `okf show --json` record), and p
 
 ## Guardrails
 - **Only `okf mv` moves concepts.** Any other rename mechanism breaks the id↔path↔link invariant.
-- Don't mix content rewrites into a reorganization — route those through `okf-update` separately
+- Don't mix content rewrites into a reorganization — route those through `okf:update` separately
   so the diff stays reviewable.
 - Keep the human in the loop on the target layout; structure is subjective and expensive to redo.
 - Prefer small batches with a lint check between them over one giant move.

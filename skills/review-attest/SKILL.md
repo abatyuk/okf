@@ -1,6 +1,6 @@
 ---
-name: okf-review-attest
-description: Use this when the user wants to review and attest OKF concepts to raise their trust — "verify these concepts", "mark this as human-reviewed", "attest the bundle", "raise the trust tier", "sign off on these docs", "record that a human/process checked this". Walks a human or agent through verifying concepts and appends verified entries via okf verify, driving concepts up the trust tiers (unverified → machine-confirmed → human-reviewed). Read-only Q&A is okf-retrieval; syncing drift is okf-update.
+name: review-attest
+description: Use this when the user wants to review and attest OKF concepts to raise their trust — "verify these concepts", "mark this as human-reviewed", "attest the bundle", "raise the trust tier", "sign off on these docs", "record that a human/process checked this". Walks a human or agent through verifying concepts and appends verified entries via okf verify, driving concepts up the trust tiers (unverified → machine-confirmed → human-reviewed). Read-only Q&A is okf:retrieval; syncing drift is okf:update.
 ---
 
 # Review & attest — raise concepts up the trust tiers
@@ -32,7 +32,7 @@ know its exact path** (from `okf resolve` or an `okf show --json` record), and p
 1. **Find what needs review.** Prioritize with `okf list <bundle> --json` (each record carries
    the derived `trust_tier`) and `okf stats <bundle>` (trust-tier distribution). Target
    `unverified` concepts, and re-review anything recently changed. Cross-check `okf stale
-   <bundle>` — a drifted concept should be reconciled (via `okf-update` + `okf refresh`) before
+   <bundle>` — a drifted concept should be reconciled (via `okf:update` + `okf refresh`) before
    it's attested, not signed off while wrong.
 
 2. **Review each concept (the judgment part).** `okf show <bundle> <concept-id>` and actually
@@ -61,5 +61,5 @@ know its exact path** (from `okf resolve` or an `okf show --json` record), and p
 - Never fabricate a `human:` attestation. The whole value of the tier is that `human:` means a
   human really looked. If you (the agent) reviewed it, use the agent actor form, not `human:`.
 - Attest content, not vibes: tie each sign-off to accurate prose and supporting sources.
-- Don't attest drifted concepts — reconcile via `okf-update`/`okf refresh` first.
+- Don't attest drifted concepts — reconcile via `okf:update`/`okf refresh` first.
 - `okf verify` is lossless and additive; it appends to `verified`, preserving history.

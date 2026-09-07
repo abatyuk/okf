@@ -1,6 +1,6 @@
 ---
-name: okf-init
-description: Use this when the user wants to start a new OKF bundle from scratch — "initialize an OKF bundle", "scaffold a knowledge base", "set up a new okf bundle", "create the ontology and first concepts". Bootstraps an empty bundle, establishes an ontology.yaml, and scaffolds the first concept documents from the ontology's concept types. Not for importing existing docs (use okf-migrate/okf-ingest) or restructuring an existing bundle (use okf-reorganize).
+name: init
+description: Use this when the user wants to start a new OKF bundle from scratch — "initialize an OKF bundle", "scaffold a knowledge base", "set up a new okf bundle", "create the ontology and first concepts". Bootstraps an empty bundle, establishes an ontology.yaml, and scaffolds the first concept documents from the ontology's concept types. Not for importing existing docs (use okf:migrate/okf:ingest) or restructuring an existing bundle (use okf:reorganize).
 ---
 
 # Initialize an OKF bundle
@@ -60,7 +60,7 @@ know its exact path** (from `okf resolve` or an `okf show --json` record), and p
    write `index.md` files so later retrieval can navigate the bundle cheaply.
 
 7. **Report.** Summarize the bundle path, the ontology types created, and the concepts
-   scaffolded. Point the user at `okf-migrate`/`okf-ingest` to bring in existing material.
+   scaffolded. Point the user at `okf:migrate`/`okf:ingest` to bring in existing material.
 
 ## Guardrails
 - Keep the human in the loop on type names and required fields — these are subjective and

@@ -1,6 +1,6 @@
 ---
-name: okf-ingest
-description: Use this when the user wants to research a directory or repository and ingest its knowledge into an OKF bundle — "ingest this repo into okf", "scan the codebase and create concepts", "build a bundle from this project", "analyze this directory and document it as concepts". Scans a repo, researches its structure and artifacts, then adds concepts attributed back to the source files. For pre-written docs that just need converting, prefer okf-migrate; for a fresh empty bundle, use okf-init.
+name: ingest
+description: Use this when the user wants to research a directory or repository and ingest its knowledge into an OKF bundle — "ingest this repo into okf", "scan the codebase and create concepts", "build a bundle from this project", "analyze this directory and document it as concepts". Scans a repo, researches its structure and artifacts, then adds concepts attributed back to the source files. For pre-written docs that just need converting, prefer okf:migrate; for a fresh empty bundle, use okf:init.
 ---
 
 # Research a repository and ingest it as concepts
@@ -34,7 +34,7 @@ reading whole files speculatively. The CLI-only rule applies to anything already
 
 2. **Locate/create the target bundle and ontology.** `okf init <bundle>` if none exists.
    Review concept types with `okf ontology list` / `okf ontology show <name>`. If the repo's
-   domain isn't covered, run `okf-ontology` or `okf-infer-ontology` first so you classify
+   domain isn't covered, run `okf:ontology` or `okf:infer-ontology` first so you classify
    against real types.
 
 3. **Research, then decide what to ingest.** Read the scanned artifacts (source modules,
@@ -72,4 +72,4 @@ reading whole files speculatively. The CLI-only rule applies to anything already
   hallucinated one. Keep the human in the loop on scope.
 - Every concept must have at least one typed `sources[]` entry so `okf stale`/`okf affected`
   can track it against the code.
-- Concepts start `unverified`; use `okf-review-attest` to raise trust.
+- Concepts start `unverified`; use `okf:review-attest` to raise trust.

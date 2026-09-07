@@ -1,5 +1,5 @@
 ---
-name: okf-retrieval
+name: retrieval
 description: PRIMARY CONSUMER SKILL. Use this whenever the user asks a question that an OKF bundle can answer — "what does our bundle say about X?", "find the concept for Y", "how are these concepts related?", "what depends on Z?", "explain the policy/metric/computation for …", or any lookup/Q&A over a knowledge bundle. Answers via progressive disclosure — okf search → okf show → okf graph/okf backlinks — so you never load the whole bundle into context. Use this before reading bundle files directly.
 ---
 
@@ -54,7 +54,7 @@ know its exact path** (from `okf resolve` or an `okf show --json` record), and p
 - Prefer many small, targeted queries over one broad dump. Widen (more search terms, `okf list`,
   deeper `okf graph`) only if the narrow pass misses.
 - This skill is **read-only**: it never mutates the bundle. If the answer reveals the docs are
-  wrong or stale, hand off to `okf-update`.
+  wrong or stale, hand off to `okf:update`.
 - Be honest about trust: flag when an answer rests on `unverified` concepts.
 - Use `--json` output when you need to filter/aggregate results programmatically; text output
   when you're just reading.

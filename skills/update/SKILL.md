@@ -1,5 +1,5 @@
 ---
-name: okf-update
+name: update
 description: Use this when the user wants to bring OKF documentation back in sync with recent changes — "update the docs for these changes", "which concepts are stale?", "what's affected by this commit/file change?", "refresh the bundle after the refactor", "the code changed, fix the concepts". Uses okf stale (automatic drift), okf affected (blast radius of known changes), and okf diff (vs a git ref) to find what needs work; you rewrite the prose and re-attribute sources, then okf refresh to re-fingerprint.
 ---
 
@@ -70,4 +70,4 @@ about bundle content.)
 - Keep the human in the loop on ambiguous drift and on any content whose correct new value you
   can't determine from the artifact.
 - Trust tier may drop conceptually after a big rewrite — consider routing through
-  okf-review-attest for re-verification.
+  okf:review-attest for re-verification.
