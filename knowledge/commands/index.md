@@ -5,7 +5,7 @@
 * [okf backlinks](backlinks.md) - Lists the concepts that link to a given concept, using the reverse adjacency from the graph.
 * [okf diff](diff.md) - Concept-level diff of the working tree against a git ref: which concepts were added, removed, or changed.
 * [okf docs](docs.md) - Generates documentation from a bundle: progressive-disclosure index.md files, or html, md, pdf, graphml, or obsidian output via --format.
-* [okf edit](edit.md) - Sets or updates frontmatter fields losslessly with --set key=value (scalars only), preserving key order and unknown keys.
+* [okf edit](edit.md) - Losslessly edits a concept's frontmatter (set/unset scalars, add/remove list items) and body (whole-body and section-aware ops), preserving key order and unknown keys.
 * [okf graph](graph.md) - Renders the link graph, or a subtree rooted at a concept, as mermaid, dot, or graphml.
 * [okf init](init.md) - Creates a new empty OKF bundle: base structure plus a starter ontology.yaml.
 * [okf lint](lint.md) - Advisory checks where the opinions live: broken links, missing descriptions, orphans, and ontology violations, at error/warn/info severities with a --fail-on threshold.
