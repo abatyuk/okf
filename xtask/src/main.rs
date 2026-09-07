@@ -13,9 +13,11 @@
 //!
 //! "Schema-derived docs" = the CLI argument reference bundled into every plugin skill
 //! (`skills/*/okf-cli-reference.md`) and the `## Arguments` section of every command
-//! concept (`knowledge/commands/*.md`). Both are generated from `okf schema --json`, so this is
-//! the single command that keeps them in lockstep with the CLI. Type `## Schema` sections are
-//! curated (they mix real Rust items with serialized-shape docs) and are not regenerated here.
+//! concept (`knowledge/commands/*.md`). The canonical skills are also mirrored into the Codex
+//! plugin package under `plugins/okf/skills/`. Both doc surfaces are generated
+//! from `okf schema --json`, so this is the single command that keeps them in lockstep with the
+//! CLI. Type `## Schema` sections are curated (they mix real Rust items with serialized-shape
+//! docs) and are not regenerated here.
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -76,7 +78,22 @@ fn run_docs(check: bool) {
         artifacts.push((skill.join("okf-cli-reference.md"), reference.clone()));
     }
 
-    // 2. The `## Arguments` section of each command concept.
+    // 2. Mirror the canonical skills into the self-contained Codex plugin package. Reference
+    // files use the freshly rendered content above, even when the checked-in source is stale.
+    let skills_root = root.join("skills");
+    let codex_skills_root = root.join("plugins/okf/skills");
+    for source in files_under(&skills_root) {
+        let relative = source.strip_prefix(&skills_root).unwrap();
+        let content =
+            if source.file_name().and_then(|name| name.to_str()) == Some("okf-cli-reference.md") {
+                reference.clone()
+            } else {
+                std::fs::read_to_string(&source).unwrap()
+            };
+        artifacts.push((codex_skills_root.join(relative), content));
+    }
+
+    // 3. The `## Arguments` section of each command concept.
     for cmd in &commands {
         let stem = cmd["name"].as_str().unwrap().replace(' ', "-");
         let path = root.join("knowledge/commands").join(format!("{stem}.md"));
@@ -111,6 +128,9 @@ fn run_docs(check: bool) {
         }
     } else {
         for (path, content) in &artifacts {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
             std::fs::write(path, content).unwrap();
         }
         println!("docs: wrote {} artifacts", artifacts.len());
@@ -138,6 +158,25 @@ fn skill_dirs(root: &Path) -> Vec<PathBuf> {
         .collect();
     dirs.sort();
     dirs
+}
+
+/// All files below `root`, in stable path order.
+fn files_under(root: &Path) -> Vec<PathBuf> {
+    fn visit(dir: &Path, files: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("read skills dir") {
+            let path = entry.expect("read skills entry").path();
+            if path.is_dir() {
+                visit(&path, files);
+            } else if path.is_file() {
+                files.push(path);
+            }
+        }
+    }
+
+    let mut files = Vec::new();
+    visit(root, &mut files);
+    files.sort();
+    files
 }
 
 /// Run `okf schema --json` and parse the NDJSON stream.

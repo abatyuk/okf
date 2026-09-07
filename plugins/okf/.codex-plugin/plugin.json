@@ -1,0 +1,27 @@
+{
+  "name": "okf",
+  "version": "0.1.0",
+  "description": "Agent skills for working with Open Knowledge Format (OKF) bundles using the okf CLI.",
+  "author": {
+    "name": "Andrey Batyuk"
+  },
+  "license": "Apache-2.0",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "OKF",
+    "shortDescription": "Build and maintain Open Knowledge Format bundles.",
+    "longDescription": "Migrate, ingest, retrieve, update, review, and reorganize Open Knowledge Format bundles through the okf CLI.",
+    "developerName": "Andrey Batyuk",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Shell"
+    ],
+    "defaultPrompt": [
+      "Create an OKF bundle for this project.",
+      "Ingest this repository into an OKF bundle.",
+      "Update the OKF bundle for recent code changes."
+    ]
+  }
+}

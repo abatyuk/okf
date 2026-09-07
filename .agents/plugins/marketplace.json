@@ -1,0 +1,20 @@
+{
+  "name": "okf-marketplace",
+  "interface": {
+    "displayName": "OKF Marketplace"
+  },
+  "plugins": [
+    {
+      "name": "okf",
+      "source": {
+        "source": "local",
+        "path": "./plugins/okf"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

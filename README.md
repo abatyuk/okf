@@ -7,8 +7,8 @@ deterministic "hands" beneath a set of agent skills that do the judgment work.
 
 - **Deterministic core** (`okf-core`) — parse, validate, lint, query, graph, fingerprint, render.
 - **Thin CLI** (`okf-cli`) — 28 commands, grouped by verb, with a machine-discoverable schema.
-- **Agent skills** (`skills/`) — packaged as the **`okf` Claude Code plugin**: migrate, ingest,
-  update, retrieve, manage ontology, etc. (see [Claude Code plugin](#claude-code-plugin)).
+- **Agent skills** (`skills/`) — packaged as the **`okf` plugin** for Claude Code and Codex:
+  migrate, ingest, update, retrieve, manage ontology, etc. (see [Agent plugins](#agent-plugins)).
 
 See `INTENT.md` for the design rationale and `ARCHITECTURE.md` for the crate/module layout.
 
@@ -152,11 +152,16 @@ A project-local `ontology.yaml` (outside the bundle, so the bundle stays spec-pu
 concept types, their typed fields, and typed reference rules with cardinality. `lint` enforces
 it advisorily; `add` scaffolds from it. Manage it with `okf ontology add/update/remove`.
 
-## Claude Code plugin
+## Agent plugins
 
-The agent skills ship as a [Claude Code](https://code.claude.com) plugin named **`okf`**, served
-from this repo as a single-plugin marketplace. Manifests live in `.claude-plugin/`
-(`marketplace.json` + `plugin.json`); the skills are auto-discovered from `skills/`.
+The agent skills ship as an **`okf`** plugin for both Claude Code and Codex. This repository is a
+single-plugin marketplace for each agent. `skills/` is the canonical source; `cargo xtask docs`
+also mirrors it into the self-contained Codex package.
+
+### Claude Code
+
+Claude Code manifests live in `.claude-plugin/` (`marketplace.json` + `plugin.json`), and Claude
+auto-discovers the canonical `skills/` directory.
 
 Install:
 
@@ -165,23 +170,38 @@ Install:
 /plugin install okf
 ```
 
-The skills are then invokable namespaced by the plugin:
+### Codex
 
-| Skill | Invoke |
-|-------|--------|
-| Start a new bundle | `/okf:init` |
-| Migrate existing docs | `/okf:migrate` |
-| Ingest a repo | `/okf:ingest` |
-| Answer questions (retrieval) | `/okf:retrieval` |
-| Manage the ontology | `/okf:ontology` |
-| Infer an ontology | `/okf:infer-ontology` |
-| Sync docs after changes | `/okf:update` |
-| Review & attest | `/okf:review-attest` |
-| Reorganize the tree | `/okf:reorganize` |
+Codex marketplace metadata lives in `.agents/plugins/marketplace.json`, and its plugin package
+lives in `plugins/okf/`.
+
+Install this repository as a marketplace, then install the plugin:
+
+```sh
+codex plugin marketplace add <owner>/<repo>   # or a full Git URL / local path
+codex plugin add okf@okf-marketplace
+```
+
+Start a new Codex thread after installation so the skills are loaded.
+
+The skills are namespaced by the plugin in both agents:
+
+| Skill | Claude Code | Codex |
+|-------|-------------|-------|
+| Start a new bundle | `/okf:init` | `$okf:init` |
+| Migrate existing docs | `/okf:migrate` | `$okf:migrate` |
+| Ingest a repo | `/okf:ingest` | `$okf:ingest` |
+| Answer questions (retrieval) | `/okf:retrieval` | `$okf:retrieval` |
+| Manage the ontology | `/okf:ontology` | `$okf:ontology` |
+| Infer an ontology | `/okf:infer-ontology` | `$okf:infer-ontology` |
+| Sync docs after changes | `/okf:update` | `$okf:update` |
+| Review & attest | `/okf:review-attest` | `$okf:review-attest` |
+| Reorganize the tree | `/okf:reorganize` | `$okf:reorganize` |
 
 The skills drive the `okf` CLI, so install the binary too (`cargo install --path crates/okf-cli`,
 or `cargo xtask install`). Each skill bundles a generated `okf-cli-reference.md` it reads from its
-own directory, so it never has to probe the CLI to learn arguments.
+own directory, so it never has to probe the CLI to learn arguments. Run `cargo xtask docs --check`
+in CI to verify both plugin packages still contain the same skill content.
 
 ## Development
 
