@@ -1,0 +1,52 @@
+okf_ontology: '0.1'
+concepts:
+  Command:
+    description: A CLI verb exposed by the okf binary.
+    fields:
+      group:
+        type: string
+        required: true
+      mutates:
+        type: bool
+        required: true
+    references:
+      implemented_by:
+        target: Component
+        cardinality: 0..n
+  DomainType:
+    description: A core in-memory data-model type in okf-core.
+    fields:
+      module:
+        type: string
+    references:
+      defined_in:
+        target: Component
+        cardinality: 1..1
+  DesignDecision:
+    description: A design principle or cross-cutting architecture decision.
+    fields:
+      status:
+        type: string
+    references:
+      affects:
+        target: Component
+        cardinality: 0..n
+  Skill:
+    description: An agent skill that drives the okf CLI to do judgment work.
+    fields:
+      trigger:
+        type: string
+    references:
+      uses:
+        target: Command
+        cardinality: 0..n
+  Component:
+    description: A crate or module/subsystem of the okf codebase.
+    fields:
+      layer:
+        type: string
+        required: true
+    references:
+      depends_on:
+        target: Component
+        cardinality: 0..n

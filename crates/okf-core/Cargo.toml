@@ -1,0 +1,33 @@
+[package]
+name = "okf-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Deterministic OKF harness logic (the hands)."
+
+[dependencies]
+# Front-loaded so later waves (graph/check/mutate/render/fingerprint/ontology) never churn deps.
+# Git is NOT a library dependency — okf-core shells out to the `git` CLI via ports::git.
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+indexmap = { version = "2", features = ["serde"] }
+thiserror = "1"
+sha2 = "0.10"
+ignore = "0.4"
+regex = "1"
+pulldown-cmark = "0.11"
+toml = "0.8"
+
+# Network fingerprints (`url` source kind) — optional, gated behind `url-sources`.
+ureq = { version = "2", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = []
+url-sources = ["dep:ureq"]   # network fingerprints for the `url` source kind
+docs-html = []
+docs-pdf = []
+docs-obsidian = []

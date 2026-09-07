@@ -1,0 +1,51 @@
+okf_ontology: "0.1"          # version of THIS ontology file's schema (our tool), not OKF's
+
+# Optional: reusable typed field definitions (DRY). Composable via `extends`.
+field_types:
+  money:
+    base: string
+    pattern: '^\d+(\.\d{2})? [A-Z]{3}$'    # e.g. "42.00 USD"
+  positive_money:
+    extends: money                         # inherits base + pattern…
+    min: 0                                  # …and adds a constraint
+  contact:
+    base: object                           # object types compose sub-fields
+    fields:
+      name:  { type: string, required: true }
+      email: { type: uri }
+
+# Source kinds `okf stale` knows how to fingerprint.
+source_kinds: [git-commit, git-path, markdown-heading, line-range, file, url]
+
+concepts:
+
+  Policy:
+    description: A rule or standard people are expected to follow.
+    requires: [description]            # OKF built-in fields this concept type must carry
+    fields:
+      owner:        { type: string, required: true }
+      effective_date: { type: date, required: true }
+      review_cycle: { type: enum, values: [monthly, quarterly, annual] }
+    trust:
+      min_tier: human-reviewed         # lint warns if the concept's derived tier is lower
+    references:
+      computations: { target: Computation, cardinality: 0..n }
+      supersedes:   { target: Policy, cardinality: 0..1 }
+
+  Computation:
+    description: A sanctioned way to compute a value.
+    attested: true                     # `okf add --attested`; scaffold as OKF Attested Computation
+    fields:
+      runtime: { type: enum, values: [bigquery, dbt, python], required: true }
+    references:
+      inputs: { target: [BigQuery Table, Metric], cardinality: 1..n }   # union of targets
+
+  "BigQuery Table":                    # OKF type with a space — quoted key, used verbatim
+    description: A BigQuery table.
+    fields:
+      resource: { type: uri, required: true }
+
+  Metric:
+    description: A named measurable quantity.
+    references:
+      computed_by: { target: Computation, cardinality: 1..1 }
