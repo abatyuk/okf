@@ -166,7 +166,7 @@ auto-discovers the canonical `skills/` directory.
 Install:
 
 ```text
-/plugin marketplace add <owner>/<repo>   # this repo on GitHub, or a full git URL / local path
+/plugin marketplace add abatyuk/okf   # this repo on GitHub, or a full git URL / local path
 /plugin install okf
 ```
 
@@ -178,7 +178,7 @@ lives in `plugins/okf/`.
 Install this repository as a marketplace, then install the plugin:
 
 ```sh
-codex plugin marketplace add <owner>/<repo>   # or a full Git URL / local path
+codex plugin marketplace add abatyuk/okf   # or a full Git URL / local path
 codex plugin add okf@okf-marketplace
 ```
 
