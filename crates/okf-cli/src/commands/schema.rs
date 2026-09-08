@@ -87,10 +87,22 @@ fn command_record(full_name: &str, cmd: &ClapCommand) -> Value {
 
 /// Derive one arg's record from clap introspection.
 fn arg_record(arg: &clap::Arg) -> Value {
-    // clap derive suffixes a `_` on ids that collide with keywords (`type_`); the visible flag
-    // is `--type`, so advertise the trimmed name.
-    let name = arg.get_id().as_str().trim_end_matches('_').to_string();
-    let kind = if arg.is_positional() { "positional" } else { "flag" };
+    let kind = if arg.is_positional() {
+        "positional"
+    } else {
+        "flag"
+    };
+    // Schema names normally retain clap's underscore-based id; renderers turn underscores into
+    // hyphens. An explicitly renamed long flag can differ from that derived spelling, though
+    // (for example, the `reference` field is exposed as `--ref`). In that case advertise the
+    // spelling a user can actually pass to the CLI.
+    let id = arg.get_id().as_str().trim_end_matches('_');
+    let derived_long = id.replace('_', "-");
+    let name = match arg.get_long() {
+        Some(long) if long != derived_long => long,
+        _ => id,
+    }
+    .to_string();
     let action = arg.get_action();
     let is_bool = matches!(action, ArgAction::SetTrue | ArgAction::SetFalse);
     let repeatable = matches!(action, ArgAction::Append);

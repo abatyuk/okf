@@ -270,7 +270,7 @@ Define a new concept type with its fields and reference rules.
 | `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
 | `--description <value>` | string | no | Description of the concept type |
 | `--field <value>` | list<string> | no | A typed field, `key:type[:required][:v1|v2|...]` (repeatable) |
-| `--reference <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
+| `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
 | `--attested` | bool | no | Mark the concept type as an attested computation |
 
 Output stream: `change`.
@@ -296,7 +296,7 @@ Modify fields/references of an existing concept type.
 | `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
 | `--description <value>` | string | no | Description of the concept type |
 | `--field <value>` | list<string> | no | A typed field, `key:type[:required][:v1|v2|...]` (repeatable) |
-| `--reference <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
+| `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
 | `--attested` | bool | no | Mark the concept type as an attested computation |
 
 Output stream: `change`.

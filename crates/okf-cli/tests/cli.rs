@@ -201,6 +201,20 @@ fn schema_is_valid_ndjson_with_all_commands() {
         .find(|a| a["name"] == "set_section")
         .expect("--set-section arg");
     assert_eq!(set_section["value_names"].as_array().unwrap().len(), 2);
+
+    // Schema names describe the public CLI spelling, not the backing Rust field name.
+    let ontology_add = records
+        .iter()
+        .find(|r| r["name"] == "ontology add")
+        .expect("ontology add command");
+    let ontology_arg_names: Vec<&str> = ontology_add["args"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|a| a["name"].as_str())
+        .collect();
+    assert!(ontology_arg_names.contains(&"ref"));
+    assert!(!ontology_arg_names.contains(&"reference"));
 }
 
 #[test]
