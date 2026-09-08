@@ -8,6 +8,7 @@ use okf_core::graph::backlinks::backlinks_of;
 use okf_core::graph::build::build_graph;
 use okf_core::graph::render::{render, RenderFormat};
 use okf_core::model::concept::Concept;
+use okf_core::ontology::load::try_load;
 use okf_core::output::record::yaml_to_json;
 use okf_core::query::resolve::resolve as resolve_link;
 use okf_core::query::search::{search, SearchFilter};
@@ -53,7 +54,10 @@ pub fn run_show(args: &IdArgs, json: bool) -> Result<i32> {
             output::print_concept(concept, json)?;
             Ok(0)
         }
-        None => Err(OkfError::Usage(format!("concept not found: {}", args.concept))),
+        None => Err(OkfError::Usage(format!(
+            "concept not found: {}",
+            args.concept
+        ))),
     }
 }
 
@@ -61,7 +65,8 @@ pub fn run_show(args: &IdArgs, json: bool) -> Result<i32> {
 pub fn run_backlinks(args: &IdArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
-    let ids = backlinks_of(&bundle, &args.concept);
+    let ontology = try_load(&root)?;
+    let ids = backlinks_of(&bundle, ontology.as_ref(), &args.concept);
     let concepts: Vec<&Concept> = ids.iter().filter_map(|id| bundle.get(&id.0)).collect();
     output::print_concepts(&concepts, json)?;
     Ok(0)
@@ -71,13 +76,14 @@ pub fn run_backlinks(args: &IdArgs, json: bool) -> Result<i32> {
 pub fn run_graph(args: &GraphArgs, _json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
+    let ontology = try_load(&root)?;
     let format = RenderFormat::parse(&args.format).ok_or_else(|| {
         OkfError::Usage(format!(
             "unknown graph format {:?}: expected mermaid, dot, or graphml",
             args.format
         ))
     })?;
-    let graph = build_graph(&bundle);
+    let graph = build_graph(&bundle, ontology.as_ref());
     let out = render(&graph, format, args.subtree.as_deref());
     print!("{out}");
     Ok(0)
@@ -96,7 +102,12 @@ pub fn run_resolve(args: &ResolveArgs, json: bool) -> Result<i32> {
             "exists": r.exists,
         }))?;
     } else {
-        println!("{}\t{}\t{}", r.id.0, r.path.display(), if r.exists { "exists" } else { "missing" });
+        println!(
+            "{}\t{}\t{}",
+            r.id.0,
+            r.path.display(),
+            if r.exists { "exists" } else { "missing" }
+        );
     }
     Ok(0)
 }
@@ -106,7 +117,9 @@ fn parse_field_filters(raw: &[String]) -> Result<Vec<(String, String)>> {
     raw.iter()
         .map(|f| match f.split_once('=') {
             Some((k, v)) if !k.trim().is_empty() => Ok((k.trim().to_string(), v.to_string())),
-            _ => Err(OkfError::Usage(format!("invalid --field {f:?}: expected key=value"))),
+            _ => Err(OkfError::Usage(format!(
+                "invalid --field {f:?}: expected key=value"
+            ))),
         })
         .collect()
 }

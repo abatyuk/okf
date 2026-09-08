@@ -6,8 +6,10 @@ use crate::output;
 use okf_core::bundle::resolve::resolve_bundle;
 use okf_core::error::{OkfError, Result};
 use okf_core::ontology::edit::{
-    add_concept_type, remove_concept_type, save_ontology, set_field, set_reference,
+    add_concept_type, remove_concept_type, remove_field, remove_reference, save_ontology,
+    set_field, set_reference,
 };
+use okf_core::ontology::field_types::resolve_field;
 use okf_core::ontology::load::{ontology_path, try_load};
 use okf_core::ontology::schema::{
     Cardinality, ConceptType, Field, Ontology, ReferenceRule, Target,
@@ -23,7 +25,7 @@ pub fn run_list(args: &BundleArgs, json: bool) -> Result<i32> {
     let ontology = require_ontology(&root)?;
     for (name, ct) in &ontology.concepts {
         if json {
-            output::print_line(&concept_type_record(name, ct))?;
+            output::print_line(&concept_type_record(name, ct, &ontology))?;
         } else {
             let desc = ct.description.as_deref().unwrap_or("");
             println!("{name}\t{desc}");
@@ -41,7 +43,7 @@ pub fn run_show(args: &OntShowArgs, json: bool) -> Result<i32> {
         .get(&args.name)
         .ok_or_else(|| OkfError::Usage(format!("no concept type {:?}", args.name)))?;
     if json {
-        output::print_line(&concept_type_record(&args.name, ct))?;
+        output::print_line(&concept_type_record(&args.name, ct, &ontology))?;
     } else {
         println!("# {}", args.name);
         if let Some(d) = &ct.description {
@@ -56,13 +58,28 @@ pub fn run_show(args: &OntShowArgs, json: bool) -> Result<i32> {
         if !ct.fields.is_empty() {
             println!("fields:");
             for (k, f) in &ct.fields {
-                println!("  {k}: {}{}", f.type_name, if f.required { " (required)" } else { "" });
+                let values = resolve_field(&ontology, f)
+                    .ok()
+                    .map(|r| r.ty.values)
+                    .filter(|v| !v.is_empty())
+                    .map(|v| format!(" [{}]", v.join("|")))
+                    .unwrap_or_default();
+                println!(
+                    "  {k}: {}{}{}",
+                    f.type_name,
+                    values,
+                    if f.required { " (required)" } else { "" }
+                );
             }
         }
         if !ct.references.is_empty() {
             println!("references:");
             for (k, r) in &ct.references {
-                println!("  {k}: {} [{}]", r.target.types().join("|"), r.cardinality.as_str());
+                println!(
+                    "  {k}: {} [{}]",
+                    r.target.types().join("|"),
+                    r.cardinality.as_str()
+                );
             }
         }
     }
@@ -73,6 +90,11 @@ pub fn run_show(args: &OntShowArgs, json: bool) -> Result<i32> {
 pub fn run_add(args: &OntEditArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let mut ontology = load_or_default(&root)?;
+    if !args.remove_field.is_empty() || !args.remove_reference.is_empty() {
+        return Err(OkfError::Usage(
+            "--remove-field/--remove-ref are only valid with `ontology update`".to_string(),
+        ));
+    }
 
     let mut ct = ConceptType {
         description: args.description.clone(),
@@ -97,7 +119,10 @@ pub fn run_update(args: &OntEditArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let mut ontology = require_ontology(&root)?;
     if !ontology.concepts.contains_key(&args.name) {
-        return Err(OkfError::Usage(format!("concept type {:?} does not exist", args.name)));
+        return Err(OkfError::Usage(format!(
+            "concept type {:?} does not exist",
+            args.name
+        )));
     }
     if let Some(d) = &args.description {
         if let Some(ct) = ontology.concepts.get_mut(&args.name) {
@@ -116,6 +141,12 @@ pub fn run_update(args: &OntEditArgs, json: bool) -> Result<i32> {
     for r in &args.reference {
         let (key, rule) = parse_reference(r)?;
         set_reference(&mut ontology, &args.name, &key, rule)?;
+    }
+    for key in &args.remove_field {
+        remove_field(&mut ontology, &args.name, key)?;
+    }
+    for key in &args.remove_reference {
+        remove_reference(&mut ontology, &args.name, key)?;
     }
     persist(&root, &ontology)?;
     report_change("update", &args.name, json)
@@ -154,7 +185,9 @@ fn persist(root: &std::path::Path, ontology: &Ontology) -> Result<()> {
 
 fn report_change(op: &str, name: &str, json: bool) -> Result<i32> {
     if json {
-        output::print_line(&json!({"kind": "change", "op": format!("ontology-{op}"), "name": name}))?;
+        output::print_line(
+            &json!({"kind": "change", "op": format!("ontology-{op}"), "name": name}),
+        )?;
     } else {
         println!("ontology {op}: {name}");
     }
@@ -162,11 +195,14 @@ fn report_change(op: &str, name: &str, json: bool) -> Result<i32> {
 }
 
 /// Build an NDJSON record describing a concept type.
-fn concept_type_record(name: &str, ct: &ConceptType) -> serde_json::Value {
+fn concept_type_record(name: &str, ct: &ConceptType, ontology: &Ontology) -> serde_json::Value {
     let fields: Vec<_> = ct
         .fields
         .iter()
-        .map(|(k, f)| json!({"key": k, "type": f.type_name, "required": f.required}))
+        .map(|(k, f)| {
+            let values = resolve_field(ontology, f).ok().map(|r| r.ty.values);
+            json!({"key": k, "type": f.type_name, "required": f.required, "values": values})
+        })
         .collect();
     let references: Vec<_> = ct
         .references

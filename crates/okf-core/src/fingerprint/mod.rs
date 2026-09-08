@@ -20,8 +20,8 @@ pub trait Fingerprinter {
     fn fingerprint(&self, source: &Source) -> Result<Fingerprint>;
 }
 
-/// A fingerprinting engine over the effect ports. `root` is the base directory that source
-/// resources (paths) are resolved against; `net` is optional (only `url` sources need it).
+/// A fingerprinting engine over the effect ports. `root` is the bundle base for file/text
+/// sources; git sources resolve from the worktree root. `net` is optional (only URLs need it).
 pub struct Engine<'a> {
     pub root: &'a Path,
     pub fs: &'a dyn FileSystem,
@@ -37,12 +37,7 @@ impl<'a> Engine<'a> {
         git: &'a dyn Git,
         net: Option<&'a dyn Net>,
     ) -> Self {
-        Self {
-            root,
-            fs,
-            git,
-            net,
-        }
+        Self { root, fs, git, net }
     }
 
     fn resolve(&self, rel: &str) -> PathBuf {
@@ -54,8 +49,14 @@ impl Fingerprinter for Engine<'_> {
     fn fingerprint(&self, source: &Source) -> Result<Fingerprint> {
         let (path_part, fragment) = split_fragment(&source.resource);
         match &source.kind {
-            SourceKind::GitPath => git::git_path_fp(self.git, &self.resolve(path_part)),
-            SourceKind::GitCommit => git::git_commit_fp(self.git, &self.resolve(path_part)),
+            SourceKind::GitPath => {
+                let git_root = self.git.worktree_root(self.root)?;
+                git::git_path_fp(self.git, &git_root.join(path_part))
+            }
+            SourceKind::GitCommit => {
+                let git_root = self.git.worktree_root(self.root)?;
+                git::git_commit_fp(self.git, &git_root.join(path_part))
+            }
             SourceKind::File => {
                 let bytes = self.fs.read(&self.resolve(path_part))?;
                 Ok(Fingerprint::from_pairs(vec![(
@@ -140,7 +141,9 @@ mod tests {
         let git = FakeGit::new();
         let net = FakeNet::new();
         let eng = Engine::new(Path::new(""), &fs, &git, Some(&net));
-        let fp = eng.fingerprint(&src("data/raw.bin", SourceKind::File)).unwrap();
+        let fp = eng
+            .fingerprint(&src("data/raw.bin", SourceKind::File))
+            .unwrap();
         assert_eq!(
             fp.get("sha256"),
             Some("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
@@ -152,8 +155,23 @@ mod tests {
         let fs = FakeFs::new();
         let git = FakeGit::new().with_hash_object("src/x.py", "3f9a1c");
         let eng = Engine::new(Path::new(""), &fs, &git, None);
-        let fp = eng.fingerprint(&src("src/x.py", SourceKind::GitPath)).unwrap();
+        let fp = eng
+            .fingerprint(&src("src/x.py", SourceKind::GitPath))
+            .unwrap();
         assert_eq!(fp.get("blob_sha"), Some("3f9a1c"));
+    }
+
+    #[test]
+    fn git_paths_are_relative_to_worktree_not_bundle() {
+        let fs = FakeFs::new();
+        let git = FakeGit::new()
+            .with_worktree_root("repo")
+            .with_hash_object("repo/docs/x.md", "abc123");
+        let eng = Engine::new(Path::new("repo/knowledge"), &fs, &git, None);
+        let fp = eng
+            .fingerprint(&src("docs/x.md", SourceKind::GitPath))
+            .unwrap();
+        assert_eq!(fp.get("blob_sha"), Some("abc123"));
     }
 
     #[test]
@@ -177,7 +195,10 @@ mod tests {
         let fp = eng
             .fingerprint(&src("docs/p.md#rates", SourceKind::MarkdownHeading))
             .unwrap();
-        assert_eq!(fp.get("section_sha256"), Some(canonicalize::canonical_sha256("body").as_str()));
+        assert_eq!(
+            fp.get("section_sha256"),
+            Some(canonicalize::canonical_sha256("body").as_str())
+        );
     }
 
     #[test]

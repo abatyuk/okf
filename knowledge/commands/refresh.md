@@ -21,8 +21,9 @@ Re-records source fingerprints after a change has been acknowledged, clearing th
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
+| `<concept>` | positional | yes | Concept id to refresh |
 | `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `--fail-on <value>` | string | no | Fail (exit 1) when any source is skipped: never (default) | skipped | any |
 
 Every command also accepts global `--json` and an optional trailing `bundle` positional.
 

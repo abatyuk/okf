@@ -17,7 +17,7 @@ use serde_yaml::Value;
 use crate::error::Result;
 use crate::fingerprint::{Engine, Fingerprinter};
 use crate::model::concept::ConceptId;
-use crate::model::source::parse_sources;
+use crate::model::source::Source;
 use crate::ports::clock::Clock;
 
 use super::edit::{load_concept, save_concept};
@@ -45,12 +45,7 @@ pub struct RefreshResult {
 
 /// Recompute and rewrite the `sources[]` fingerprints of the concept `id`, and update its
 /// `last_modified`. `engine`'s `root` is the base that source resource paths resolve against.
-pub fn refresh(
-    root: &Path,
-    id: &str,
-    engine: &Engine,
-    clock: &dyn Clock,
-) -> Result<RefreshResult> {
+pub fn refresh(root: &Path, id: &str, engine: &Engine, clock: &dyn Clock) -> Result<RefreshResult> {
     let cid = ConceptId::from_relative(id);
     let mut concept = load_concept(root, &cid)?;
 
@@ -59,30 +54,60 @@ pub fn refresh(
     let mut skipped = Vec::new();
 
     if let Some(sources_val) = concept.frontmatter.map.get("sources").cloned() {
-        let mut sources = parse_sources(&sources_val);
-        for source in &mut sources {
-            match engine.fingerprint(source) {
-                Ok(fp) => {
-                    if fp != source.fingerprint {
-                        updated.push(source.resource.clone());
-                        source.fingerprint = fp;
-                    } else {
-                        unchanged.push(source.resource.clone());
+        if let Value::Sequence(entries) = sources_val {
+            let mut rebuilt = Vec::with_capacity(entries.len());
+            for (index, original) in entries.into_iter().enumerate() {
+                let Some(mut source) = Source::from_value(&original) else {
+                    skipped.push(SkippedSource {
+                        resource: format!("sources[{index}]"),
+                        reason: "malformed source: expected a mapping with resource and kind"
+                            .to_string(),
+                    });
+                    rebuilt.push(original);
+                    continue;
+                };
+                if source.resource.trim().is_empty() || source.kind.as_kind_str().trim().is_empty()
+                {
+                    skipped.push(SkippedSource {
+                        resource: if source.resource.is_empty() {
+                            format!("sources[{index}]")
+                        } else {
+                            source.resource.clone()
+                        },
+                        reason: "malformed source: resource and kind must be non-empty strings"
+                            .to_string(),
+                    });
+                    rebuilt.push(original);
+                    continue;
+                }
+                match engine.fingerprint(&source) {
+                    Ok(fp) => {
+                        if fp != source.fingerprint {
+                            updated.push(source.resource.clone());
+                            source.fingerprint = fp;
+                        } else {
+                            unchanged.push(source.resource.clone());
+                        }
+                        rebuilt.push(source.to_value());
+                    }
+                    Err(e) => {
+                        skipped.push(SkippedSource {
+                            resource: source.resource.clone(),
+                            reason: e.to_string(),
+                        });
+                        rebuilt.push(original);
                     }
                 }
-                Err(e) => skipped.push(SkippedSource {
-                    resource: source.resource.clone(),
-                    reason: e.to_string(),
-                }),
             }
-        }
-        // Only rewrite the field when it was a sequence we could parse into entries.
-        if matches!(sources_val, Value::Sequence(_)) {
-            let rebuilt = Value::Sequence(sources.iter().map(|s| s.to_value()).collect());
             concept
                 .frontmatter
                 .map
-                .insert("sources".to_string(), rebuilt);
+                .insert("sources".to_string(), Value::Sequence(rebuilt));
+        } else {
+            skipped.push(SkippedSource {
+                resource: "sources".to_string(),
+                reason: "malformed sources field: expected a sequence".to_string(),
+            });
         }
     }
 

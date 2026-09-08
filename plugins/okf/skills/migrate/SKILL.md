@@ -51,9 +51,12 @@ applies to anything already in the bundle.
    - `git-path` (a tracked file), `line-range` (a specific span), `markdown-heading` (a
      section), `git-commit`, `file` (untracked), or `url`.
    - Each entry carries `resource` plus `kind`; the fingerprint is recorded on first sync —
-     run `okf refresh <concept-id>` after setting sources so `fingerprint`/`last_modified`
-     get written. Set structured fields via `okf edit <concept-id> --set <key>=<value>` where
-     the CLI supports it; otherwise scaffold via `okf add` and refresh.
+     run `okf refresh <concept-id> --fail-on any` after setting sources so
+     `fingerprint`/`last_modified` get written and unresolved sources fail loudly. Author each
+     structured entry with `okf edit <concept-id> --add-source
+     resource=<git-root-relative-path>,kind=<kind>` (or the same `--add-source` on `okf add`).
+     A `git-path`/`git-commit` resource is relative to the repository root; file/text source
+     kinds remain relative to the bundle.
 
 5. **Wire references.** Reconnect cross-references between the migrated docs using the
    ontology's reference keys (`okf edit <concept-id> --set <key>=<link>`), so backlinks and

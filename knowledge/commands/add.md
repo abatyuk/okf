@@ -27,6 +27,9 @@ Adds a new concept document, scaffolded from the ontology so required fields and
 | `--title <value>` | string | no | Concept title |
 | `--description <value>` | string | no | Concept description |
 | `--attested` | bool | no | Scaffold an OKF Attested Computation (computation/executor/attester) |
+| `--set <value>` | list<string> | no | Set a custom scalar field at creation, `key=value` (repeatable) |
+| `--ref <value>` | list<string> | no | Set a declared reference at creation, `key=link` (repeatable) |
+| `--add-source <value>` | list<string> | no | Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable) |
 
 Every command also accepts global `--json` and an optional trailing `bundle` positional.
 

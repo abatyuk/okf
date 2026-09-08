@@ -9,8 +9,8 @@
 //! ints/floats → number, `null` → null, else string; values that would lose information when
 //! coerced, like `007` or `1.0`, stay strings). `--unset key` removes a field. `--add
 //! key=value` appends an item to a list field (creating the list, idempotent), and `--remove
-//! key=value` drops matching item(s). Structured `verified`/`sources` families still belong to
-//! the dedicated `verify`/`refresh` writers.
+//! key=value` drops matching item(s). `add_sources` appends typed source mappings; structured
+//! `verified` entries still belong to the dedicated `verify` writer.
 //!
 //! **Body ops.** `--set-body`/`--append-body`/`--clear-body` rewrite the whole body; the
 //! section-aware `--set-section`/`--append-section`/`--remove-section` splice a single heading
@@ -25,6 +25,7 @@ use serde_yaml::Value;
 use crate::error::{OkfError, Result};
 use crate::model::concept::{Concept, ConceptId};
 use crate::model::frontmatter::Frontmatter;
+use crate::model::source::Source;
 use crate::mutate::body;
 use crate::parse::{parse_concept, writer::write_concept};
 
@@ -67,6 +68,8 @@ pub struct EditSpec {
     pub adds: Vec<(String, String)>,
     /// `--remove key=value`: drop matching item(s) from a list field.
     pub removes: Vec<(String, String)>,
+    /// Structured entries appended to `sources`.
+    pub add_sources: Vec<Source>,
     /// `--clear-body`: empty the body.
     pub clear_body: bool,
     /// `--set-body`: replace the whole body.
@@ -88,6 +91,7 @@ impl EditSpec {
             && self.unsets.is_empty()
             && self.adds.is_empty()
             && self.removes.is_empty()
+            && self.add_sources.is_empty()
             && !self.clear_body
             && self.set_body.is_none()
             && self.append_body.is_none()
@@ -235,7 +239,10 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
         ensure_key(key)?;
         let existed = concept.frontmatter.map.contains_key(key);
         // IndexMap::insert updates in place (keeping position) or appends a new key.
-        concept.frontmatter.map.insert(key.clone(), parse_scalar(raw));
+        concept
+            .frontmatter
+            .map
+            .insert(key.clone(), parse_scalar(raw));
         changes.push(EditChange::Set {
             key: key.clone(),
             existed,
@@ -255,6 +262,13 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
         changes.push(EditChange::Remove {
             key: key.clone(),
             removed,
+        });
+    }
+    for source in &spec.add_sources {
+        let added = apply_add(&mut concept.frontmatter, "sources", source.to_value())?;
+        changes.push(EditChange::Add {
+            key: "sources".to_string(),
+            added,
         });
     }
 

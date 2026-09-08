@@ -8,7 +8,7 @@
 //! even a scaffold round-trips cleanly. `add` refuses to overwrite an existing file.
 //!
 //! Placeholders are intentionally empty/typed-neutral (empty string, `false`, `0`, empty list,
-//! empty map, or an enum's first value) — a human or agent fills them in next.
+//! or empty map). Required enums are omitted so validation can flag them instead of guessing.
 use std::path::{Path, PathBuf};
 
 use serde_yaml::{Mapping, Value};
@@ -16,6 +16,7 @@ use serde_yaml::{Mapping, Value};
 use crate::error::{OkfError, Result};
 use crate::model::concept::{Concept, ConceptId};
 use crate::model::frontmatter::Frontmatter;
+use crate::model::source::Source;
 use crate::ontology::field_types::resolve_field;
 use crate::ontology::schema::{ConceptType, FieldType, Ontology};
 
@@ -30,6 +31,12 @@ pub struct AddOptions {
     pub description: Option<String>,
     /// Scaffold an OKF Attested Computation (`computation`/`executor`/`attester`).
     pub attested: bool,
+    /// Custom scalar values supplied at creation.
+    pub sets: Vec<(String, Value)>,
+    /// Declared references supplied at creation.
+    pub references: Vec<(String, String)>,
+    /// Structured source entries supplied at creation.
+    pub sources: Vec<Source>,
 }
 
 /// What `add` created.
@@ -81,7 +88,9 @@ pub fn add(
         // Required custom fields, with a type-appropriate placeholder.
         for (key, field) in &ct.fields {
             if field.required && !map.contains_key(key) {
-                map.insert(key.clone(), field_placeholder(ont, field));
+                if let Some(value) = field_placeholder(ont, field) {
+                    map.insert(key.clone(), value);
+                }
             }
         }
         // Required reference keys (cardinality lower bound ≥ 1).
@@ -102,6 +111,52 @@ pub fn add(
             map.entry(key.to_string())
                 .or_insert_with(|| Value::String(String::new()));
         }
+    }
+
+    // Explicit creation-time values replace placeholders without requiring a second command.
+    for (key, value) in &opts.sets {
+        map.insert(key.clone(), value.clone());
+    }
+    for (key, link) in &opts.references {
+        let rule = ct.and_then(|c| c.references.get(key)).ok_or_else(|| {
+            OkfError::Usage(format!(
+                "add: --ref key {key:?} is not declared on concept type {concept_type:?}"
+            ))
+        })?;
+        if rule.cardinality.max() == Some(1) {
+            if map
+                .get(key)
+                .and_then(Value::as_str)
+                .is_some_and(|s| !s.is_empty())
+            {
+                return Err(OkfError::Usage(format!(
+                    "add: reference {key:?} accepts only one value"
+                )));
+            }
+            map.insert(key.clone(), Value::String(link.clone()));
+        } else {
+            match map.get_mut(key) {
+                Some(Value::Sequence(values)) => values.push(Value::String(link.clone())),
+                Some(_) => {
+                    map.insert(
+                        key.clone(),
+                        Value::Sequence(vec![Value::String(link.clone())]),
+                    );
+                }
+                None => {
+                    map.insert(
+                        key.clone(),
+                        Value::Sequence(vec![Value::String(link.clone())]),
+                    );
+                }
+            }
+        }
+    }
+    if !opts.sources.is_empty() {
+        map.insert(
+            "sources".to_string(),
+            Value::Sequence(opts.sources.iter().map(Source::to_value).collect()),
+        );
     }
 
     let heading = if title.is_empty() {
@@ -153,22 +208,19 @@ fn resolve_type_name(ontology: Option<&Ontology>, opts: &AddOptions) -> Result<S
 }
 
 /// A type-appropriate empty placeholder for a required custom field.
-fn field_placeholder(ontology: &Ontology, field: &crate::ontology::schema::Field) -> Value {
+fn field_placeholder(ontology: &Ontology, field: &crate::ontology::schema::Field) -> Option<Value> {
     match resolve_field(ontology, field) {
         Ok(resolved) => match resolved.ty.base {
-            FieldType::Bool => Value::Bool(false),
-            FieldType::Int => Value::Number(0.into()),
-            FieldType::List => Value::Sequence(Vec::new()),
-            FieldType::Object => Value::Mapping(Mapping::new()),
-            FieldType::Enum => resolved
-                .ty
-                .values
-                .first()
-                .map(|v| Value::String(v.clone()))
-                .unwrap_or_else(|| Value::String(String::new())),
-            _ => Value::String(String::new()),
+            FieldType::Bool => Some(Value::Bool(false)),
+            FieldType::Int => Some(Value::Number(0.into())),
+            FieldType::List => Some(Value::Sequence(Vec::new())),
+            FieldType::Object => Some(Value::Mapping(Mapping::new())),
+            // An enum has no honest neutral value. Omitting it lets lint identify the missing
+            // required field instead of silently claiming the first member.
+            FieldType::Enum => None,
+            _ => Some(Value::String(String::new())),
         },
         // Unresolvable field type — fall back to an empty string placeholder.
-        Err(_) => Value::String(String::new()),
+        Err(_) => Some(Value::String(String::new())),
     }
 }

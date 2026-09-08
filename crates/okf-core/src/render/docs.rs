@@ -23,6 +23,7 @@ use crate::graph::build::build_graph;
 use crate::graph::render::{render as graph_render, RenderFormat};
 use crate::model::concept::Concept;
 use crate::model::link::outbound_links;
+use crate::ontology::schema::Ontology;
 
 /// A documentation output format for `okf docs --format …`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,12 +80,16 @@ impl DocsFormat {
 ///
 /// Returns an error for `pdf` (unsupported in v1) and for `index` (a write format — call
 /// [`crate::render::index::write_indexes`]).
-pub fn render_docs(bundle: &Bundle, format: DocsFormat) -> Result<String> {
+pub fn render_docs(
+    bundle: &Bundle,
+    ontology: Option<&Ontology>,
+    format: DocsFormat,
+) -> Result<String> {
     match format {
         DocsFormat::Md => Ok(render_markdown(bundle)),
-        DocsFormat::Obsidian => Ok(render_obsidian(bundle)),
+        DocsFormat::Obsidian => Ok(render_obsidian(bundle, ontology)),
         DocsFormat::Html => Ok(render_html(bundle)),
-        DocsFormat::Graphml => Ok(render_graphml(bundle)),
+        DocsFormat::Graphml => Ok(render_graphml(bundle, ontology)),
         DocsFormat::Pdf => Err(OkfError::Usage(
             "pdf requires the `docs-pdf` feature / external renderer; not available in v1"
                 .to_string(),
@@ -128,9 +133,7 @@ fn render_markdown(bundle: &Bundle) -> String {
     out.push_str("## Contents\n\n");
     for c in &bundle.concepts {
         match c.concept_type() {
-            Some(ty) if !ty.is_empty() => {
-                out.push_str(&format!("* {} — {ty}\n", concept_title(c)))
-            }
+            Some(ty) if !ty.is_empty() => out.push_str(&format!("* {} — {ty}\n", concept_title(c))),
             _ => out.push_str(&format!("* {}\n", concept_title(c))),
         }
     }
@@ -146,7 +149,7 @@ fn render_markdown(bundle: &Bundle) -> String {
 /// Consolidated markdown with Obsidian-style `[[wikilinks]]`. Contents entries and each
 /// concept's outbound references are emitted as wikilinks keyed by concept id, so splitting
 /// the document into per-note files in a vault keeps the links resolvable.
-fn render_obsidian(bundle: &Bundle) -> String {
+fn render_obsidian(bundle: &Bundle, ontology: Option<&Ontology>) -> String {
     let mut out = String::from("# OKF Vault Index\n\n");
     out.push_str(
         "> Consolidated bundle rendered for an Obsidian vault. \
@@ -170,7 +173,7 @@ fn render_obsidian(bundle: &Bundle) -> String {
         if let Some(d) = c.description() {
             out.push_str(&format!("- **Description:** {d}\n"));
         }
-        let links = outbound_links(c);
+        let links = outbound_links(c, ontology);
         if !links.is_empty() {
             let joined = links
                 .iter()
@@ -221,8 +224,8 @@ fn render_html(bundle: &Bundle) -> String {
 }
 
 /// Delegate the graph rendering to the shared emitter (do not reimplement).
-fn render_graphml(bundle: &Bundle) -> String {
-    let graph = build_graph(bundle);
+fn render_graphml(bundle: &Bundle, ontology: Option<&Ontology>) -> String {
+    let graph = build_graph(bundle, ontology);
     graph_render(&graph, RenderFormat::Graphml, None)
 }
 
@@ -258,8 +261,8 @@ mod tests {
     #[test]
     fn md_is_nonempty_and_deterministic() {
         let b = sample();
-        let a = render_docs(&b, DocsFormat::Md).unwrap();
-        let c = render_docs(&b, DocsFormat::Md).unwrap();
+        let a = render_docs(&b, None, DocsFormat::Md).unwrap();
+        let c = render_docs(&b, None, DocsFormat::Md).unwrap();
         assert_eq!(a, c, "markdown output must be deterministic");
         assert!(a.starts_with("# OKF Documentation\n"));
         assert!(a.contains("## Contents"));
@@ -276,8 +279,8 @@ mod tests {
     #[test]
     fn html_wraps_rendered_markdown() {
         let b = sample();
-        let a = render_docs(&b, DocsFormat::Html).unwrap();
-        let c = render_docs(&b, DocsFormat::Html).unwrap();
+        let a = render_docs(&b, None, DocsFormat::Html).unwrap();
+        let c = render_docs(&b, None, DocsFormat::Html).unwrap();
         assert_eq!(a, c, "html output must be deterministic");
         assert!(a.starts_with("<!DOCTYPE html>"));
         assert!(a.contains("<title>OKF Documentation</title>"));
@@ -290,17 +293,17 @@ mod tests {
     #[test]
     fn graphml_delegates_to_graph_renderer() {
         let b = sample();
-        let a = render_docs(&b, DocsFormat::Graphml).unwrap();
+        let a = render_docs(&b, None, DocsFormat::Graphml).unwrap();
         assert!(a.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<graphml"));
         assert!(a.contains("<graph id=\"okf\" edgedefault=\"directed\">"));
-        assert_eq!(a, render_docs(&b, DocsFormat::Graphml).unwrap());
+        assert_eq!(a, render_docs(&b, None, DocsFormat::Graphml).unwrap());
     }
 
     #[test]
     fn obsidian_uses_wikilinks() {
         let b = sample();
-        let a = render_docs(&b, DocsFormat::Obsidian).unwrap();
-        assert_eq!(a, render_docs(&b, DocsFormat::Obsidian).unwrap());
+        let a = render_docs(&b, None, DocsFormat::Obsidian).unwrap();
+        assert_eq!(a, render_docs(&b, None, DocsFormat::Obsidian).unwrap());
         assert!(a.contains("[[/tables/customers|Customers]]"));
         assert!(a.contains("[[wikilinks]]"));
     }
@@ -308,7 +311,7 @@ mod tests {
     #[test]
     fn pdf_returns_clear_error() {
         let b = sample();
-        let err = render_docs(&b, DocsFormat::Pdf).unwrap_err();
+        let err = render_docs(&b, None, DocsFormat::Pdf).unwrap_err();
         assert!(matches!(err, OkfError::Usage(_)));
         assert!(err.to_string().contains("pdf"));
         assert!(err.to_string().contains("not available in v1"));
@@ -317,7 +320,7 @@ mod tests {
     #[test]
     fn index_format_is_a_write_not_an_artifact() {
         let b = sample();
-        let err = render_docs(&b, DocsFormat::Index).unwrap_err();
+        let err = render_docs(&b, None, DocsFormat::Index).unwrap_err();
         assert!(matches!(err, OkfError::Usage(_)));
         assert!(err.to_string().contains("write_indexes"));
     }

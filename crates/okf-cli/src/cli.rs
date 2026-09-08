@@ -66,7 +66,7 @@ pub enum Command {
     /// Append a `verified` entry (the write-side of trust).
     Verify(VerifyArgs),
     /// Re-record source fingerprints after a change is acknowledged.
-    Refresh(IdArgs),
+    Refresh(RefreshArgs),
 
     // ---- MUTATE / QUERY: ontology ----
     /// Inspect or edit the tool-local `ontology.yaml`.
@@ -230,6 +230,15 @@ pub struct AddArgs {
     /// Scaffold an OKF Attested Computation (computation/executor/attester).
     #[arg(long)]
     pub attested: bool,
+    /// Set a custom scalar field at creation, `key=value` (repeatable).
+    #[arg(long = "set")]
+    pub set: Vec<String>,
+    /// Set a declared reference at creation, `key=link` (repeatable).
+    #[arg(long = "ref")]
+    pub reference: Vec<String>,
+    /// Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable).
+    #[arg(long = "add-source")]
+    pub add_source: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -250,6 +259,9 @@ pub struct EditArgs {
     /// Remove matching item(s) from a list field, `key=value` (repeatable).
     #[arg(long = "remove")]
     pub remove: Vec<String>,
+    /// Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable).
+    #[arg(long = "add-source")]
+    pub add_source: Vec<String>,
     /// Replace the whole body. Use `@file` to read a file or `-` for stdin.
     #[arg(long = "set-body")]
     pub set_body: Option<String>,
@@ -268,6 +280,17 @@ pub struct EditArgs {
     /// Remove a section (heading + content), `<heading>` (repeatable).
     #[arg(long = "remove-section")]
     pub remove_section: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct RefreshArgs {
+    /// Concept id to refresh.
+    pub concept: String,
+    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    pub bundle: Option<String>,
+    /// Fail (exit 1) when any source is skipped: never (default) | skipped | any.
+    #[arg(long = "fail-on")]
+    pub fail_on: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -342,6 +365,12 @@ pub struct OntEditArgs {
     /// A reference rule, `key:Target[|Target2]:cardinality` (repeatable).
     #[arg(long = "ref")]
     pub reference: Vec<String>,
+    /// Remove a typed field (update only; repeatable).
+    #[arg(long = "remove-field")]
+    pub remove_field: Vec<String>,
+    /// Remove a reference rule (update only; repeatable).
+    #[arg(long = "remove-ref")]
+    pub remove_reference: Vec<String>,
     /// Mark the concept type as an attested computation.
     #[arg(long)]
     pub attested: bool,

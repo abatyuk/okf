@@ -1,9 +1,10 @@
 //! init, add, edit, mv, rm, verify, refresh. Each emits a `change` record under `--json`.
-use crate::cli::{AddArgs, EditArgs, IdArgs, InitArgs, MvArgs, RmArgs, VerifyArgs};
+use crate::cli::{AddArgs, EditArgs, InitArgs, MvArgs, RefreshArgs, RmArgs, VerifyArgs};
 use crate::output;
 use okf_core::bundle::resolve::resolve_bundle;
 use okf_core::error::Result;
 use okf_core::fingerprint::Engine;
+use okf_core::model::source::{Fingerprint, Source, SourceKind};
 use okf_core::mutate::add::{add, AddOptions};
 use okf_core::mutate::edit::{edit, parse_kv, EditChange, EditSpec};
 use okf_core::mutate::init::{init, InitOptions};
@@ -73,6 +74,12 @@ pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
         title: args.title.clone(),
         description: args.description.clone(),
         attested: args.attested,
+        sets: parse_pairs("--set", &args.set)?
+            .into_iter()
+            .map(|(k, v)| (k, okf_core::mutate::edit::parse_scalar(&v)))
+            .collect(),
+        references: parse_pairs("--ref", &args.reference)?,
+        sources: parse_source_args(&args.add_source)?,
     };
     let r = add(&root, &args.path, ontology.as_ref(), &opts)?;
     if json {
@@ -85,7 +92,12 @@ pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
             "attested": r.attested,
         }))?;
     } else {
-        println!("added {} ({}) at {}", r.id.0, r.concept_type, r.path.display());
+        println!(
+            "added {} ({}) at {}",
+            r.id.0,
+            r.concept_type,
+            r.path.display()
+        );
     }
     Ok(0)
 }
@@ -101,6 +113,7 @@ pub fn run_edit(args: &EditArgs, json: bool) -> Result<i32> {
         unsets: args.unset.clone(),
         adds: parse_pairs("--add", &args.add)?,
         removes: parse_pairs("--remove", &args.remove)?,
+        add_sources: parse_source_args(&args.add_source)?,
         clear_body: args.clear_body,
         set_body: resolve_opt(&args.set_body, &mut stdin_cache)?,
         append_body: resolve_opt(&args.append_body, &mut stdin_cache)?,
@@ -128,6 +141,47 @@ pub fn run_edit(args: &EditArgs, json: bool) -> Result<i32> {
 /// Split a list of `key=value` args for a given flag.
 fn parse_pairs(flag: &str, args: &[String]) -> Result<Vec<(String, String)>> {
     args.iter().map(|a| parse_kv(flag, a)).collect()
+}
+
+/// Parse `resource=...,kind=...` into a typed source. The comma delimiter is intentionally
+/// narrow; paths and URIs containing commas can use percent-encoding.
+fn parse_source_args(args: &[String]) -> Result<Vec<Source>> {
+    use okf_core::error::OkfError;
+    args.iter()
+        .map(|arg| {
+            let mut resource = None;
+            let mut kind = None;
+            for part in arg.split(',') {
+                let (key, value) = part.split_once('=').ok_or_else(|| {
+                    OkfError::Usage(format!(
+                        "invalid --add-source {arg:?}: expected resource=<value>,kind=<value>"
+                    ))
+                })?;
+                match key.trim() {
+                    "resource" if !value.trim().is_empty() => {
+                        resource = Some(value.trim().to_string())
+                    }
+                    "kind" if !value.trim().is_empty() => kind = Some(value.trim().to_string()),
+                    other => {
+                        return Err(OkfError::Usage(format!(
+                            "invalid --add-source key {other:?}: expected resource and kind"
+                        )))
+                    }
+                }
+            }
+            let resource = resource.ok_or_else(|| {
+                OkfError::Usage("--add-source requires resource=<value>".to_string())
+            })?;
+            let kind = kind
+                .ok_or_else(|| OkfError::Usage("--add-source requires kind=<value>".to_string()))?;
+            Ok(Source {
+                resource,
+                kind: SourceKind::from_kind_str(&kind),
+                fingerprint: Fingerprint::default(),
+                extra: Default::default(),
+            })
+        })
+        .collect()
 }
 
 /// Chunk a `num_args = 2` section flag (`<heading> <text>` pairs) into `(heading, text)`,
@@ -180,15 +234,23 @@ fn resolve_text(raw: &str, stdin_cache: &mut Option<String>) -> Result<String> {
 fn change_json(c: &EditChange) -> serde_json::Value {
     match c {
         EditChange::Set { key, existed } => json!({"op": "set", "key": key, "existed": existed}),
-        EditChange::Unset { key, existed } => json!({"op": "unset", "key": key, "existed": existed}),
+        EditChange::Unset { key, existed } => {
+            json!({"op": "unset", "key": key, "existed": existed})
+        }
         EditChange::Add { key, added } => json!({"op": "add", "key": key, "added": added}),
-        EditChange::Remove { key, removed } => json!({"op": "remove", "key": key, "removed": removed}),
+        EditChange::Remove { key, removed } => {
+            json!({"op": "remove", "key": key, "removed": removed})
+        }
         EditChange::SetBody => json!({"op": "set-body"}),
         EditChange::AppendBody => json!({"op": "append-body"}),
         EditChange::ClearBody => json!({"op": "clear-body"}),
         EditChange::SetSection { heading } => json!({"op": "set-section", "heading": heading}),
-        EditChange::AppendSection { heading } => json!({"op": "append-section", "heading": heading}),
-        EditChange::RemoveSection { heading } => json!({"op": "remove-section", "heading": heading}),
+        EditChange::AppendSection { heading } => {
+            json!({"op": "append-section", "heading": heading})
+        }
+        EditChange::RemoveSection { heading } => {
+            json!({"op": "remove-section", "heading": heading})
+        }
     }
 }
 
@@ -206,7 +268,12 @@ pub fn run_mv(args: &MvArgs, json: bool) -> Result<i32> {
             "rewritten": rewritten,
         }))?;
     } else {
-        println!("moved {} -> {} ({} referrer(s) rewritten)", r.from.0, r.to.0, r.rewritten.len());
+        println!(
+            "moved {} -> {} ({} referrer(s) rewritten)",
+            r.from.0,
+            r.to.0,
+            r.rewritten.len()
+        );
     }
     Ok(0)
 }
@@ -227,7 +294,10 @@ pub fn run_rm(args: &RmArgs, json: bool) -> Result<i32> {
     } else {
         println!("removed {}", r.id.0);
         if !r.dangling_referrers.is_empty() {
-            eprintln!("warning: {} referrer(s) now dangle", r.dangling_referrers.len());
+            eprintln!(
+                "warning: {} referrer(s) now dangle",
+                r.dangling_referrers.len()
+            );
         }
     }
     Ok(0)
@@ -253,7 +323,7 @@ pub fn run_verify(args: &VerifyArgs, json: bool) -> Result<i32> {
 }
 
 /// `okf refresh <concept> [bundle]`.
-pub fn run_refresh(args: &IdArgs, json: bool) -> Result<i32> {
+pub fn run_refresh(args: &RefreshArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let fs = RealFs;
     let git = RealGit;
@@ -283,6 +353,18 @@ pub fn run_refresh(args: &IdArgs, json: bool) -> Result<i32> {
             r.unchanged.len(),
             r.skipped.len()
         );
+        for skipped in &r.skipped {
+            eprintln!("  skipped {}: {}", skipped.resource, skipped.reason);
+        }
     }
-    Ok(0)
+    let fail = match args.fail_on.as_deref() {
+        None | Some("never") => false,
+        Some("any") | Some("skipped") => !r.skipped.is_empty(),
+        Some(other) => {
+            return Err(okf_core::error::OkfError::Usage(format!(
+                "invalid --fail-on {other:?}: expected never, skipped, or any"
+            )))
+        }
+    };
+    Ok(if fail { 1 } else { 0 })
 }

@@ -2,6 +2,7 @@
 use crate::bundle::loader::Bundle;
 use crate::graph::build::build_graph;
 use crate::model::trust::TrustTier;
+use crate::ontology::schema::Ontology;
 use std::collections::BTreeMap;
 
 /// Type string used when a concept carries no (or an empty) `type`.
@@ -32,8 +33,8 @@ pub struct Stats {
 }
 
 /// Compute the [`Stats`] summary for a bundle.
-pub fn stats(bundle: &Bundle) -> Stats {
-    let graph = build_graph(bundle);
+pub fn stats(bundle: &Bundle, ontology: Option<&Ontology>) -> Stats {
+    let graph = build_graph(bundle, ontology);
 
     let mut by_type: BTreeMap<String, usize> = BTreeMap::new();
     let mut trust = TrustDistribution::default();
@@ -85,6 +86,9 @@ mod tests {
 
     #[test]
     fn summarizes_types_trust_and_orphans() {
+        let ontology = crate::ontology::load::parse_ontology(
+            "okf_ontology: '0.1'\nconcepts:\n  Policy:\n    references:\n      refs: {target: Metric, cardinality: 0..n}\n  Metric: {}\n"
+        ).unwrap();
         let bundle = Bundle {
             root: std::path::PathBuf::from("."),
             concepts: vec![
@@ -93,7 +97,7 @@ mod tests {
                 concept("c", "type: Metric"), // orphan: no links either way
             ],
         };
-        let s = stats(&bundle);
+        let s = stats(&bundle, Some(&ontology));
         assert_eq!(s.total, 3);
         assert_eq!(s.by_type.get("Policy"), Some(&1));
         assert_eq!(s.by_type.get("Metric"), Some(&2));
@@ -109,6 +113,6 @@ mod tests {
             root: std::path::PathBuf::from("."),
             concepts: vec![concept("a", "title: no type")],
         };
-        assert_eq!(stats(&bundle).by_type.get(UNTYPED), Some(&1));
+        assert_eq!(stats(&bundle, None).by_type.get(UNTYPED), Some(&1));
     }
 }

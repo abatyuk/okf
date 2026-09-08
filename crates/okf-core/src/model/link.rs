@@ -12,9 +12,13 @@
 //! - **external** — anything with a URI scheme (`https://…`, `bigquery://…`, `mailto:…`) or a
 //!   pure `#fragment`; never a concept edge.
 //!
+//! Frontmatter strings are considered only when their key is a reference rule declared by the
+//! concept's ontology type. Markdown body links are always considered.
+//!
 //! Broken links are **not** errors (spec: consumers MUST tolerate them). Extraction records
 //! edges to ids that may not exist; the graph carries them so callers can detect breakage.
 use crate::model::concept::{Concept, ConceptId};
+use crate::ontology::schema::Ontology;
 use pulldown_cmark::{Event, Parser, Tag};
 use serde_yaml::Value;
 use std::collections::HashSet;
@@ -122,28 +126,11 @@ fn normalize_id(path: &str) -> ConceptId {
     ConceptId(format!("/{}", out.join("/")))
 }
 
-/// Heuristic: does a frontmatter scalar *look like* a concept link/id (as opposed to a title,
-/// tag, date, …)? It must be internal (not external) and path-shaped: a leading slash, a
-/// dot-relative prefix, a `.md` suffix, or an embedded `/` with no whitespace.
-fn looks_like_link(s: &str) -> bool {
-    let t = s.trim();
-    if t.is_empty() || classify(t) == LinkKind::External {
-        return false;
-    }
-    t.starts_with('/')
-        || t.starts_with("./")
-        || t.starts_with("../")
-        || t.ends_with(".md")
-        || (t.contains('/') && !t.chars().any(char::is_whitespace))
-}
-
-/// Pull link-shaped strings out of a frontmatter value: bare strings and (recursively)
-/// sequences of them. Mappings (e.g. `sources`/`verified` structured entries) are ignored, so
-/// only genuine reference fields contribute edges.
+/// Pull strings out of a declared frontmatter reference value.
 fn collect_from_value(v: &Value, out: &mut Vec<String>) {
     match v {
         Value::String(s) => {
-            if looks_like_link(s) {
+            if !s.trim().is_empty() {
                 out.push(s.clone());
             }
         }
@@ -168,10 +155,17 @@ fn collect_from_body(body: &str, out: &mut Vec<String>) {
 
 /// Raw (unresolved) link strings a concept references, from BOTH frontmatter reference fields
 /// and markdown links in the body, in a stable order (frontmatter first, then body).
-pub fn raw_links(concept: &Concept) -> Vec<String> {
+pub fn raw_links(concept: &Concept, ontology: Option<&Ontology>) -> Vec<String> {
     let mut raw = Vec::new();
-    for (_key, value) in &concept.frontmatter.map {
-        collect_from_value(value, &mut raw);
+    if let Some(ct) = concept
+        .concept_type()
+        .and_then(|name| ontology.and_then(|o| o.concepts.get(name)))
+    {
+        for key in ct.references.keys() {
+            if let Some(value) = concept.frontmatter.get(key) {
+                collect_from_value(value, &mut raw);
+            }
+        }
     }
     collect_from_body(&concept.body, &mut raw);
     raw
@@ -180,10 +174,10 @@ pub fn raw_links(concept: &Concept) -> Vec<String> {
 /// The concept ids a concept links to (outbound edges): resolved, external links dropped,
 /// self-links dropped, deduplicated, order-preserving. Targets may not exist in the bundle
 /// (broken links are recorded, not rejected).
-pub fn outbound_links(concept: &Concept) -> Vec<ConceptId> {
+pub fn outbound_links(concept: &Concept, ontology: Option<&Ontology>) -> Vec<ConceptId> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut out: Vec<ConceptId> = Vec::new();
-    for raw in raw_links(concept) {
+    for raw in raw_links(concept, ontology) {
         if classify(&raw) == LinkKind::External {
             continue;
         }
@@ -267,12 +261,18 @@ mod tests {
 
     #[test]
     fn extracts_from_frontmatter_and_body() {
+        let ontology = crate::ontology::load::parse_ontology(
+            "okf_ontology: '0.1'\nconcepts:\n  Policy:\n    references:\n      computations: {target: X, cardinality: 0..n}\n      inputs: {target: X, cardinality: 0..n}\n"
+        ).unwrap();
         let c = concept(
             "policies/travel",
             "type: Policy\ntitle: Travel policy\ncomputations:\n- /computations/mileage\ninputs:\n- ../tables/customers\nresource: bigquery://p/d/t",
             "See [customers](/tables/customers.md) and [ext](https://x.com).",
         );
-        let outs: Vec<String> = outbound_links(&c).iter().map(|c| c.0.clone()).collect();
+        let outs: Vec<String> = outbound_links(&c, Some(&ontology))
+            .iter()
+            .map(|c| c.0.clone())
+            .collect();
         assert_eq!(
             outs,
             vec![
@@ -290,6 +290,20 @@ mod tests {
             "type: Note\ntitle: A B C\ntags:\n- finance\n- core\nstatus: draft",
             "no links here",
         );
-        assert!(outbound_links(&c).is_empty());
+        assert!(outbound_links(&c, None).is_empty());
+    }
+
+    #[test]
+    fn only_declared_reference_fields_become_edges() {
+        let ontology = crate::ontology::load::parse_ontology(
+            "okf_ontology: '0.1'\nconcepts:\n  Contract:\n    fields:\n      schema: {type: string}\n    references:\n      depends_on: {target: Contract, cardinality: 0..1}\n"
+        ).unwrap();
+        let c = concept(
+            "contracts/a",
+            "type: Contract\nschema: contracts/permissions/tables.schema.json\ndepends_on: /contracts/base",
+            "",
+        );
+        let outs = outbound_links(&c, Some(&ontology));
+        assert_eq!(outs, vec![id("contracts/base")]);
     }
 }

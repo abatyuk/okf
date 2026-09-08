@@ -1,6 +1,6 @@
 # okf CLI — argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.0, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.1, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 **For skills:** consult this file to learn a command's arguments. **Do not** run `okf <cmd> --help` or `okf schema` first just to discover flags — they are all listed here. Every command also accepts the global `--json` flag (NDJSON output) and takes an optional trailing `bundle` positional that falls back to `$OKF_BUNDLE`, then the cwd.
 
@@ -211,6 +211,9 @@ Add a new concept document, scaffolded from the ontology.
 | `--title <value>` | string | no | Concept title |
 | `--description <value>` | string | no | Concept description |
 | `--attested` | bool | no | Scaffold an OKF Attested Computation (computation/executor/attester) |
+| `--set <value>` | list<string> | no | Set a custom scalar field at creation, `key=value` (repeatable) |
+| `--ref <value>` | list<string> | no | Set a declared reference at creation, `key=link` (repeatable) |
+| `--add-source <value>` | list<string> | no | Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable) |
 
 Output stream: `change`.
 
@@ -226,6 +229,7 @@ Edit a concept losslessly: frontmatter (`--set/--unset/--add/--remove`) and body
 | `--unset <value>` | list<string> | no | Remove a field entirely, `key` (repeatable) |
 | `--add <value>` | list<string> | no | Append an item to a list field, `key=value` (repeatable, idempotent) |
 | `--remove <value>` | list<string> | no | Remove matching item(s) from a list field, `key=value` (repeatable) |
+| `--add-source <value>` | list<string> | no | Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable) |
 | `--set-body <value>` | string | no | Replace the whole body. Use `@file` to read a file or `-` for stdin |
 | `--append-body <value>` | string | no | Append a block to the body. Use `@file` or `-` (stdin) |
 | `--clear-body` | bool | no | Empty the body |
@@ -271,6 +275,8 @@ Define a new concept type with its fields and reference rules.
 | `--description <value>` | string | no | Description of the concept type |
 | `--field <value>` | list<string> | no | A typed field, `key:type[:required][:v1|v2|...]` (repeatable) |
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
+| `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
+| `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
 | `--attested` | bool | no | Mark the concept type as an attested computation |
 
 Output stream: `change`.
@@ -297,6 +303,8 @@ Modify fields/references of an existing concept type.
 | `--description <value>` | string | no | Description of the concept type |
 | `--field <value>` | list<string> | no | A typed field, `key:type[:required][:v1|v2|...]` (repeatable) |
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
+| `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
+| `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
 | `--attested` | bool | no | Mark the concept type as an attested computation |
 
 Output stream: `change`.
@@ -307,8 +315,9 @@ Re-record source fingerprints after a change is acknowledged.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
+| `<concept>` | positional | yes | Concept id to refresh |
 | `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `--fail-on <value>` | string | no | Fail (exit 1) when any source is skipped: never (default) | skipped | any |
 
 Output stream: `change`.
 

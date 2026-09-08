@@ -1,11 +1,14 @@
 ---
 type: 'DesignDecision'
-title: 'Comment loss in ontology.yaml (v1)'
-description: 'serde-based YAML drops comments, but ontology.yaml is hand-edited and commented.'
-status: 'open'
+title: 'Preserve comments in ontology.yaml edits'
+description: 'Typed serialization validates ontology edits; a key-path merge restores comments to surviving keys.'
+status: 'resolved'
 affects:
   - /components/ontology
 ---
-# Comment loss in ontology.yaml (v1)
+# Preserve comments in ontology.yaml edits
 
-serde-based YAML drops comments, but ontology.yaml is hand-edited and commented. v1 accepts comment loss as a documented limitation; a CST-based surgical editor for ontology.yaml is a later upgrade.
+Typed serialization remains the validation boundary for `ontology.yaml`. Before writing, the
+editor maps leading and inline comments to their YAML key paths and restores them to keys that
+survive the edit. Formatting and blank-line layout may normalize, and comments belonging to a
+removed key disappear with that key.

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use assert_cmd::prelude::*;
+use predicates::prelude::PredicateBooleanExt;
 use serde_json::Value;
 
 /// Path to a shared fixture bundle (they live in the `okf-core` crate).
@@ -93,7 +94,10 @@ fn validate_conformant_exits_zero() {
 #[test]
 fn validate_nonconformant_exits_one() {
     let out = okf()
-        .args(["validate", fixture("nonconformant-bundle").to_str().unwrap()])
+        .args([
+            "validate",
+            fixture("nonconformant-bundle").to_str().unwrap(),
+        ])
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
@@ -167,12 +171,39 @@ fn schema_is_valid_ndjson_with_all_commands() {
         .map(|r| r["name"].as_str().unwrap())
         .collect();
     for expected in [
-        "schema", "version", "list", "search", "show", "backlinks", "graph", "resolve", "scan",
-        "validate", "lint", "stale", "affected", "diff", "stats", "init", "add", "edit", "mv",
-        "rm", "verify", "refresh", "docs", "ontology list", "ontology show", "ontology add",
-        "ontology update", "ontology remove",
+        "schema",
+        "version",
+        "list",
+        "search",
+        "show",
+        "backlinks",
+        "graph",
+        "resolve",
+        "scan",
+        "validate",
+        "lint",
+        "stale",
+        "affected",
+        "diff",
+        "stats",
+        "init",
+        "add",
+        "edit",
+        "mv",
+        "rm",
+        "verify",
+        "refresh",
+        "docs",
+        "ontology list",
+        "ontology show",
+        "ontology add",
+        "ontology update",
+        "ontology remove",
     ] {
-        assert!(commands.contains(&expected), "missing command in schema: {expected}");
+        assert!(
+            commands.contains(&expected),
+            "missing command in schema: {expected}"
+        );
     }
     // Every command declares a group and mutates bool.
     for r in records.iter().filter(|r| r["kind"] == "command") {
@@ -256,24 +287,66 @@ fn mv_rewrites_inbound_links_via_cli() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().to_str().unwrap();
 
-    okf().args(["init", root, "--no-ontology"]).assert().success();
+    okf().args(["init", root]).assert().success();
     okf()
-        .args(["add", "computations/mileage", root, "--type", "Computation", "--title", "M"])
+        .args(["ontology", "add", "Computation", root])
         .assert()
         .success();
     okf()
-        .args(["add", "policies/travel", root, "--type", "Policy", "--title", "T"])
+        .args([
+            "ontology",
+            "add",
+            "Policy",
+            root,
+            "--ref",
+            "computations:Computation:0..1",
+        ])
+        .assert()
+        .success();
+    okf()
+        .args([
+            "add",
+            "computations/mileage",
+            root,
+            "--type",
+            "Computation",
+            "--title",
+            "M",
+        ])
+        .assert()
+        .success();
+    okf()
+        .args([
+            "add",
+            "policies/travel",
+            root,
+            "--type",
+            "Policy",
+            "--title",
+            "T",
+        ])
         .assert()
         .success();
     // Point travel at mileage via a frontmatter link.
     okf()
-        .args(["edit", "policies/travel", root, "--set", "computations=/computations/mileage"])
+        .args([
+            "edit",
+            "policies/travel",
+            root,
+            "--set",
+            "computations=/computations/mileage",
+        ])
         .assert()
         .success();
 
     // Move mileage; the inbound link in travel must be rewritten.
     okf()
-        .args(["mv", "computations/mileage", "computations/mileage_v2", root])
+        .args([
+            "mv",
+            "computations/mileage",
+            "computations/mileage_v2",
+            root,
+        ])
         .assert()
         .success();
 
@@ -284,4 +357,92 @@ fn mv_rewrites_inbound_links_via_cli() {
     let records = ndjson(&out.stdout);
     assert_eq!(records.len(), 1);
     assert_eq!(records[0]["id"], "/policies/travel");
+}
+
+#[test]
+fn structured_sources_can_be_added_and_refresh_can_fail_on_skips() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_str().unwrap();
+    okf()
+        .args(["init", root, "--no-ontology"])
+        .assert()
+        .success();
+    okf()
+        .args([
+            "add",
+            "notes/x",
+            root,
+            "--type",
+            "Note",
+            "--title",
+            "X",
+            "--set",
+            "status=active",
+            "--add-source",
+            "resource=missing.txt,kind=file",
+        ])
+        .assert()
+        .success();
+    let shown = okf()
+        .args(["show", "notes/x", root, "--json"])
+        .output()
+        .unwrap();
+    let record = &ndjson(&shown.stdout)[0];
+    assert_eq!(record["status"], "active");
+    assert_eq!(record["sources"][0]["resource"], "missing.txt");
+    assert_eq!(record["sources"][0]["kind"], "file");
+
+    okf()
+        .args(["refresh", "notes/x", root, "--fail-on", "any"])
+        .assert()
+        .code(1)
+        .stderr(predicates::str::contains("skipped missing.txt"));
+}
+
+#[test]
+fn ontology_show_lists_enum_values_and_update_can_remove_members() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_str().unwrap();
+    okf().args(["init", root]).assert().success();
+    okf()
+        .args([
+            "ontology",
+            "add",
+            "Contract",
+            root,
+            "--field",
+            "status:enum:required:draft|active",
+            "--field",
+            "schema:string",
+            "--ref",
+            "depends_on:Contract:0..1",
+        ])
+        .assert()
+        .success();
+    okf()
+        .args(["ontology", "show", "Contract", root])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains(
+            "status: enum [draft|active] (required)",
+        ));
+    okf()
+        .args([
+            "ontology",
+            "update",
+            "Contract",
+            root,
+            "--remove-field",
+            "schema",
+            "--remove-ref",
+            "depends_on",
+        ])
+        .assert()
+        .success();
+    okf()
+        .args(["ontology", "show", "Contract", root])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("schema").not())
+        .stdout(predicates::str::contains("depends_on").not());
 }

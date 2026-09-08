@@ -4,12 +4,12 @@
 use std::path::{Path, PathBuf};
 
 use okf_core::fingerprint::Engine;
+use okf_core::model::concept::ConceptId;
 use okf_core::model::source::parse_sources;
 use okf_core::mutate::{add, edit, init, mv, refresh, rm, verify};
 use okf_core::ontology::load::parse_ontology;
 use okf_core::ontology::schema::Ontology;
 use okf_core::parse::parse_concept;
-use okf_core::model::concept::ConceptId;
 use okf_core::ports::clock::FixedClock;
 use okf_core::ports::fs::FakeFs;
 use okf_core::ports::git::FakeGit;
@@ -109,6 +109,7 @@ fn add_scaffolds_from_ontology_required_fields() {
             title: Some("Travel policy".to_string()),
             description: Some("Rules for travel.".to_string()),
             attested: false,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -118,7 +119,10 @@ fn add_scaffolds_from_ontology_required_fields() {
     let c = parse_concept(res.id.clone(), &read_file(root, "policies/travel.md")).unwrap();
     let keys: Vec<&str> = c.frontmatter.map.keys().map(String::as_str).collect();
     // type/title/description first, then the required custom field + required reference key.
-    assert_eq!(keys, vec!["type", "title", "description", "owner", "computations"]);
+    assert_eq!(
+        keys,
+        vec!["type", "title", "description", "owner", "computations"]
+    );
     assert_eq!(c.title(), Some("Travel policy"));
     assert_eq!(c.frontmatter.get_str("owner"), Some(""));
     assert!(c.frontmatter.get("computations").unwrap().is_sequence());
@@ -151,6 +155,7 @@ fn add_attested_defaults_type_and_scaffolds_block() {
             title: Some("Mileage calc".to_string()),
             description: None,
             attested: true,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -158,9 +163,13 @@ fn add_attested_defaults_type_and_scaffolds_block() {
     assert_eq!(res.concept_type, "Computation");
     assert!(res.attested);
 
-    let c = parse_concept(res.id.clone(), &read_file(root, "computations/mileage_calc.md")).unwrap();
-    // Required enum field scaffolds to its first value; attested block appended.
-    assert_eq!(c.frontmatter.get_str("runtime"), Some("bigquery"));
+    let c = parse_concept(
+        res.id.clone(),
+        &read_file(root, "computations/mileage_calc.md"),
+    )
+    .unwrap();
+    // Required enums stay unset rather than being silently guessed.
+    assert_eq!(c.frontmatter.get_str("runtime"), None);
     for key in ["computation", "executor", "attester"] {
         assert!(c.frontmatter.get(key).is_some(), "missing {key}");
     }
@@ -196,7 +205,10 @@ fn edit_sets_fields_losslessly_preserving_order_and_unknown_keys() {
     let c = parse_concept(res.id.clone(), &read_file(root, "notes/n.md")).unwrap();
     let keys: Vec<&str> = c.frontmatter.map.keys().map(String::as_str).collect();
     // Existing keys keep position; new keys appended in order.
-    assert_eq!(keys, vec!["type", "title", "custom_key", "version", "count", "draft"]);
+    assert_eq!(
+        keys,
+        vec!["type", "title", "custom_key", "version", "count", "draft"]
+    );
     assert_eq!(c.title(), Some("New title"));
     assert_eq!(c.frontmatter.get_str("custom_key"), Some("keep-me"));
     assert_eq!(c.frontmatter.get("count").unwrap().as_i64(), Some(42));
@@ -229,14 +241,24 @@ fn edit_unset_add_remove_manage_fields_and_lists() {
         },
     )
     .unwrap();
-    assert!(matches!(res.changes[0], edit::EditChange::Unset { existed: true, .. }));
+    assert!(matches!(
+        res.changes[0],
+        edit::EditChange::Unset { existed: true, .. }
+    ));
 
     let c = parse_concept(res.id.clone(), &read_file(root, "c/x.md")).unwrap();
     // layer removed; remaining keys keep order; new `tags` appended.
     let keys: Vec<&str> = c.frontmatter.map.keys().map(String::as_str).collect();
     assert_eq!(keys, vec!["type", "title", "deps", "tags"]);
-    let deps: Vec<&str> = c.frontmatter.get("deps").unwrap().as_sequence().unwrap()
-        .iter().map(|v| v.as_str().unwrap()).collect();
+    let deps: Vec<&str> = c
+        .frontmatter
+        .get("deps")
+        .unwrap()
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
     assert_eq!(deps, vec!["/a", "/c"]); // /b removed, /c added, /a not duplicated
     assert_eq!(c.frontmatter.get_tags(), vec!["core"]);
     assert_eq!(c.body, "body\n");
@@ -317,6 +339,7 @@ fn edit_with_no_operations_errors() {
 fn mv_rewrites_every_inbound_link_and_rebases_moved_relative_links() {
     let tmp = temp_bundle();
     let root = tmp.path();
+    write_file(root, "ontology.yaml", "okf_ontology: '0.1'\nconcepts:\n  Table:\n    references:\n      see: {target: Metric, cardinality: 0..n}\n      rel: {target: Table, cardinality: 0..n}\n  Policy:\n    references:\n      refs: {target: Table, cardinality: 0..n}\n  Metric:\n    references:\n      inputs: {target: Table, cardinality: 0..n}\n  T: {}\n");
 
     // The concept being moved: has an outbound RELATIVE link that must be rebased.
     write_file(
@@ -357,17 +380,32 @@ fn mv_rewrites_every_inbound_link_and_rebases_moved_relative_links() {
     // Bundle-relative referrer: style preserved, id updated.
     let travel = read_file(root, "policies/travel.md");
     assert!(travel.contains("- /warehouse/east/customers\n"), "{travel}");
-    assert!(travel.contains("[c](/warehouse/east/customers.md)"), "{travel}");
+    assert!(
+        travel.contains("[c](/warehouse/east/customers.md)"),
+        "{travel}"
+    );
 
     // Relative referrer recomputed from its own directory.
     let revenue = read_file(root, "metrics/revenue.md");
-    assert!(revenue.contains("- ../warehouse/east/customers.md\n"), "{revenue}");
-    assert!(revenue.contains("[c](../warehouse/east/customers.md)"), "{revenue}");
+    assert!(
+        revenue.contains("- ../warehouse/east/customers.md\n"),
+        "{revenue}"
+    );
+    assert!(
+        revenue.contains("[c](../warehouse/east/customers.md)"),
+        "{revenue}"
+    );
 
     // Sibling relative referrer recomputed.
     let orders = read_file(root, "tables/orders.md");
-    assert!(orders.contains("- ../warehouse/east/customers\n"), "{orders}");
-    assert!(orders.contains("[c](../warehouse/east/customers.md)"), "{orders}");
+    assert!(
+        orders.contains("- ../warehouse/east/customers\n"),
+        "{orders}"
+    );
+    assert!(
+        orders.contains("[c](../warehouse/east/customers.md)"),
+        "{orders}"
+    );
 
     // Moved file's OWN relative links rebased to the new depth.
     let moved = read_file(root, "warehouse/east/customers.md");
@@ -385,6 +423,7 @@ fn mv_rewrites_every_inbound_link_and_rebases_moved_relative_links() {
 fn rm_guards_dangling_backlinks_unless_forced() {
     let tmp = temp_bundle();
     let root = tmp.path();
+    write_file(root, "ontology.yaml", "okf_ontology: '0.1'\nconcepts:\n  Table: {}\n  Policy:\n    references:\n      refs: {target: Table, cardinality: 0..n}\n");
     write_file(root, "tables/customers.md", "---\ntype: Table\n---\n# C\n");
     write_file(
         root,
@@ -400,7 +439,11 @@ fn rm_guards_dangling_backlinks_unless_forced() {
     // Force removes and reports the now-dangling referrer.
     let forced = rm::rm(root, "tables/customers", true).unwrap();
     assert!(forced.removed);
-    let dangling: Vec<&str> = forced.dangling_referrers.iter().map(|c| c.0.as_str()).collect();
+    let dangling: Vec<&str> = forced
+        .dangling_referrers
+        .iter()
+        .map(|c| c.0.as_str())
+        .collect();
     assert_eq!(dangling, vec!["/policies/travel"]);
     assert!(!root.join("tables/customers.md").exists());
 
@@ -422,7 +465,12 @@ fn verify_appends_entry_and_promotes_bare_mapping_to_list() {
     write_file(root, "a.md", "---\ntype: T\ntitle: A\n---\n# A\n");
     verify::verify(root, "a", "human:andrey", &clock).unwrap();
     let a = parse_concept(ConceptId::from_relative("a"), &read_file(root, "a.md")).unwrap();
-    let seq = a.frontmatter.get("verified").unwrap().as_sequence().unwrap();
+    let seq = a
+        .frontmatter
+        .get("verified")
+        .unwrap()
+        .as_sequence()
+        .unwrap();
     assert_eq!(seq.len(), 1);
     assert_eq!(a.trust_tier().as_str(), "human-reviewed");
 
@@ -434,11 +482,25 @@ fn verify_appends_entry_and_promotes_bare_mapping_to_list() {
     );
     verify::verify(root, "b", "human:andrey", &clock).unwrap();
     let b = parse_concept(ConceptId::from_relative("b"), &read_file(root, "b.md")).unwrap();
-    let seq = b.frontmatter.get("verified").unwrap().as_sequence().unwrap();
+    let seq = b
+        .frontmatter
+        .get("verified")
+        .unwrap()
+        .as_sequence()
+        .unwrap();
     assert_eq!(seq.len(), 2, "bare mapping became a 2-element list");
-    assert_eq!(seq[0].get("by").and_then(|v| v.as_str()), Some("process:ci"));
-    assert_eq!(seq[1].get("by").and_then(|v| v.as_str()), Some("human:andrey"));
-    assert_eq!(seq[1].get("at").and_then(|v| v.as_str()), Some("2026-09-07T00:00:00Z"));
+    assert_eq!(
+        seq[0].get("by").and_then(|v| v.as_str()),
+        Some("process:ci")
+    );
+    assert_eq!(
+        seq[1].get("by").and_then(|v| v.as_str()),
+        Some("human:andrey")
+    );
+    assert_eq!(
+        seq[1].get("at").and_then(|v| v.as_str()),
+        Some("2026-09-07T00:00:00Z")
+    );
 }
 
 // ---------------------------------------------------------------------------- refresh
@@ -478,7 +540,10 @@ fn refresh_recomputes_fingerprints_preserving_extras_and_updating_last_modified(
     assert_eq!(res.last_modified, "2026-09-07T12:00:00Z");
 
     let c = parse_concept(res.id.clone(), &read_file(root, "computations/mileage.md")).unwrap();
-    assert_eq!(c.frontmatter.get_str("last_modified"), Some("2026-09-07T12:00:00Z"));
+    assert_eq!(
+        c.frontmatter.get_str("last_modified"),
+        Some("2026-09-07T12:00:00Z")
+    );
     let sources = parse_sources(c.frontmatter.get("sources").unwrap());
     assert_eq!(sources[0].fingerprint.get("blob_sha"), Some("newsha"));
     // Extra keys (id/author) preserved verbatim.
@@ -486,4 +551,24 @@ fn refresh_recomputes_fingerprints_preserving_extras_and_updating_last_modified(
     assert_eq!(extras, vec!["id", "author"]);
     // The skipped source is untouched.
     assert_eq!(sources[1].resource, "weird");
+}
+
+#[test]
+fn refresh_preserves_and_reports_malformed_source_entries() {
+    let tmp = temp_bundle();
+    let root = tmp.path();
+    write_file(
+        root,
+        "x.md",
+        "---\ntype: T\nsources:\n- accidentally-a-string\n- resource: ''\n  kind: file\n---\n",
+    );
+    let fs = FakeFs::new();
+    let git = FakeGit::new();
+    let engine = Engine::new(root, &fs, &git, None);
+    let clock = FixedClock("2026-09-08T00:00:00Z".to_string());
+    let result = refresh::refresh(root, "x", &engine, &clock).unwrap();
+    assert_eq!(result.skipped.len(), 2);
+    let after = read_file(root, "x.md");
+    assert!(after.contains("- accidentally-a-string"), "{after}");
+    assert!(after.contains("resource: ''"), "{after}");
 }

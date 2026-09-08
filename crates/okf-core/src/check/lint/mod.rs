@@ -149,7 +149,7 @@ pub fn lint_bundle(
     ontology: Option<&Ontology>,
     config: &LintConfig,
 ) -> Vec<Finding> {
-    let graph = build_graph(bundle);
+    let graph = build_graph(bundle, ontology);
     let ctx = RuleContext {
         bundle,
         graph: &graph,

@@ -106,7 +106,11 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
         Some(s) => FailOn::from_str(s)?,
         None => FailOn::default(), // error
     };
-    Ok(if meets_threshold(&findings, fail_on) { 1 } else { 0 })
+    Ok(if meets_threshold(&findings, fail_on) {
+        1
+    } else {
+        0
+    })
 }
 
 /// `okf stale [bundle] [--fail-on <sev>]` — informational unless `--fail-on` is set.
@@ -137,7 +141,13 @@ pub fn run_stale(args: &FailOnArgs, json: bool) -> Result<i32> {
                 println!("{}\texpired\tstale_after {exp}", cd.concept);
             }
             for s in &cd.sources {
-                println!("{}\t{}\t{}\t{}", cd.concept, s.drift.as_str(), s.resource, s.message);
+                println!(
+                    "{}\t{}\t{}\t{}",
+                    cd.concept,
+                    s.drift.as_str(),
+                    s.resource,
+                    s.message
+                );
             }
         }
     }
@@ -148,6 +158,7 @@ pub fn run_stale(args: &FailOnArgs, json: bool) -> Result<i32> {
 pub fn run_affected(args: &AffectedArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
+    let ontology = try_load(&root)?;
 
     let mut changed = args.changed.clone();
     // Also accept changed links piped on stdin (one per line), combined with `--changed`.
@@ -167,7 +178,7 @@ pub fn run_affected(args: &AffectedArgs, json: bool) -> Result<i32> {
         ));
     }
 
-    let graph = build_graph(&bundle);
+    let graph = build_graph(&bundle, ontology.as_ref());
     let opts = AffectedOptions {
         transitive: args.transitive,
         depth: args.depth,
@@ -196,7 +207,11 @@ pub fn run_diff(args: &DiffArgs, json: bool) -> Result<i32> {
     let d = diff(&bundle, &git, &args.git_ref)?;
 
     if json {
-        for (change, ids) in [("added", &d.added), ("removed", &d.removed), ("modified", &d.modified)] {
+        for (change, ids) in [
+            ("added", &d.added),
+            ("removed", &d.removed),
+            ("modified", &d.modified),
+        ] {
             for id in ids {
                 output::print_line(&json!({"kind": "diff", "change": change, "concept": id.0}))?;
             }
@@ -221,7 +236,8 @@ pub fn run_diff(args: &DiffArgs, json: bool) -> Result<i32> {
 pub fn run_stats(args: &FailOnArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
-    let s = stats(&bundle);
+    let ontology = try_load(&root)?;
+    let s = stats(&bundle, ontology.as_ref());
 
     if json {
         output::print_line(&json!({
@@ -262,7 +278,11 @@ fn discovery_exit(fail_on: &Option<String>, empty: bool) -> Result<i32> {
         None => Ok(0),
         Some(s) => {
             let fo = FailOn::from_str(s)?;
-            Ok(if !matches!(fo, FailOn::Never) && !empty { 1 } else { 0 })
+            Ok(if !matches!(fo, FailOn::Never) && !empty {
+                1
+            } else {
+                0
+            })
         }
     }
 }

@@ -8,6 +8,8 @@ use okf_core::graph::affected::{affected, AffectedOptions};
 use okf_core::graph::backlinks::backlinks_of;
 use okf_core::graph::build::build_graph;
 use okf_core::graph::render::{render, RenderFormat};
+use okf_core::ontology::load::parse_ontology;
+use okf_core::ontology::schema::Ontology;
 use okf_core::query::resolve::resolve;
 use okf_core::query::stats::stats;
 
@@ -19,10 +21,15 @@ fn ids(v: Vec<okf_core::model::concept::ConceptId>) -> Vec<String> {
     v.into_iter().map(|c| c.0).collect()
 }
 
+fn ontology() -> Ontology {
+    parse_ontology("okf_ontology: '0.1'\nconcepts:\n  Computation:\n    references:\n      inputs: {target: 'BigQuery Table', cardinality: 0..n}\n  Metric:\n    references:\n      computed_by: {target: Computation, cardinality: 0..1}\n  Policy:\n    references:\n      computations: {target: Computation, cardinality: 0..n}\n  BigQuery Table: {}\n").unwrap()
+}
+
 #[test]
 fn outbound_edges_from_frontmatter_and_body_including_broken() {
     let bundle = load_bundle(&linked_root()).unwrap();
-    let g = build_graph(&bundle);
+    let ontology = ontology();
+    let g = build_graph(&bundle, Some(&ontology));
 
     // Policy pulls its ref from frontmatter (computations) AND body links; dedups the
     // repeated mileage link, keeps the broken ghost, drops the external URL.
@@ -33,7 +40,11 @@ fn outbound_edges_from_frontmatter_and_body_including_broken() {
         .collect();
     assert_eq!(
         out,
-        vec!["/computations/mileage", "/tables/customers", "/tables/ghost"]
+        vec![
+            "/computations/mileage",
+            "/tables/customers",
+            "/tables/ghost"
+        ]
     );
 
     // Broken target exists in reverse but is not a loaded concept.
@@ -44,8 +55,9 @@ fn outbound_edges_from_frontmatter_and_body_including_broken() {
 #[test]
 fn backlinks_are_sorted_linkers() {
     let bundle = load_bundle(&linked_root()).unwrap();
+    let ontology = ontology();
     assert_eq!(
-        ids(backlinks_of(&bundle, "tables/customers")),
+        ids(backlinks_of(&bundle, Some(&ontology), "tables/customers")),
         vec![
             "/computations/mileage".to_string(),
             "/policies/travel".to_string(),
@@ -56,7 +68,8 @@ fn backlinks_are_sorted_linkers() {
 #[test]
 fn affected_direct_transitive_and_depth_capped() {
     let bundle = load_bundle(&linked_root()).unwrap();
-    let g = build_graph(&bundle);
+    let ontology = ontology();
+    let g = build_graph(&bundle, Some(&ontology));
     let changed = vec!["/tables/customers".to_string()];
 
     // Direct dependents only.
@@ -73,7 +86,10 @@ fn affected_direct_transitive_and_depth_capped() {
         ids(affected(
             &g,
             &changed,
-            &AffectedOptions { transitive: true, depth: None }
+            &AffectedOptions {
+                transitive: true,
+                depth: None
+            }
         )),
         vec![
             "/computations/mileage".to_string(),
@@ -87,7 +103,10 @@ fn affected_direct_transitive_and_depth_capped() {
         ids(affected(
             &g,
             &changed,
-            &AffectedOptions { transitive: true, depth: Some(1) }
+            &AffectedOptions {
+                transitive: true,
+                depth: Some(1)
+            }
         )),
         vec![
             "/computations/mileage".to_string(),
@@ -112,7 +131,8 @@ fn resolve_maps_id_to_path_and_flags_broken() {
 #[test]
 fn stats_summarize_bundle() {
     let bundle = load_bundle(&linked_root()).unwrap();
-    let s = stats(&bundle);
+    let ontology = ontology();
+    let s = stats(&bundle, Some(&ontology));
     assert_eq!(s.total, 5);
     assert_eq!(s.by_type.get("BigQuery Table"), Some(&1));
     assert_eq!(s.by_type.get("Policy"), Some(&1));
@@ -126,7 +146,8 @@ fn stats_summarize_bundle() {
 #[test]
 fn render_formats_are_stable() {
     let bundle = load_bundle(&linked_root()).unwrap();
-    let g = build_graph(&bundle);
+    let ontology = ontology();
+    let g = build_graph(&bundle, Some(&ontology));
 
     // Subtree forward-reachable from customers is the whole cycle
     // {customers, revenue, mileage} (mileage → customers closes it).

@@ -5,6 +5,10 @@ use std::path::Path;
 use std::process::Command;
 
 pub trait Git {
+    /// Locate the worktree root containing `anchor`. Test ports default to the anchor itself.
+    fn worktree_root(&self, anchor: &Path) -> Result<std::path::PathBuf> {
+        Ok(anchor.to_path_buf())
+    }
     /// `git hash-object <path>` — the blob object id (git-path fingerprint).
     fn hash_object(&self, path: &Path) -> Result<String>;
     /// `git log -1 --format=%H -- <path>` — last commit touching a path (git-commit).
@@ -33,19 +37,64 @@ impl RealGit {
             Err(e) => Err(OkfError::Io(e.to_string())),
         }
     }
+
+    fn repo_path(path: &Path) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
+        let anchor = path.parent().unwrap_or_else(|| Path::new("."));
+        let out = Self::run(
+            Command::new("git")
+                .arg("-C")
+                .arg(anchor)
+                .args(["rev-parse", "--show-toplevel"]),
+        )?;
+        let root = std::path::PathBuf::from(
+            String::from_utf8_lossy(&out.stdout).trim().to_string(),
+        );
+        let absolute = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir()
+                .map_err(|e| OkfError::Environment(e.to_string()))?
+                .join(path)
+        };
+        let relative = absolute.strip_prefix(&root).map_err(|_| {
+            OkfError::Usage(format!("git source {} is outside worktree {}", path.display(), root.display()))
+        })?;
+        Ok((root, relative.to_path_buf()))
+    }
 }
 
 impl Git for RealGit {
+    fn worktree_root(&self, anchor: &Path) -> Result<std::path::PathBuf> {
+        let out = Self::run(
+            Command::new("git")
+                .arg("-C")
+                .arg(anchor)
+                .args(["rev-parse", "--show-toplevel"]),
+        )?;
+        Ok(std::path::PathBuf::from(
+            String::from_utf8_lossy(&out.stdout).trim().to_string(),
+        ))
+    }
     fn hash_object(&self, path: &Path) -> Result<String> {
-        let out = Self::run(Command::new("git").arg("hash-object").arg(path))?;
+        let (root, relative) = Self::repo_path(path)?;
+        let out = Self::run(
+            Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .arg("hash-object")
+                .arg(relative),
+        )?;
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
     fn last_commit(&self, path: &Path) -> Result<String> {
+        let (root, relative) = Self::repo_path(path)?;
         let out = Self::run(
             Command::new("git")
+                .arg("-C")
+                .arg(root)
                 .args(["log", "-1", "--format=%H", "--"])
-                .arg(path),
+                .arg(relative),
         )?;
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
@@ -68,6 +117,7 @@ impl Git for RealGit {
 /// In-memory git for hermetic tests: register exactly the answers a test needs.
 #[derive(Default, Clone)]
 pub struct FakeGit {
+    worktree_root: Option<std::path::PathBuf>,
     hash_objects: std::collections::HashMap<std::path::PathBuf, String>,
     last_commits: std::collections::HashMap<std::path::PathBuf, String>,
     shows: std::collections::HashMap<(String, std::path::PathBuf), Vec<u8>>,
@@ -79,12 +129,25 @@ impl FakeGit {
         Self::default()
     }
 
-    pub fn with_hash_object(mut self, path: impl Into<std::path::PathBuf>, sha: impl Into<String>) -> Self {
+    pub fn with_worktree_root(mut self, root: impl Into<std::path::PathBuf>) -> Self {
+        self.worktree_root = Some(root.into());
+        self
+    }
+
+    pub fn with_hash_object(
+        mut self,
+        path: impl Into<std::path::PathBuf>,
+        sha: impl Into<String>,
+    ) -> Self {
         self.hash_objects.insert(path.into(), sha.into());
         self
     }
 
-    pub fn with_last_commit(mut self, path: impl Into<std::path::PathBuf>, sha: impl Into<String>) -> Self {
+    pub fn with_last_commit(
+        mut self,
+        path: impl Into<std::path::PathBuf>,
+        sha: impl Into<String>,
+    ) -> Self {
         self.last_commits.insert(path.into(), sha.into());
         self
     }
@@ -106,6 +169,12 @@ impl FakeGit {
 }
 
 impl Git for FakeGit {
+    fn worktree_root(&self, anchor: &Path) -> Result<std::path::PathBuf> {
+        Ok(self
+            .worktree_root
+            .clone()
+            .unwrap_or_else(|| anchor.to_path_buf()))
+    }
     fn hash_object(&self, path: &Path) -> Result<String> {
         self.hash_objects
             .get(path)

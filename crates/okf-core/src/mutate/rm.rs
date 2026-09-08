@@ -11,6 +11,7 @@ use crate::bundle::loader::load_bundle;
 use crate::error::{OkfError, Result};
 use crate::graph::backlinks::backlinks_of;
 use crate::model::concept::ConceptId;
+use crate::ontology::load::try_load;
 
 use super::edit::id_to_path;
 
@@ -38,7 +39,8 @@ pub fn rm(root: &Path, id: &str, force: bool) -> Result<RmResult> {
     }
 
     let bundle = load_bundle(root)?;
-    let referrers = backlinks_of(&bundle, &cid.0);
+    let ontology = try_load(root)?;
+    let referrers = backlinks_of(&bundle, ontology.as_ref(), &cid.0);
 
     if !referrers.is_empty() && !force {
         let names: Vec<&str> = referrers.iter().map(|c| c.0.as_str()).collect();

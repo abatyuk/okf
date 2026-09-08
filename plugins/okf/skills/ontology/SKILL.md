@@ -68,7 +68,7 @@ the whole file speculatively.
 ## Guardrails
 - Removing a type or tightening `required`/cardinality can invalidate existing concepts —
   surface the blast radius (`okf lint`) and keep the human in the loop before cascading edits.
-- Ontology edits may not preserve YAML comments in v1 (known limitation); don't rely on
-  comments as load-bearing.
+- Ontology edits preserve comments attached to keys, including inline comments. Layout may be
+  normalized, so keep rationale attached to the field/type it explains.
 - Keep concept-type keys byte-identical to the `type` strings concepts actually use, spaces
   and all.

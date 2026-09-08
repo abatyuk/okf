@@ -26,6 +26,8 @@ use crate::error::{OkfError, Result};
 use crate::graph::backlinks::backlinks_of;
 use crate::model::concept::{Concept, ConceptId};
 use crate::model::link::{classify, resolve_link, LinkKind};
+use crate::ontology::load::try_load;
+use crate::ontology::schema::Ontology;
 
 use super::edit::{id_to_path, save_concept};
 
@@ -57,13 +59,12 @@ pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
         return Err(OkfError::Usage(format!("mv: no concept at {old}")));
     }
     if new_path.exists() {
-        return Err(OkfError::Usage(format!(
-            "mv: target {new} already exists"
-        )));
+        return Err(OkfError::Usage(format!("mv: target {new} already exists")));
     }
 
     let bundle = load_bundle(root)?;
-    let referrers = backlinks_of(&bundle, &old.0);
+    let ontology = try_load(root)?;
+    let referrers = backlinks_of(&bundle, ontology.as_ref(), &old.0);
 
     // 1. Rewrite inbound links in each referrer, staging changed concepts.
     let mut staged: Vec<Concept> = Vec::new();
@@ -76,7 +77,7 @@ pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
         let from = concept.id.clone();
         let old_t = old.clone();
         let new_t = new.clone();
-        let changed = apply_rewrite(&mut concept, &move |raw: &str| {
+        let changed = apply_rewrite(&mut concept, ontology.as_ref(), &move |raw: &str| {
             if classify(raw) == LinkKind::External {
                 return None;
             }
@@ -100,7 +101,7 @@ pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
     {
         let old_from = old.clone();
         let new_from = new.clone();
-        apply_rewrite(&mut moved, &move |raw: &str| {
+        apply_rewrite(&mut moved, ontology.as_ref(), &move |raw: &str| {
             if classify(raw) == LinkKind::External {
                 return None;
             }
@@ -131,14 +132,21 @@ pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
 
 /// Apply a link-string rewrite closure over a concept's frontmatter reference fields and body
 /// markdown links. Returns whether anything changed.
-fn apply_rewrite<F>(concept: &mut Concept, rewrite: &F) -> bool
+fn apply_rewrite<F>(concept: &mut Concept, ontology: Option<&Ontology>, rewrite: &F) -> bool
 where
     F: Fn(&str) -> Option<String>,
 {
     let mut changed = false;
-    for value in concept.frontmatter.map.values_mut() {
-        if rewrite_in_value(value, rewrite) {
-            changed = true;
+    let keys: Vec<String> = concept
+        .concept_type()
+        .and_then(|name| ontology.and_then(|o| o.concepts.get(name)))
+        .map(|ct| ct.references.keys().cloned().collect())
+        .unwrap_or_default();
+    for key in keys {
+        if let Some(value) = concept.frontmatter.map.get_mut(&key) {
+            if rewrite_in_value(value, rewrite) {
+                changed = true;
+            }
         }
     }
     let (new_body, body_changed) = rewrite_in_body(&concept.body, rewrite);

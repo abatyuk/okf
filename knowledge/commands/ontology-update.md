@@ -26,6 +26,8 @@ Modifies the fields or references of an existing concept type.
 | `--description <value>` | string | no | Description of the concept type |
 | `--field <value>` | list<string> | no | A typed field, `key:type[:required][:v1|v2|...]` (repeatable) |
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
+| `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
+| `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
 | `--attested` | bool | no | Mark the concept type as an attested computation |
 
 Every command also accepts global `--json` and an optional trailing `bundle` positional.

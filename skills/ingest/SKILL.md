@@ -53,7 +53,9 @@ reading whole files speculatively. The CLI-only rule applies to anything already
    - `git-path` for a tracked file, `line-range` for a function/span, `markdown-heading` for a
      doc section, `git-commit` to pin a revision, `url` for external references, `file` for
      untracked artifacts.
-   - After setting `resource`+`kind`, run `okf refresh <concept-id>` to record the initial
+   - Add each entry with `okf edit <concept-id> --add-source
+     resource=<git-root-relative-path>,kind=<kind>` (or use `--add-source` on `okf add`). Then
+     run `okf refresh <concept-id> --fail-on any` to record the initial
      `fingerprint`/`last_modified`. This is what lets `okf stale` later notice the code moved.
 
 6. **Wire references.** Connect concepts using the ontology's reference keys via

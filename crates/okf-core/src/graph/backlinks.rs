@@ -2,6 +2,7 @@
 use crate::bundle::loader::Bundle;
 use crate::graph::build::{build_graph, LinkGraph};
 use crate::model::concept::ConceptId;
+use crate::ontology::schema::Ontology;
 
 /// Concepts that link *to* `id` (accepts an id with or without a leading slash), sorted by id.
 /// Returns references into the graph's reverse adjacency.
@@ -11,8 +12,8 @@ pub fn backlinks<'a>(graph: &'a LinkGraph, id: &str) -> Vec<&'a ConceptId> {
 }
 
 /// Convenience: build the graph for `bundle` and return the backlink ids of `id` (owned).
-pub fn backlinks_of(bundle: &Bundle, id: &str) -> Vec<ConceptId> {
-    let graph = build_graph(bundle);
+pub fn backlinks_of(bundle: &Bundle, ontology: Option<&Ontology>, id: &str) -> Vec<ConceptId> {
+    let graph = build_graph(bundle, ontology);
     backlinks(&graph, id).into_iter().cloned().collect()
 }
 
@@ -35,15 +36,21 @@ mod tests {
 
     #[test]
     fn returns_linkers_sorted() {
+        let ontology = crate::ontology::load::parse_ontology(
+            "okf_ontology: '0.1'\nconcepts:\n  T:\n    references:\n      refs: {target: T, cardinality: 0..n}\n      inputs: {target: T, cardinality: 0..n}\n  X: {}\n"
+        ).unwrap();
         let bundle = Bundle {
             root: std::path::PathBuf::from("."),
             concepts: vec![
-                concept("policies/travel", "refs:\n- /tables/customers"),
-                concept("computations/mileage", "inputs:\n- /tables/customers"),
+                concept("policies/travel", "type: T\nrefs:\n- /tables/customers"),
+                concept(
+                    "computations/mileage",
+                    "type: T\ninputs:\n- /tables/customers",
+                ),
                 concept("tables/customers", "type: X"),
             ],
         };
-        let g = build_graph(&bundle);
+        let g = build_graph(&bundle, Some(&ontology));
         let bl: Vec<&str> = backlinks(&g, "tables/customers")
             .iter()
             .map(|c| c.0.as_str())

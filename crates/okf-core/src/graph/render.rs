@@ -94,7 +94,8 @@ fn mermaid(nodes: &[String], edges: &[(String, String)]) -> String {
     for (src, dst) in edges {
         out.push_str(&format!(
             "    {} --> {}\n",
-            idx[src.as_str()], idx[dst.as_str()]
+            idx[src.as_str()],
+            idx[dst.as_str()]
         ));
     }
     out
@@ -105,12 +106,17 @@ fn dot(nodes: &[String], edges: &[(String, String)]) -> String {
     let mut out = String::from("digraph okf {\n");
     for node in nodes {
         let label = node.replace('\\', "\\\\").replace('"', "\\\"");
-        out.push_str(&format!("    {} [label=\"{}\"];\n", idx[node.as_str()], label));
+        out.push_str(&format!(
+            "    {} [label=\"{}\"];\n",
+            idx[node.as_str()],
+            label
+        ));
     }
     for (src, dst) in edges {
         out.push_str(&format!(
             "    {} -> {};\n",
-            idx[src.as_str()], idx[dst.as_str()]
+            idx[src.as_str()],
+            idx[dst.as_str()]
         ));
     }
     out.push_str("}\n");
@@ -171,16 +177,19 @@ mod tests {
     }
 
     fn graph() -> LinkGraph {
+        let ontology = crate::ontology::load::parse_ontology(
+            "okf_ontology: '0.1'\nconcepts:\n  T:\n    references:\n      refs: {target: T, cardinality: 0..n}\n  X: {}\n"
+        ).unwrap();
         // a → b, b → c
         let bundle = Bundle {
             root: std::path::PathBuf::from("."),
             concepts: vec![
-                concept("a", "refs:\n- /b"),
-                concept("b", "refs:\n- /c"),
+                concept("a", "type: T\nrefs:\n- /b"),
+                concept("b", "type: T\nrefs:\n- /c"),
                 concept("c", "type: X"),
             ],
         };
-        build_graph(&bundle)
+        build_graph(&bundle, Some(&ontology))
     }
 
     #[test]

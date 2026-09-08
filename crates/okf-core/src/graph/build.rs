@@ -7,6 +7,7 @@
 use crate::bundle::loader::Bundle;
 use crate::model::concept::ConceptId;
 use crate::model::link::outbound_links;
+use crate::ontology::schema::Ontology;
 use indexmap::{IndexMap, IndexSet};
 
 /// Forward + reverse adjacency over a bundle's concepts.
@@ -41,7 +42,7 @@ impl LinkGraph {
 
 /// Construct the [`LinkGraph`] for a bundle. Concepts are visited in bundle order (already
 /// sorted by id in the loader); reverse adjacency lists and keys are sorted for determinism.
-pub fn build_graph(bundle: &Bundle) -> LinkGraph {
+pub fn build_graph(bundle: &Bundle, ontology: Option<&Ontology>) -> LinkGraph {
     let mut forward: IndexMap<String, Vec<ConceptId>> = IndexMap::new();
     let mut reverse: IndexMap<String, Vec<ConceptId>> = IndexMap::new();
     let mut existing: IndexSet<String> = IndexSet::new();
@@ -51,7 +52,7 @@ pub fn build_graph(bundle: &Bundle) -> LinkGraph {
     }
 
     for c in &bundle.concepts {
-        let outs = outbound_links(c);
+        let outs = outbound_links(c, ontology);
         for target in &outs {
             reverse
                 .entry(target.0.clone())
@@ -102,11 +103,14 @@ mod tests {
 
     #[test]
     fn forward_and_reverse_including_broken() {
+        let ontology = crate::ontology::load::parse_ontology(
+            "okf_ontology: '0.1'\nconcepts:\n  T:\n    references:\n      refs: {target: T, cardinality: 0..n}\n"
+        ).unwrap();
         let b = bundle(vec![
-            concept("a", "refs:\n- /b", "[ghost](/missing.md)"),
+            concept("a", "type: T\nrefs:\n- /b", "[ghost](/missing.md)"),
             concept("b", "type: X", ""),
         ]);
-        let g = build_graph(&b);
+        let g = build_graph(&b, Some(&ontology));
         let out: Vec<&str> = g.outbound("/a").iter().map(|c| c.0.as_str()).collect();
         assert_eq!(out, vec!["/b", "/missing"]);
         let inb: Vec<&str> = g.inbound("/b").iter().map(|c| c.0.as_str()).collect();

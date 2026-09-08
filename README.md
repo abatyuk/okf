@@ -144,7 +144,8 @@ Trust tiers are **derived**, never asserted: a concept's `verified` actors decid
 (`human:` prefix → human-reviewed; other actors → machine-confirmed; none → unverified).
 Source drift uses **typed source kinds** (`git-commit`, `git-path`, `markdown-heading`,
 `line-range`, `file`, `url`) recorded in `sources[]` with a `kind` + `fingerprint`; `refresh`
-re-records them after you've reconciled a change.
+re-records them after you've reconciled a change. Git source paths resolve from the Git
+worktree root; file and text-excerpt source paths resolve from the bundle root.
 
 ## Ontology
 

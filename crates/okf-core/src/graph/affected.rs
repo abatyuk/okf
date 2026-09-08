@@ -82,16 +82,22 @@ mod tests {
 
     /// Cycle: customers → revenue → mileage → customers (via the fields below).
     fn cyclic_graph() -> LinkGraph {
+        let ontology = crate::ontology::load::parse_ontology(
+            "okf_ontology: '0.1'\nconcepts:\n  T:\n    references:\n      refs: {target: T, cardinality: 0..n}\n  Note: {}\n"
+        ).unwrap();
         let bundle = Bundle {
             root: std::path::PathBuf::from("."),
             concepts: vec![
-                concept("tables/customers", "refs:\n- /metrics/revenue"),
-                concept("metrics/revenue", "refs:\n- /computations/mileage"),
-                concept("computations/mileage", "refs:\n- /tables/customers"),
+                concept("tables/customers", "type: T\nrefs:\n- /metrics/revenue"),
+                concept("metrics/revenue", "type: T\nrefs:\n- /computations/mileage"),
+                concept(
+                    "computations/mileage",
+                    "type: T\nrefs:\n- /tables/customers",
+                ),
                 concept("notes/orphan", "type: Note"),
             ],
         };
-        build_graph(&bundle)
+        build_graph(&bundle, Some(&ontology))
     }
 
     fn ids(v: Vec<ConceptId>) -> Vec<String> {
@@ -102,7 +108,11 @@ mod tests {
     fn direct_dependents_only_by_default() {
         let g = cyclic_graph();
         // who links to customers? mileage.
-        let got = affected(&g, &["/tables/customers".into()], &AffectedOptions::default());
+        let got = affected(
+            &g,
+            &["/tables/customers".into()],
+            &AffectedOptions::default(),
+        );
         assert_eq!(ids(got), vec!["/computations/mileage".to_string()]);
     }
 
