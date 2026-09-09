@@ -33,7 +33,9 @@ pub fn resolve(bundle: &Bundle, from: Option<&str>, link: &str) -> Resolved {
     let id = resolve_link(&from_id, link);
     let rel = id.0.trim_start_matches('/');
     let path = PathBuf::from(format!("{rel}.md"));
-    let exists = bundle.get(id.0.as_str()).is_some();
+    // Structural resources such as index.md/log.md are deliberately not loaded as concepts,
+    // but `resolve` should still report their physical existence truthfully.
+    let exists = bundle.get(id.0.as_str()).is_some() || bundle.root.join(&path).is_file();
     Resolved { id, path, exists }
 }
 

@@ -12,10 +12,10 @@ and the prose in each first concept.
 ## Tool discipline
 **CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
 
-Discover and inspect everything in the bundle **only through the `okf` CLI** — `okf search`,
+Discover and inspect everything in the bundle **only through the `okf` CLI** — `okf browse`, `okf search`,
 `okf list`, `okf show`, `okf graph`, `okf backlinks`, `okf resolve`, `okf stats` (add `--json`
 when parsing). Do **not** use Glob, Grep, `find`, or generic file-content search over the
-bundle: `okf` already indexes it and supports progressive disclosure, so grepping it is
+bundle: the CLI provides structural indexes and targeted queries, so grepping it is
 wasteful and defeats the design. Read a bundle markdown file directly **only when you already
 know its exact path** (from `okf resolve` or an `okf show --json` record), and prefer
 `okf show` over a raw read. When a raw read is unavoidable, read the **narrowest slice** needed
@@ -59,7 +59,7 @@ relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END
      descriptions / ontology violations. Lint findings are opinions, not blockers.
 
 6. **Generate progressive-disclosure indexes.** Run `okf docs <bundle> --format index` to
-   write `index.md` files so later retrieval can navigate the bundle cheaply.
+   write `index.md` files, then verify the root view with `okf browse <bundle>`.
 
 7. **Report.** Summarize the bundle path, the ontology types created, and the concepts
    scaffolded. Point the user at `okf:migrate`/`okf:ingest` to bring in existing material.

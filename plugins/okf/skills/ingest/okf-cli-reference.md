@@ -1,6 +1,6 @@
 # okf CLI — argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.2, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.3, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 **For skills:** consult this file to learn a command's arguments. **Do not** run `okf <cmd> --help` or `okf schema` first just to discover flags — they are all listed here. Every command also accepts the global `--json` flag (NDJSON output) and takes an optional trailing `bundle` positional that falls back to `$OKF_BUNDLE`, then the cwd.
 
@@ -34,6 +34,17 @@ Concepts that link to a given concept.
 | `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
 
 Output stream: `concept`.
+
+### `okf browse`
+
+Show a directory's index.md, synthesizing it when absent.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `--directory <value>` | string | no | Bundle-relative directory to browse (default: root `/`) (default: `/`) |
+
+Output stream: `index`.
 
 ### `okf graph`
 

@@ -15,10 +15,10 @@ the prose and re-attribute sources. Three complementary detectors feed you:
 ## Tool discipline
 **CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
 
-Discover and inspect everything in the bundle **only through the `okf` CLI** — `okf search`,
+Discover and inspect everything in the bundle **only through the `okf` CLI** — `okf browse`, `okf search`,
 `okf list`, `okf show`, `okf graph`, `okf backlinks`, `okf resolve`, `okf stats`, plus the
 drift detectors above (add `--json` when parsing). Do **not** use Glob, Grep, `find`, or generic
-file-content search over the bundle: `okf` already indexes it and supports progressive
+file-content search over the bundle: the CLI provides structural indexes and targeted
 disclosure, so grepping it is wasteful and defeats the design. Read a bundle markdown file
 directly **only when you already know its exact path** (from `okf resolve` or an `okf show
 --json` record), and prefer `okf show` over a raw read. When a raw read is unavoidable, read the
@@ -60,8 +60,9 @@ relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END
    `stale` — the "I've reviewed this, it matches again" operation. Do NOT refresh a concept you
    haven't actually reconciled; that would hide real drift.
 
-6. **Re-check.** Run `okf stale <bundle>` again to confirm nothing you touched still drifts, and
-   `okf lint <bundle>` to catch links you may have broken while editing.
+6. **Re-check and regenerate indexes.** Run `okf stale <bundle>` again to confirm nothing you
+   touched still drifts, `okf lint <bundle>` to catch links you may have broken, then
+   `okf docs <bundle> --format index`. Verify the root view with `okf browse <bundle>`.
 
 7. **Report.** List concepts updated (what changed and why), sources re-attributed, concepts
    refreshed, and any drift you deliberately left (e.g. needs a human decision).

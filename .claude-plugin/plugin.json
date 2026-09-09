@@ -1,7 +1,7 @@
 {
   "name": "okf",
   "description": "Agent skills for working with Open Knowledge Format (OKF) bundles: migrate/ingest docs, author and infer ontologies, retrieve, review/attest, update, and reorganize. The skills drive the `okf` CLI (install separately with `cargo install --path crates/okf-cli`).",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": {
     "name": "Andrey Batyuk"
   },

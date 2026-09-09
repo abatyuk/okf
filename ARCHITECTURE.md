@@ -74,6 +74,7 @@ okf-core/src/
       rules/          # broken_link, missing_description, ontology_violation, orphan, …
 
   query/
+    browse.rs         # index.md traversal; synthesize a directory view when absent
     search.rs         # search + list (list = search, no filter)
     show.rs
     resolve.rs        # link/id → path

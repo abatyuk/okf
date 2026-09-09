@@ -1,17 +1,17 @@
 ---
 type: Component
 title: render module
-description: 'Derived output artifacts: progressive-disclosure index.md generation and the optional html/md/pdf/graphml/obsidian document renderers behind feature flags.'
+description: Derived output artifacts, including deterministic specification-conformant index.md generation.
 layer: core
 depends_on:
 - /components/model
 - /components/graph
+last_modified: 2026-09-09T13:13:43Z
 sources:
-- resource: ../crates/okf-core/src/render/mod.rs
+- resource: crates/okf-core/src/render/index.rs
   kind: git-path
   fingerprint:
-    blob_sha: 604e313f4a702db4182b80134bbe325cc961da7a
-last_modified: 2026-09-07T18:47:09Z
+    blob_sha: 35b21f6070042bf47f4651aed138ab2bc274f53a
 ---
 # render module
 

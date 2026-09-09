@@ -3,9 +3,10 @@
 * [okf add](add.md) - Adds a new concept document, scaffolded from the ontology so required fields and reference keys start present.
 * [okf affected](affected.md) - Impact query: given a set of changed links, computes the blast radius of concepts that may need review via a reverse walk, direct by default or --transitive.
 * [okf backlinks](backlinks.md) - Lists the concepts that link to a given concept, using the reverse adjacency from the graph.
+* [okf browse](browse.md) - Reads a directory's index.md for progressive disclosure, synthesizing it when absent.
 * [okf diff](diff.md) - Concept-level diff of the working tree against a git ref: which concepts were added, removed, or changed.
 * [okf docs](docs.md) - Generates documentation from a bundle: progressive-disclosure index.md files, or html, md, pdf, graphml, or obsidian output via --format.
-* [okf edit](edit.md) - Losslessly edits a concept's frontmatter (set/unset scalars, add/remove list items) and body (whole-body and section-aware ops), preserving key order and unknown keys.
+* [okf edit](edit.md) - Losslessly edits a concept's frontmatter or body and invalidates its prior verification.
 * [okf graph](graph.md) - Renders the link graph, or a subtree rooted at a concept, as mermaid, dot, or graphml.
 * [okf init](init.md) - Creates a new empty OKF bundle: base structure plus a starter ontology.yaml.
 * [okf lint](lint.md) - Advisory checks where the opinions live: broken links, missing descriptions, orphans, and ontology violations, at error/warn/info severities with a --fail-on threshold.
@@ -22,7 +23,7 @@
 * [okf scan](scan.md) - Walks a bundle and reports the candidate files that would be analyzed, without loading them as concepts.
 * [okf schema](schema.md) - Prints machine-readable CLI metadata as NDJSON: every command with its group, mutates flag, args, and output shape.
 * [okf search](search.md) - Searches concepts by type, tag, free text, and/or frontmatter field, returning matching concept records.
-* [okf show](show.md) - Shows one concept's full content: frontmatter plus body, or the concept record under --json.
+* [okf show](show.md) - Shows a concept in full, as a heading outline with line numbers, or as a selected line range.
 * [okf stale](stale.md) - Drift detection: compares recorded source fingerprints against recomputed ones (plus any stale_after date) to find concepts whose sources have moved.
 * [okf stats](stats.md) - Bundle summary: counts by type, trust-tier distribution, and orphan count.
 * [okf validate](validate.md) - Conformance validation: the spec's three hard rules only (parseable frontmatter, non-empty type, reserved-filename structure).

@@ -22,6 +22,7 @@ use crate::bundle::loader::Bundle;
 use crate::error::Result;
 use crate::model::concept::Concept;
 use crate::parse::markdown::split_frontmatter;
+use crate::parse::yaml::parse_frontmatter;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -90,7 +91,10 @@ fn render_dir_index(concepts: &[&Concept], child_dirs: &BTreeSet<String>) -> Str
     // Group by type (empty/missing type → "Other"), types sorted alphabetically.
     let mut by_type: BTreeMap<&str, Vec<&Concept>> = BTreeMap::new();
     for c in concepts {
-        let ty = c.concept_type().filter(|s| !s.is_empty()).unwrap_or("Other");
+        let ty = c
+            .concept_type()
+            .filter(|s| !s.is_empty())
+            .unwrap_or("Other");
         by_type.entry(ty).or_default().push(c);
     }
 
@@ -144,13 +148,20 @@ pub fn write_indexes(bundle: &Bundle) -> Result<Vec<PathBuf>> {
             bundle.root.join(&idx.dir).join("index.md")
         };
 
-        // Preserve any pre-existing frontmatter (e.g. root `okf_version`) losslessly.
-        let final_content = match std::fs::read_to_string(&target) {
-            Ok(existing) => match split_frontmatter(&existing).0 {
-                Some(fm) => format!("---\n{fm}---\n{}", idx.content),
-                None => idx.content.clone(),
-            },
-            Err(_) => idx.content.clone(),
+        // Only the bundle-root index may carry frontmatter. Preserve its version declaration
+        // losslessly; generated nested indexes are always frontmatter-free per the spec.
+        let final_content = if idx.dir.as_os_str().is_empty() {
+            match std::fs::read_to_string(&target) {
+                Ok(existing) => match split_frontmatter(&existing).0 {
+                    Some(fm) if valid_root_frontmatter(&fm) => {
+                        format!("---\n{fm}---\n{}", idx.content)
+                    }
+                    _ => idx.content.clone(),
+                },
+                Err(_) => idx.content.clone(),
+            }
+        } else {
+            idx.content.clone()
         };
 
         std::fs::write(&target, final_content)
@@ -158,6 +169,13 @@ pub fn write_indexes(bundle: &Bundle) -> Result<Vec<PathBuf>> {
         written.push(target);
     }
     Ok(written)
+}
+
+fn valid_root_frontmatter(frontmatter: &str) -> bool {
+    parse_frontmatter(frontmatter).is_ok_and(|map| {
+        map.len() == 1
+            && matches!(map.get("okf_version"), Some(serde_yaml::Value::String(version)) if !version.trim().is_empty())
+    })
 }
 
 #[cfg(test)]
@@ -256,7 +274,11 @@ mod tests {
 
         // Give the root index frontmatter that must survive regeneration (spec allows
         // `okf_version` on the root index only).
-        std::fs::write(root.join("index.md"), "---\nokf_version: \"0.2\"\n---\nold body\n").unwrap();
+        std::fs::write(
+            root.join("index.md"),
+            "---\nokf_version: \"0.2\"\n---\nold body\n",
+        )
+        .unwrap();
 
         let bundle = load_bundle(&root).unwrap();
         let written = write_indexes(&bundle).unwrap();
@@ -285,7 +307,10 @@ mod tests {
             .iter()
             .map(|p| std::fs::read_to_string(p).unwrap())
             .collect();
-        assert_eq!(before, after, "re-running write_indexes must not change any file");
+        assert_eq!(
+            before, after,
+            "re-running write_indexes must not change any file"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -298,6 +323,34 @@ mod tests {
         write_indexes(&bundle).unwrap();
         let after = std::fs::read_to_string(root.join("tables/customers.md")).unwrap();
         assert_eq!(before, after, "concept files must be left untouched");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn write_removes_frontmatter_from_nested_indexes() {
+        let root = temp_copy();
+        std::fs::write(
+            root.join("tables/index.md"),
+            "---\nokf_version: \"0.2\"\n---\nold body\n",
+        )
+        .unwrap();
+        let bundle = load_bundle(&root).unwrap();
+        write_indexes(&bundle).unwrap();
+        let nested = std::fs::read_to_string(root.join("tables/index.md")).unwrap();
+        assert!(!nested.starts_with("---"));
+        assert!(nested.contains("[Customers](customers.md)"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn write_discards_non_version_root_frontmatter() {
+        let root = temp_copy();
+        std::fs::write(root.join("index.md"), "---\ntitle: Home\n---\nold body\n").unwrap();
+        let bundle = load_bundle(&root).unwrap();
+        write_indexes(&bundle).unwrap();
+        let index = std::fs::read_to_string(root.join("index.md")).unwrap();
+        assert!(!index.starts_with("---"));
+        assert!(index.contains("# Subdirectories"));
         let _ = std::fs::remove_dir_all(&root);
     }
 }

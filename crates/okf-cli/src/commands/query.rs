@@ -1,5 +1,5 @@
 //! search, list, show, backlinks, graph, resolve.
-use crate::cli::{BundleArgs, GraphArgs, IdArgs, ResolveArgs, SearchArgs, ShowArgs};
+use crate::cli::{BrowseArgs, BundleArgs, GraphArgs, IdArgs, ResolveArgs, SearchArgs, ShowArgs};
 use crate::output;
 use okf_core::bundle::loader::load_bundle;
 use okf_core::bundle::resolve::resolve_bundle;
@@ -10,6 +10,7 @@ use okf_core::graph::render::{render, RenderFormat};
 use okf_core::model::concept::Concept;
 use okf_core::ontology::load::try_load;
 use okf_core::output::record::yaml_to_json;
+use okf_core::query::browse::browse;
 use okf_core::query::resolve::resolve as resolve_link;
 use okf_core::query::search::{search, SearchFilter};
 use okf_core::query::show::show;
@@ -66,6 +67,24 @@ pub fn run_show(args: &ShowArgs, json: bool) -> Result<i32> {
             args.concept
         ))),
     }
+}
+
+/// `okf browse [bundle] [--directory <dir>]` — read or synthesize a structural index.
+pub fn run_browse(args: &BrowseArgs, json: bool) -> Result<i32> {
+    let root = resolve_bundle(args.bundle.as_deref())?;
+    let result = browse(&root, Some(&args.directory))?;
+    if json {
+        output::print_line(&json!({
+            "kind": "index",
+            "directory": result.directory,
+            "path": result.path.to_string_lossy(),
+            "source": result.source.as_str(),
+            "content": result.content,
+        }))?;
+    } else {
+        print!("{}", result.content);
+    }
+    Ok(0)
 }
 
 /// Parse an inclusive, 1-based `START:END` range (or a single line `N`).

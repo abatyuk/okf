@@ -1,21 +1,25 @@
 ---
 type: Component
 title: query module
-description: 'Read-only lookups: search (list is search with no filter), show, resolve a link or id to a path, stats summary, and a concept-level diff against a git ref.'
+description: Read-only lookups, including specification-native index.md browsing and targeted concept queries.
 layer: core
 depends_on:
 - /components/model
 - /components/graph
 - /components/bundle
+last_modified: 2026-09-09T13:17:50Z
 sources:
-- resource: ../crates/okf-core/src/query/mod.rs
+- resource: crates/okf-core/src/query/mod.rs
   kind: git-path
   fingerprint:
-    blob_sha: 2dd8114d6a52e8c0deea408a556477f87978c5c0
-last_modified: 2026-09-07T18:47:09Z
+    blob_sha: 24f3127b319aaed41f39a3d342ffdb7dd0e62665
+- resource: crates/okf-core/src/query/browse.rs
+  kind: git-path
+  fingerprint:
+    blob_sha: f908123790031cf642ee8aaf0219d51e7e763dc3
 ---
 # query module
 
-Read-only lookups: search (list is search with no filter), show, resolve a link or id to a path, stats summary, and a concept-level diff against a git ref.
+Read-only lookups: browse reads or synthesizes structural directory indexes; search and list locate concepts; show progressively reveals outlines and line ranges; resolve maps links and structural resources to paths; stats and diff summarize bundle state.
 
 Location: `crates/okf-core/src/query`.

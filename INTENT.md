@@ -78,6 +78,9 @@ consistent across all commands. Commands are grouped by verb category.
 - `okf version` — CLI version and the OKF spec version(s) it supports.
 
 ### QUERY (read-only lookups)
+- `okf browse <bundle> [--directory <path>]` — read that directory's checked-in `index.md`,
+  or synthesize the same view in memory when absent. This is the specification-native
+  progressive-disclosure entry point.
 - `okf search <bundle> [--tag] [--type] [--text] [--field]` — search by tag, type, text, or field.
 - `okf list <bundle>` — **alias of `okf search` with no filter**; lists all concepts (ID,
   type, title, status, trust tier).
@@ -338,7 +341,7 @@ subsequent line describes one command. Every line is a standalone JSON object so
 stream and filter without a JSON-array parser.
 
 ```jsonl
-{"kind":"schema","tool":"okf","tool_version":"0.1.0","okf_spec":["0.2"],"ndjson_schema":"1"}
+{"kind":"schema","tool":"okf","tool_version":"0.1.3","okf_spec":["0.2"],"ndjson_schema":"1"}
 {"kind":"command","name":"list","group":"query","mutates":false,"summary":"List concepts with id, type, title, status, trust tier.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."}],"output":{"kind":"query","stream":"concept"}}
 {"kind":"command","name":"affected","group":"check","mutates":false,"summary":"Concepts needing review given changed links.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."},{"name":"changed","kind":"flag","type":"list<string>","required":true,"repeatable":true,"stdin":true},{"name":"transitive","kind":"flag","type":"bool","default":false},{"name":"depth","kind":"flag","type":"int","required":false}],"output":{"kind":"query","stream":"affected"}}
 {"kind":"command","name":"add","group":"mutate","mutates":true,"summary":"Add a concept scaffolded from the ontology.","args":[{"name":"path","kind":"positional","type":"path","required":true},{"name":"type","kind":"flag","type":"string","required":false},{"name":"title","kind":"flag","type":"string"},{"name":"attested","kind":"flag","type":"bool","default":false}],"output":{"kind":"mutation","stream":"change"}}

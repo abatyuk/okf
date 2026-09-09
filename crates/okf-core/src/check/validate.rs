@@ -10,7 +10,8 @@
 //! 2. **Non-empty `type`** — every non-reserved `.md` (a concept) must carry a non-empty
 //!    `type` string.
 //! 3. **Reserved structure** — the reserved filenames `index.md` / `log.md` are structural,
-//!    not concepts, so they MUST NOT declare a `type`.
+//!    not concepts. They MUST NOT declare a `type`; only the bundle-root `index.md` may have
+//!    frontmatter, and it may contain only `okf_version`.
 //!
 //! It MUST exit 0 (be conformant) on a spec-conformant bundle even if that bundle has broken
 //! links, unknown types, or missing optional fields. The result is typed and printing-free;
@@ -36,6 +37,8 @@ pub enum ValidateRule {
     MissingType,
     /// A reserved file (`index.md` / `log.md`) declares a `type`, masquerading as a concept.
     ReservedIsConcept,
+    /// A reserved file carries frontmatter outside the root-index `okf_version` exception.
+    ReservedFrontmatter,
 }
 
 impl ValidateRule {
@@ -45,6 +48,7 @@ impl ValidateRule {
             ValidateRule::UnparseableFrontmatter => "unparseable-frontmatter",
             ValidateRule::MissingType => "missing-type",
             ValidateRule::ReservedIsConcept => "reserved-is-concept",
+            ValidateRule::ReservedFrontmatter => "reserved-frontmatter",
         }
     }
 }
@@ -88,17 +92,35 @@ pub fn validate_document(rel_path: &str, content: &str) -> Vec<Violation> {
     let parsed = fm_text.as_deref().map(parse_frontmatter);
 
     if is_reserved {
-        // Rule 3: reserved files are structural. They are only nonconformant if they parse
-        // *and* declare a concept `type`. Unparseable/empty reserved files are fine (they are
-        // simply not concepts).
-        if let Some(Ok(map)) = parsed.as_ref().map(|r| r.as_ref()) {
-            if has_nonempty_type(map) {
+        // Rule 3: reserved files are structural. Only the bundle-root index may carry
+        // frontmatter, and that exception is limited to an `okf_version` string.
+        if fm_text.is_none() && content.lines().next() == Some("---") {
+            out.push(Violation {
+                file,
+                rule: ValidateRule::ReservedFrontmatter,
+                message: "reserved-file frontmatter is unclosed".to_string(),
+            });
+            return out;
+        }
+        match parsed.as_ref().map(|r| r.as_ref()) {
+            Some(Ok(map)) if has_nonempty_type(map) => out.push(Violation {
+                file,
+                rule: ValidateRule::ReservedIsConcept,
+                message: format!("reserved file {base:?} must not declare a `type`"),
+            }),
+            Some(Ok(map)) if !valid_root_index_frontmatter(&file, base.as_str(), map) => {
                 out.push(Violation {
                     file,
-                    rule: ValidateRule::ReservedIsConcept,
-                    message: format!("reserved file {base:?} must not declare a `type`"),
-                });
+                    rule: ValidateRule::ReservedFrontmatter,
+                    message: "only the bundle-root index.md may carry frontmatter, limited to a string okf_version".to_string(),
+                })
             }
+            Some(Err(_)) => out.push(Violation {
+                file,
+                rule: ValidateRule::ReservedFrontmatter,
+                message: "reserved-file frontmatter is malformed or not permitted".to_string(),
+            }),
+            _ => {}
         }
         return out;
     }
@@ -138,6 +160,17 @@ pub fn validate_document(rel_path: &str, content: &str) -> Vec<Violation> {
 /// True when the frontmatter map has a `type` key holding a non-empty string.
 fn has_nonempty_type(map: &indexmap::IndexMap<String, Value>) -> bool {
     matches!(map.get("type"), Some(Value::String(s)) if !s.trim().is_empty())
+}
+
+fn valid_root_index_frontmatter(
+    file: &str,
+    base: &str,
+    map: &indexmap::IndexMap<String, Value>,
+) -> bool {
+    file == "index.md"
+        && base == "index.md"
+        && map.len() == 1
+        && matches!(map.get("okf_version"), Some(Value::String(version)) if !version.trim().is_empty())
 }
 
 /// Validate every `*.md` under a bundle root (reserved files included, per rule 3), collecting
@@ -205,7 +238,10 @@ mod tests {
             "notes/n.md",
             "---\ntype: Wibble\n---\nsee [x](/missing.md)\n",
         );
-        assert!(v.is_empty(), "validate must not flag unknown types or broken links");
+        assert!(
+            v.is_empty(),
+            "validate must not flag unknown types or broken links"
+        );
     }
 
     #[test]
@@ -237,11 +273,20 @@ mod tests {
     }
 
     #[test]
-    fn reserved_without_type_is_fine() {
-        let v = validate_document("index.md", "---\ntitle: Home\n---\nwelcome\n");
+    fn reserved_structure_and_root_version_exception() {
+        let v = validate_document("index.md", "---\nokf_version: \"0.2\"\n---\nwelcome\n");
         assert!(v.is_empty());
         let v = validate_document("sub/log.md", "# changelog\n");
         assert!(v.is_empty());
+
+        let v = validate_document("sub/index.md", "---\nokf_version: \"0.2\"\n---\n");
+        assert_eq!(v[0].rule, ValidateRule::ReservedFrontmatter);
+
+        let v = validate_document("index.md", "---\ntitle: Home\n---\nwelcome\n");
+        assert_eq!(v[0].rule, ValidateRule::ReservedFrontmatter);
+
+        let v = validate_document("sub/index.md", "---\nunclosed\n");
+        assert_eq!(v[0].rule, ValidateRule::ReservedFrontmatter);
     }
 
     #[test]

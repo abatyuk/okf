@@ -49,6 +49,8 @@ use the `xtask` wrappers.
 ```sh
 okf init mybundle                     # create an empty bundle (+ starter ontology.yaml)
 okf add notes/hello --type Note --title "Hello"   # scaffold a concept from the ontology
+okf browse mybundle                   # read/synthesize the root index.md
+okf browse mybundle --directory notes # descend one directory without loading its concepts
 okf list mybundle                     # human table: id, type, trust tier, title
 okf list mybundle --json              # one JSON object per concept (NDJSON)
 okf validate mybundle                 # conformance only (exit 1 if nonconformant)

@@ -66,6 +66,49 @@ fn show_json_is_single_record() {
 }
 
 #[test]
+fn browse_reads_existing_index_and_synthesizes_missing_index() {
+    let root = fixture("sample-bundle");
+    okf()
+        .args(["browse", root.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("reserved `index.md`"));
+
+    let out = okf()
+        .args([
+            "browse",
+            root.to_str().unwrap(),
+            "--directory",
+            "tables",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let records = ndjson(&out.stdout);
+    assert_eq!(records[0]["kind"], "index");
+    assert_eq!(records[0]["directory"], "/tables");
+    assert_eq!(records[0]["source"], "synthesized");
+    assert!(records[0]["content"]
+        .as_str()
+        .unwrap()
+        .contains("[Customers](customers.md)"));
+}
+
+#[test]
+fn resolve_reports_structural_index_as_existing() {
+    okf()
+        .args([
+            "resolve",
+            "index.md",
+            fixture("sample-bundle").to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("index.md\texists"));
+}
+
+#[test]
 fn show_outline_reports_headings_with_document_line_numbers() {
     let out = okf()
         .args([
@@ -231,6 +274,7 @@ fn schema_is_valid_ndjson_with_all_commands() {
         "list",
         "search",
         "show",
+        "browse",
         "backlinks",
         "graph",
         "resolve",

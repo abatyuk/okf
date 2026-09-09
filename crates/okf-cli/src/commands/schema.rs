@@ -153,6 +153,7 @@ fn meta(name: &str) -> (&'static str, bool, &'static str) {
         "list" => ("query", false, "concept"),
         "search" => ("query", false, "concept"),
         "show" => ("query", false, "concept"),
+        "browse" => ("query", false, "index"),
         "backlinks" => ("query", false, "concept"),
         "graph" => ("query", false, "graph"),
         "resolve" => ("query", false, "resolved"),

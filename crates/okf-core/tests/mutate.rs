@@ -82,6 +82,7 @@ fn init_scaffolds_index_and_ontology_and_is_idempotent() {
     assert!(res.ontology_path.is_some());
     assert!(root.join("index.md").is_file());
     assert!(root.join("ontology.yaml").is_file());
+    assert!(read_file(&root, "index.md").starts_with("---\nokf_version: \"0.2\"\n---\n"));
     assert!(read_file(&root, "ontology.yaml").contains("okf_ontology"));
 
     // Re-init never clobbers existing structural files.

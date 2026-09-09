@@ -8,7 +8,8 @@ uses:
 - /commands/show
 - /commands/graph
 - /commands/backlinks
+- /commands/browse
 ---
 # okf:retrieval skill
 
-The primary consumer skill. Answers questions via progressive disclosure (search, then show, then graph/backlinks) so the whole bundle never has to be loaded into context.
+The primary consumer skill. It follows the specification's progressive-disclosure path by browsing `index.md` directory by directory, then uses search for targeted discovery, show for selective concept loading, and graph/backlinks for relationships.

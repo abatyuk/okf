@@ -28,6 +28,8 @@ pub enum Command {
     Search(SearchArgs),
     /// Show one concept's content, heading outline, or selected line range.
     Show(ShowArgs),
+    /// Show a directory's index.md, synthesizing it when absent.
+    Browse(BrowseArgs),
     /// Concepts that link to a given concept.
     Backlinks(IdArgs),
     /// Render the link graph (or a subtree) as mermaid/dot/graphml.
@@ -136,6 +138,15 @@ pub struct ShowArgs {
     /// Show only an inclusive 1-based document line range, `START:END` (or one line, `N`).
     #[arg(long, value_name = "START:END", conflicts_with = "outline")]
     pub lines: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowseArgs {
+    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    pub bundle: Option<String>,
+    /// Bundle-relative directory to browse (default: root `/`).
+    #[arg(long, default_value = "/")]
+    pub directory: String,
 }
 
 #[derive(Debug, Args)]

@@ -12,10 +12,10 @@ deterministically; you do the research and decide what is worth capturing as a c
 **CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
 
 Anything **already in the OKF bundle** is discovered and inspected **only through the `okf`
-CLI** — `okf scan` for the source map, `okf search`, `okf list`, `okf show`, `okf graph`,
+CLI** — `okf scan` for the source map, `okf browse`, `okf search`, `okf list`, `okf show`, `okf graph`,
 `okf backlinks`, `okf resolve`, `okf stats`, `okf ontology list`/`show` (add `--json` when
 parsing). Do **not** use Glob, Grep, `find`, or generic file-content search over the bundle:
-`okf` already indexes it and supports progressive disclosure, so grepping it is wasteful and
+the CLI provides structural indexes and targeted queries, so grepping it is wasteful and
 defeats the design. When you must read a bundle markdown file directly, do so **only when you
 already know its exact path** (from `okf resolve` / an `okf show --json` record), prefer
 `okf show`, and read the **narrowest slice** needed — a known line range, section/heading, or
@@ -66,7 +66,8 @@ reading whole files speculatively. The CLI-only rule applies to anything already
 
 7. **Validate, lint, index.**
    - `okf validate <bundle>` (must pass), `okf lint <bundle>` (resolve/accept findings).
-   - `okf docs <bundle> --format index` to write progressive-disclosure `index.md` files.
+   - `okf docs <bundle> --format index` to write progressive-disclosure `index.md` files;
+     verify the root view with `okf browse <bundle>`.
 
 8. **Report.** Summarize concepts created (path + type), which parts of the repo they cover,
    and notable areas you intentionally skipped.

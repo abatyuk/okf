@@ -62,8 +62,7 @@ pub fn init(root: &Path, opts: &InitOptions) -> Result<InitResult> {
             root.display()
         )));
     }
-    std::fs::create_dir_all(root)
-        .map_err(|e| OkfError::Io(format!("{}: {e}", root.display())))?;
+    std::fs::create_dir_all(root).map_err(|e| OkfError::Io(format!("{}: {e}", root.display())))?;
 
     let mut index_path = None;
     if opts.index {
@@ -78,7 +77,8 @@ pub fn init(root: &Path, opts: &InitOptions) -> Result<InitResult> {
                         .map(str::to_string)
                 })
                 .unwrap_or_else(|| "Knowledge bundle".to_string());
-            let body = format!("# {title}\n\nAn OKF knowledge bundle.\n");
+            let body =
+                format!("---\nokf_version: \"0.2\"\n---\n# {title}\n\nAn OKF knowledge bundle.\n");
             std::fs::write(&path, body)
                 .map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
             index_path = Some(path);

@@ -1,22 +1,22 @@
 ---
 type: Component
 title: check module
-description: Read-only diagnostics.
+description: Read-only diagnostics, including OKF reserved-file conformance.
 layer: core
 depends_on:
 - /components/model
 - /components/fingerprint
 - /components/ontology
 - /components/graph
+last_modified: 2026-09-09T13:17:50Z
 sources:
-- resource: ../crates/okf-core/src/check/mod.rs
+- resource: crates/okf-core/src/check/validate.rs
   kind: git-path
   fingerprint:
-    blob_sha: a805160ea422a63816d5a0b9c50118584e0f9a5a
-last_modified: 2026-09-07T18:47:09Z
+    blob_sha: ea7b75b29440a8ed6d6d6b69ed2c889b3eb2b555
 ---
 # check module
 
-Read-only diagnostics. validate enforces only the three conformance rules; the lint rule engine emits Findings at error/warn/info severities; stale detects drift between recorded and recomputed source fingerprints.
+Read-only diagnostics. Validate enforces the three conformance rules, including the root-only `okf_version` frontmatter exception for `index.md`; the lint engine emits Findings; stale detects drift between recorded and recomputed source fingerprints.
 
 Location: `crates/okf-core/src/check`.

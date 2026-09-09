@@ -13,9 +13,9 @@ the rewritten frontmatter, and the source attribution.
 **CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
 
 Anything **already in the OKF bundle** is discovered and inspected **only through the `okf`
-CLI** — `okf search`, `okf list`, `okf show`, `okf graph`, `okf backlinks`, `okf resolve`,
+CLI** — `okf browse`, `okf search`, `okf list`, `okf show`, `okf graph`, `okf backlinks`, `okf resolve`,
 `okf stats`, `okf ontology list`/`show` (add `--json` when parsing). Do **not** use Glob, Grep,
-`find`, or generic file-content search over the bundle: `okf` already indexes it and supports
+`find`, or generic file-content search over the bundle: the CLI provides structural indexes and
 progressive disclosure, so grepping it is wasteful and defeats the design. When you must read a
 bundle markdown file directly, do so **only when you already know its exact path** (from
 `okf resolve` / an `okf show --json` record), prefer `okf show`, and read the **narrowest
@@ -64,11 +64,12 @@ applies to anything already in the bundle.
    ontology's reference keys (`okf edit <concept-id> --set <key>=<link>`), so backlinks and
    the graph reflect the original document relationships.
 
-6. **Validate and lint.**
+6. **Validate, lint, and index.**
    - `okf validate <bundle>` — conformance (three hard rules); must pass.
    - `okf lint <bundle>` — advisory; fix broken links, missing `title`/`description`, and
      ontology violations you introduced, or note accepted ones.
    - `okf refresh` any concept whose sources you set, so it starts in-sync rather than stale.
+   - `okf docs <bundle> --format index`, then `okf browse <bundle>` to verify the root view.
 
 7. **Report.** List each migrated concept (path + type), how the original doc mapped, and any
    docs you deliberately did not migrate.
