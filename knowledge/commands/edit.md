@@ -1,7 +1,7 @@
 ---
 type: Command
 title: okf edit
-description: Losslessly edits a concept's frontmatter (set/unset scalars, add/remove list items) and body (whole-body and section-aware ops), preserving key order and unknown keys.
+description: Losslessly edits a concept's frontmatter or body and invalidates its prior verification.
 group: mutate
 mutates: true
 implemented_by:
@@ -20,6 +20,8 @@ Losslessly edits a concept in place. Frontmatter: `--set key=value` (scalar), `-
 Body: `--set-body` / `--append-body` / `--clear-body`, or the section-aware `--set-section` /
 `--append-section` / `--remove-section` (heading matched by GitHub slug). Body/section text
 accepts `@file` or `-` (stdin). Key order and unknown keys are always preserved.
+Every successful edit removes the concept's `verified` entries, so its derived trust tier returns
+to `unverified` until the revised document is reviewed and verified again.
 
 ## Arguments
 

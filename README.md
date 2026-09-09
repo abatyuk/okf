@@ -131,6 +131,10 @@ Highlights:
   changes, `diff <ref>` shows concept-level changes vs a git ref.
 - **`verify`** appends a `verified` entry, raising a concept's trust tier
   (unverified → machine-confirmed → human-reviewed).
+- **`edit` invalidates verification** by removing prior `verified` entries, returning the
+  concept to `unverified` until it is reviewed again.
+- **`show --outline` / `show --lines START:END`** expose a document's heading map and retrieve
+  only the relevant numbered slice, avoiding full reads of large concepts.
 
 ## Exit codes
 

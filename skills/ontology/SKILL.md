@@ -22,6 +22,8 @@ directly **only when you already know its exact path** (from `okf resolve` or an
 --json` record), and prefer `okf show` over a raw read. When a raw read is unavoidable, read the
 **narrowest slice** needed — a known line range, a section/heading, or a named symbol — never
 the whole file speculatively.
+For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
+relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
 
 ## Key facts
 - Each key under `concepts:` **is the OKF `type` string verbatim** — types may contain spaces,

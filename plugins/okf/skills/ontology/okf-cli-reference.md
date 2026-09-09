@@ -1,6 +1,6 @@
 # okf CLI — argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.1, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.2, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 **For skills:** consult this file to learn a command's arguments. **Do not** run `okf <cmd> --help` or `okf schema` first just to discover flags — they are all listed here. Every command also accepts the global `--json` flag (NDJSON output) and takes an optional trailing `bundle` positional that falls back to `$OKF_BUNDLE`, then the cwd.
 
@@ -106,12 +106,14 @@ Output stream: `concept`.
 
 ### `okf show`
 
-Show one concept's full content.
+Show one concept's content, heading outline, or selected line range.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
 | `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `--outline` | bool | no | Show only the Markdown heading outline with 1-based document line numbers |
+| `--lines <value>` | string | no | Show only an inclusive 1-based document line range, `START:END` (or one line, `N`) |
 
 Output stream: `concept`.
 
@@ -219,7 +221,7 @@ Output stream: `change`.
 
 ### `okf edit` · _mutates_
 
-Edit a concept losslessly: frontmatter (`--set/--unset/--add/--remove`) and body (`--set-body/--append-body/--clear-body`, `--{set,append,remove}-section`).
+Edit a concept losslessly and invalidate its prior verification.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|

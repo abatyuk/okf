@@ -66,6 +66,61 @@ fn show_json_is_single_record() {
 }
 
 #[test]
+fn show_outline_reports_headings_with_document_line_numbers() {
+    let out = okf()
+        .args([
+            "show",
+            "tables/customers",
+            fixture("sample-bundle").to_str().unwrap(),
+            "--outline",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("13: # Customers"), "{text}");
+    assert!(!text.contains("The canonical customers table"), "{text}");
+}
+
+#[test]
+fn show_lines_returns_only_requested_numbered_slice() {
+    let out = okf()
+        .args([
+            "show",
+            "tables/customers",
+            fixture("sample-bundle").to_str().unwrap(),
+            "--lines",
+            "13:14",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "13: # Customers\n14: \n"
+    );
+}
+
+#[test]
+fn show_outline_json_is_structured() {
+    let out = okf()
+        .args([
+            "show",
+            "tables/customers",
+            fixture("sample-bundle").to_str().unwrap(),
+            "--outline",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let records = ndjson(&out.stdout);
+    assert_eq!(records[0]["kind"], "outline");
+    assert_eq!(records[0]["headings"][0]["line"], 13);
+    assert_eq!(records[0]["headings"][0]["text"], "Customers");
+}
+
+#[test]
 fn search_json_filters_by_type() {
     let out = okf()
         .args([

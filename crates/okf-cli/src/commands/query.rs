@@ -1,5 +1,5 @@
 //! search, list, show, backlinks, graph, resolve.
-use crate::cli::{BundleArgs, GraphArgs, IdArgs, ResolveArgs, SearchArgs};
+use crate::cli::{BundleArgs, GraphArgs, IdArgs, ResolveArgs, SearchArgs, ShowArgs};
 use crate::output;
 use okf_core::bundle::loader::load_bundle;
 use okf_core::bundle::resolve::resolve_bundle;
@@ -45,13 +45,20 @@ pub fn run_search(args: &SearchArgs, json: bool) -> Result<i32> {
     Ok(0)
 }
 
-/// `okf show <concept> [bundle]`.
-pub fn run_show(args: &IdArgs, json: bool) -> Result<i32> {
+/// `okf show <concept> [bundle] [--outline | --lines START:END]`.
+pub fn run_show(args: &ShowArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
     match show(&bundle, &args.concept) {
         Some(concept) => {
-            output::print_concept(concept, json)?;
+            if args.outline {
+                output::print_concept_outline(concept, json)?;
+            } else if let Some(raw) = &args.lines {
+                let (start, end) = parse_line_range(raw)?;
+                output::print_concept_lines(concept, start, end, json)?;
+            } else {
+                output::print_concept(concept, json)?;
+            }
             Ok(0)
         }
         None => Err(OkfError::Usage(format!(
@@ -59,6 +66,33 @@ pub fn run_show(args: &IdArgs, json: bool) -> Result<i32> {
             args.concept
         ))),
     }
+}
+
+/// Parse an inclusive, 1-based `START:END` range (or a single line `N`).
+fn parse_line_range(raw: &str) -> Result<(usize, usize)> {
+    let parse = |part: &str| {
+        part.parse::<usize>()
+            .ok()
+            .filter(|n| *n > 0)
+            .ok_or_else(|| {
+                OkfError::Usage(format!(
+                    "invalid --lines {raw:?}: expected START:END with positive line numbers"
+                ))
+            })
+    };
+    let (start, end) = match raw.split_once(':') {
+        Some((start, end)) => (parse(start)?, parse(end)?),
+        None => {
+            let line = parse(raw)?;
+            (line, line)
+        }
+    };
+    if start > end {
+        return Err(OkfError::Usage(format!(
+            "invalid --lines {raw:?}: start must not exceed end"
+        )));
+    }
+    Ok((start, end))
 }
 
 /// `okf backlinks <concept> [bundle]` — concepts that link to the given concept.

@@ -20,6 +20,8 @@ wasteful and defeats the design. Read a bundle markdown file directly **only whe
 know its exact path** (from `okf resolve` or an `okf show --json` record), and prefer
 `okf show` over a raw read. When a raw read is unavoidable, read the **narrowest slice** needed
 — a known line range, a section/heading, or a named symbol — never the whole file speculatively.
+For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
+relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
 
 ## Progressive disclosure loop
 
@@ -31,10 +33,11 @@ know its exact path** (from `okf resolve` or an `okf show --json` record), and p
      inventory (id, type, title, status, trust tier).
    Skim the returned ids/titles/types and pick the few most relevant concepts.
 
-2. **Read the relevant concepts — `okf show`.** For each promising candidate,
-   `okf show <bundle> <concept-id>` to get its full frontmatter + body. Read only what you need;
-   stop once you can answer. Note each concept's `trust_tier` — it signals how much to rely on
-   the content (unverified / machine-confirmed / human-reviewed).
+2. **Read the relevant concepts — `okf show`.** For each promising candidate, inspect its
+   heading map with `okf show <concept-id> <bundle> --outline`, then request only relevant lines
+   with `--lines <START:END>`. Use the full `okf show <concept-id> <bundle>` only for a small
+   concept. Note its `trust_tier` — it signals how much to rely on the content (unverified /
+   machine-confirmed / human-reviewed).
 
 3. **Follow relationships — `okf graph` / `okf backlinks`.** When the question is about how
    things connect or what's impacted:

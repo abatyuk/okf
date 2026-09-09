@@ -326,6 +326,39 @@ fn edit_body_and_section_ops_preserve_frontmatter() {
 }
 
 #[test]
+fn edit_invalidates_verification_and_trust_tier() {
+    let tmp = temp_bundle();
+    let root = tmp.path();
+    write_file(
+        root,
+        "policies/p.md",
+        "---\ntype: Policy\ntitle: Old\nverified:\n- by: human:reviewer\n  at: 2026-09-01\n- by: process:ci\n  at: 2026-09-02\n---\n# Policy\n",
+    );
+
+    let res = edit::edit(
+        root,
+        "policies/p",
+        &edit::EditSpec {
+            sets: vec![("title".to_string(), "New".to_string())],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    assert!(matches!(
+        res.changes.last(),
+        Some(edit::EditChange::InvalidateVerification { removed: 2 })
+    ));
+    let concept =
+        parse_concept(res.id, &read_file(root, "policies/p.md")).expect("edited concept parses");
+    assert!(concept.frontmatter.get("verified").is_none());
+    assert_eq!(
+        concept.trust_tier(),
+        okf_core::model::trust::TrustTier::Unverified
+    );
+}
+
+#[test]
 fn edit_with_no_operations_errors() {
     let tmp = temp_bundle();
     let root = tmp.path();

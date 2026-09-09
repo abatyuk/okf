@@ -20,6 +20,8 @@ defeats the design. When you must read a bundle markdown file directly, do so **
 already know its exact path** (from `okf resolve` / an `okf show --json` record), prefer
 `okf show`, and read the **narrowest slice** needed — a known line range, section/heading, or
 symbol — never the whole file speculatively.
+For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
+relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
 
 The **external source material** being ingested (the repo/dir, which is *not* yet an OKF
 bundle) is different: normal code-search tools (Glob, Grep, `find`, Read) are fine there, but

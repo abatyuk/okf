@@ -10,7 +10,8 @@
 //! coerced, like `007` or `1.0`, stay strings). `--unset key` removes a field. `--add
 //! key=value` appends an item to a list field (creating the list, idempotent), and `--remove
 //! key=value` drops matching item(s). `add_sources` appends typed source mappings; structured
-//! `verified` entries still belong to the dedicated `verify` writer.
+//! `verified` entries still belong to the dedicated `verify` writer. Every successful edit
+//! invalidates prior verification by removing `verified`; the document must be reviewed again.
 //!
 //! **Body ops.** `--set-body`/`--append-body`/`--clear-body` rewrite the whole body; the
 //! section-aware `--set-section`/`--append-section`/`--remove-section` splice a single heading
@@ -124,6 +125,8 @@ pub enum EditChange {
     AppendSection { heading: String },
     /// A section was removed.
     RemoveSection { heading: String },
+    /// Prior verification entries were removed because content or metadata was edited.
+    InvalidateVerification { removed: usize },
 }
 
 /// What `edit` changed.
@@ -302,6 +305,14 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
         changes.push(EditChange::AppendSection {
             heading: heading.clone(),
         });
+    }
+
+    // Verification attests to the document as reviewed. Any edit makes that attestation stale,
+    // regardless of which field or body region was touched. Keep this last so failed edits do
+    // not invalidate a document that was never written.
+    if let Some(verified) = concept.frontmatter.map.shift_remove("verified") {
+        let removed = verified.as_sequence().map(Vec::len).unwrap_or(1);
+        changes.push(EditChange::InvalidateVerification { removed });
     }
 
     let path = save_concept(root, &concept)?;

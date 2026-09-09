@@ -26,6 +26,8 @@ directly **only when you already know its exact path** (from `okf resolve` or an
 the whole file speculatively. (Reading the *external artifacts* a concept sources — the code or
 docs it points at — by known path/line-range to check drift is expected; the CLI-only rule is
 about bundle content.)
+For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
+relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
 
 ## Steps
 
@@ -69,5 +71,5 @@ about bundle content.)
 - Never rename a concept file by hand; `okf mv` keeps backlinks intact.
 - Keep the human in the loop on ambiguous drift and on any content whose correct new value you
   can't determine from the artifact.
-- Trust tier may drop conceptually after a big rewrite — consider routing through
-  okf:review-attest for re-verification.
+- Every `okf edit` automatically removes prior `verified` entries because they attest to the
+  pre-edit document. Route every edited concept through okf:review-attest for re-verification.

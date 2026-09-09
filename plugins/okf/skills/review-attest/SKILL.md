@@ -26,6 +26,8 @@ wasteful and defeats the design. Read a bundle markdown file directly **only whe
 know its exact path** (from `okf resolve` or an `okf show --json` record), and prefer
 `okf show` over a raw read. When a raw read is unavoidable, read the **narrowest slice** needed
 — a known line range, a section/heading, or a named symbol — never the whole file speculatively.
+For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch each range
+needed for a complete review with `okf show <concept-id> <bundle> --lines <START:END>`.
 
 ## Steps
 
@@ -35,7 +37,7 @@ know its exact path** (from `okf resolve` or an `okf show --json` record), and p
    <bundle>` — a drifted concept should be reconciled (via `okf:update` + `okf refresh`) before
    it's attested, not signed off while wrong.
 
-2. **Review each concept (the judgment part).** `okf show <bundle> <concept-id>` and actually
+2. **Review each concept (the judgment part).** `okf show <concept-id> <bundle>` and actually
    verify the content:
    - Is the prose accurate and current? Do its `sources[]` still support the claims (spot-check
      with `okf resolve` / read the artifact)?
@@ -62,4 +64,5 @@ know its exact path** (from `okf resolve` or an `okf show --json` record), and p
   human really looked. If you (the agent) reviewed it, use the agent actor form, not `human:`.
 - Attest content, not vibes: tie each sign-off to accurate prose and supporting sources.
 - Don't attest drifted concepts — reconcile via `okf:update`/`okf refresh` first.
-- `okf verify` is lossless and additive; it appends to `verified`, preserving history.
+- `okf verify` is lossless and additive; it appends to `verified`, preserving history until the
+  next `okf edit`, which removes prior entries and returns the concept to `unverified`.

@@ -251,6 +251,9 @@ fn change_json(c: &EditChange) -> serde_json::Value {
         EditChange::RemoveSection { heading } => {
             json!({"op": "remove-section", "heading": heading})
         }
+        EditChange::InvalidateVerification { removed } => {
+            json!({"op": "invalidate-verification", "removed": removed})
+        }
     }
 }
 

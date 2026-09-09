@@ -26,8 +26,8 @@ pub enum Command {
     List(BundleArgs),
     /// Search concepts by type, tag, text, and/or frontmatter field.
     Search(SearchArgs),
-    /// Show one concept's full content.
-    Show(IdArgs),
+    /// Show one concept's content, heading outline, or selected line range.
+    Show(ShowArgs),
     /// Concepts that link to a given concept.
     Backlinks(IdArgs),
     /// Render the link graph (or a subtree) as mermaid/dot/graphml.
@@ -56,8 +56,7 @@ pub enum Command {
     Init(InitArgs),
     /// Add a new concept document, scaffolded from the ontology.
     Add(AddArgs),
-    /// Edit a concept losslessly: frontmatter (`--set/--unset/--add/--remove`) and body
-    /// (`--set-body/--append-body/--clear-body`, `--{set,append,remove}-section`).
+    /// Edit a concept losslessly and invalidate its prior verification.
     Edit(EditArgs),
     /// Move/rename a concept and rewrite every inbound link.
     Mv(MvArgs),
@@ -123,6 +122,20 @@ pub struct IdArgs {
     pub concept: String,
     /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
     pub bundle: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ShowArgs {
+    /// Concept id (leading slash optional), e.g. `tables/customers`.
+    pub concept: String,
+    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    pub bundle: Option<String>,
+    /// Show only the Markdown heading outline with 1-based document line numbers.
+    #[arg(long, conflicts_with = "lines")]
+    pub outline: bool,
+    /// Show only an inclusive 1-based document line range, `START:END` (or one line, `N`).
+    #[arg(long, value_name = "START:END", conflicts_with = "outline")]
+    pub lines: Option<String>,
 }
 
 #[derive(Debug, Args)]

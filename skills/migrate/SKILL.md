@@ -21,6 +21,8 @@ bundle markdown file directly, do so **only when you already know its exact path
 `okf resolve` / an `okf show --json` record), prefer `okf show`, and read the **narrowest
 slice** needed — a known line range, section/heading, or symbol — never the whole file
 speculatively.
+For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
+relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
 
 The **external source docs** being migrated (the specs/plans/READMEs, which are *not* yet an
 OKF bundle) are different: normal file-search tools (Glob, Grep, `find`, Read) are fine for
