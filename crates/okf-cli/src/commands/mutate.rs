@@ -6,7 +6,7 @@ use okf_core::error::Result;
 use okf_core::fingerprint::Engine;
 use okf_core::model::source::{Fingerprint, Source, SourceKind};
 use okf_core::mutate::add::{add, AddOptions};
-use okf_core::mutate::edit::{edit, parse_kv, EditChange, EditSpec};
+use okf_core::mutate::edit::{edit, parse_kv, EditChange, EditSpec, SourceSelector};
 use okf_core::mutate::init::{init, InitOptions};
 use okf_core::mutate::mv::mv;
 use okf_core::mutate::refresh::refresh;
@@ -114,6 +114,7 @@ pub fn run_edit(args: &EditArgs, json: bool) -> Result<i32> {
         adds: parse_pairs("--add", &args.add)?,
         removes: parse_pairs("--remove", &args.remove)?,
         add_sources: parse_source_args(&args.add_source)?,
+        remove_sources: parse_source_selector_args(&args.remove_source)?,
         clear_body: args.clear_body,
         set_body: resolve_opt(&args.set_body, &mut stdin_cache)?,
         append_body: resolve_opt(&args.append_body, &mut stdin_cache)?,
@@ -179,6 +180,57 @@ fn parse_source_args(args: &[String]) -> Result<Vec<Source>> {
                 kind: SourceKind::from_kind_str(&kind),
                 fingerprint: Fingerprint::default(),
                 extra: Default::default(),
+            })
+        })
+        .collect()
+}
+
+/// Parse a `--remove-source` selector. A bare value matches every source with that resource;
+/// the structured form can additionally restrict the match to one source kind.
+fn parse_source_selector_args(args: &[String]) -> Result<Vec<SourceSelector>> {
+    use okf_core::error::OkfError;
+    args.iter()
+        .map(|arg| {
+            if !arg.contains('=') {
+                let resource = arg.trim();
+                if resource.is_empty() {
+                    return Err(OkfError::Usage(
+                        "--remove-source requires a non-empty resource".to_string(),
+                    ));
+                }
+                return Ok(SourceSelector {
+                    resource: resource.to_string(),
+                    kind: None,
+                });
+            }
+
+            let mut resource = None;
+            let mut kind = None;
+            for part in arg.split(',') {
+                let (key, value) = part.split_once('=').ok_or_else(|| {
+                    OkfError::Usage(format!(
+                        "invalid --remove-source {arg:?}: expected resource=<value>[,kind=<value>]"
+                    ))
+                })?;
+                match key.trim() {
+                    "resource" if !value.trim().is_empty() => {
+                        resource = Some(value.trim().to_string())
+                    }
+                    "kind" if !value.trim().is_empty() => {
+                        kind = Some(SourceKind::from_kind_str(value.trim()))
+                    }
+                    other => {
+                        return Err(OkfError::Usage(format!(
+                            "invalid --remove-source key {other:?}: expected resource and optional kind"
+                        )))
+                    }
+                }
+            }
+            Ok(SourceSelector {
+                resource: resource.ok_or_else(|| {
+                    OkfError::Usage("--remove-source requires resource=<value>".to_string())
+                })?,
+                kind,
             })
         })
         .collect()

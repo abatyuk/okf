@@ -9,9 +9,10 @@
 //! ints/floats → number, `null` → null, else string; values that would lose information when
 //! coerced, like `007` or `1.0`, stay strings). `--unset key` removes a field. `--add
 //! key=value` appends an item to a list field (creating the list, idempotent), and `--remove
-//! key=value` drops matching item(s). `add_sources` appends typed source mappings; structured
-//! `verified` entries still belong to the dedicated `verify` writer. Every successful edit
-//! invalidates prior verification by removing `verified`; the document must be reviewed again.
+//! key=value` drops matching item(s). `add_sources` appends typed source mappings and
+//! `remove_sources` removes them by resource and, optionally, kind; structured `verified`
+//! entries still belong to the dedicated `verify` writer. Every successful edit invalidates
+//! prior verification by removing `verified`; the document must be reviewed again.
 //!
 //! **Body ops.** `--set-body`/`--append-body`/`--clear-body` rewrite the whole body; the
 //! section-aware `--set-section`/`--append-section`/`--remove-section` splice a single heading
@@ -26,7 +27,7 @@ use serde_yaml::Value;
 use crate::error::{OkfError, Result};
 use crate::model::concept::{Concept, ConceptId};
 use crate::model::frontmatter::Frontmatter;
-use crate::model::source::Source;
+use crate::model::source::{Source, SourceKind};
 use crate::mutate::body;
 use crate::parse::{parse_concept, writer::write_concept};
 
@@ -71,6 +72,8 @@ pub struct EditSpec {
     pub removes: Vec<(String, String)>,
     /// Structured entries appended to `sources`.
     pub add_sources: Vec<Source>,
+    /// Structured source selectors removed from `sources`.
+    pub remove_sources: Vec<SourceSelector>,
     /// `--clear-body`: empty the body.
     pub clear_body: bool,
     /// `--set-body`: replace the whole body.
@@ -93,6 +96,7 @@ impl EditSpec {
             && self.adds.is_empty()
             && self.removes.is_empty()
             && self.add_sources.is_empty()
+            && self.remove_sources.is_empty()
             && !self.clear_body
             && self.set_body.is_none()
             && self.append_body.is_none()
@@ -100,6 +104,13 @@ impl EditSpec {
             && self.append_sections.is_empty()
             && self.remove_sections.is_empty()
     }
+}
+
+/// Identifies sources to remove. Omitting `kind` matches all entries with the resource.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceSelector {
+    pub resource: String,
+    pub kind: Option<SourceKind>,
 }
 
 /// One applied change, for reporting (text summary + `--json` detail).
@@ -216,6 +227,31 @@ fn apply_remove(fm: &mut Frontmatter, key: &str, value: Value) -> Result<usize> 
     }
 }
 
+/// Remove every well-formed source matching `selector`, preserving non-mapping entries and
+/// unrelated source metadata byte-for-byte. A missing `sources` field is a no-op.
+fn apply_remove_source(fm: &mut Frontmatter, selector: &SourceSelector) -> Result<usize> {
+    match fm.map.get_mut("sources") {
+        None => Ok(0),
+        Some(Value::Sequence(seq)) => {
+            let before = seq.len();
+            seq.retain(|value| {
+                let Some(source) = Source::from_value(value) else {
+                    return true;
+                };
+                source.resource != selector.resource
+                    || selector
+                        .kind
+                        .as_ref()
+                        .is_some_and(|kind| &source.kind != kind)
+            });
+            Ok(before - seq.len())
+        }
+        Some(_) => Err(OkfError::Usage(
+            "--remove-source: field \"sources\" is not a list".to_string(),
+        )),
+    }
+}
+
 /// Apply a batch of frontmatter and body edits to the concept at `id`, losslessly.
 ///
 /// Operations run in a fixed order (unset, set, add, remove, whole-body, section edits) so the
@@ -272,6 +308,13 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
         changes.push(EditChange::Add {
             key: "sources".to_string(),
             added,
+        });
+    }
+    for selector in &spec.remove_sources {
+        let removed = apply_remove_source(&mut concept.frontmatter, selector)?;
+        changes.push(EditChange::Remove {
+            key: "sources".to_string(),
+            removed,
         });
     }
 

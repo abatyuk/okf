@@ -34,6 +34,7 @@ to `unverified` until the revised document is reviewed and verified again.
 | `--add <value>` | list<string> | no | Append an item to a list field, `key=value` (repeatable, idempotent) |
 | `--remove <value>` | list<string> | no | Remove matching item(s) from a list field, `key=value` (repeatable) |
 | `--add-source <value>` | list<string> | no | Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable) |
+| `--remove-source <value>` | list<string> | no | Remove sources matching `<path-or-uri>` or `resource=<path-or-uri>[,kind=<kind>]` (repeatable) |
 | `--set-body <value>` | string | no | Replace the whole body. Use `@file` to read a file or `-` for stdin |
 | `--append-body <value>` | string | no | Append a block to the body. Use `@file` or `-` (stdin) |
 | `--clear-body` | bool | no | Empty the body |

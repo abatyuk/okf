@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use okf_core::fingerprint::Engine;
 use okf_core::model::concept::ConceptId;
-use okf_core::model::source::parse_sources;
+use okf_core::model::source::{parse_sources, Source, SourceKind};
 use okf_core::mutate::{add, edit, init, mv, refresh, rm, verify};
 use okf_core::ontology::load::parse_ontology;
 use okf_core::ontology::schema::Ontology;
@@ -263,6 +263,59 @@ fn edit_unset_add_remove_manage_fields_and_lists() {
     assert_eq!(deps, vec!["/a", "/c"]); // /b removed, /c added, /a not duplicated
     assert_eq!(c.frontmatter.get_tags(), vec!["core"]);
     assert_eq!(c.body, "body\n");
+}
+
+#[test]
+fn edit_removes_sources_by_resource_and_optional_kind() {
+    let tmp = temp_bundle();
+    let root = tmp.path();
+    write_file(
+        root,
+        "c/sources.md",
+        "---\ntype: Component\nsources:\n- resource: shared\n  kind: file\n  fingerprint: {content_sha256: old}\n- resource: shared\n  kind: url\n- resource: remove-all\n  kind: file\n- malformed-entry\n---\nbody\n",
+    );
+
+    let res = edit::edit(
+        root,
+        "c/sources",
+        &edit::EditSpec {
+            remove_sources: vec![
+                edit::SourceSelector {
+                    resource: "shared".to_string(),
+                    kind: Some(SourceKind::File),
+                },
+                edit::SourceSelector {
+                    resource: "remove-all".to_string(),
+                    kind: None,
+                },
+            ],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    assert!(matches!(
+        &res.changes[0],
+        edit::EditChange::Remove { key, removed: 1 } if key == "sources"
+    ));
+    assert!(matches!(
+        &res.changes[1],
+        edit::EditChange::Remove { key, removed: 1 } if key == "sources"
+    ));
+    let after = read_file(root, "c/sources.md");
+    let concept = parse_concept(res.id, &after).unwrap();
+    let sources = concept
+        .frontmatter
+        .get("sources")
+        .unwrap()
+        .as_sequence()
+        .unwrap();
+    assert_eq!(sources.len(), 2);
+    assert_eq!(
+        SourceKind::Url,
+        Source::from_value(&sources[0]).unwrap().kind
+    );
+    assert_eq!(sources[1].as_str(), Some("malformed-entry"));
 }
 
 #[test]

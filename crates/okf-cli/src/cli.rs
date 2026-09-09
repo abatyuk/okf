@@ -286,6 +286,10 @@ pub struct EditArgs {
     /// Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable).
     #[arg(long = "add-source")]
     pub add_source: Vec<String>,
+    /// Remove sources matching `<path-or-uri>` or `resource=<path-or-uri>[,kind=<kind>]`
+    /// (repeatable).
+    #[arg(long = "remove-source")]
+    pub remove_source: Vec<String>,
     /// Replace the whole body. Use `@file` to read a file or `-` for stdin.
     #[arg(long = "set-body")]
     pub set_body: Option<String>,

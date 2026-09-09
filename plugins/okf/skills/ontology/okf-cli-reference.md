@@ -1,6 +1,6 @@
 # okf CLI — argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.4, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.5, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 **For skills:** consult this file to learn a command's arguments. **Do not** run `okf <cmd> --help` or `okf schema` first just to discover flags — they are all listed here. Every command also accepts the global `--json` flag (NDJSON output) and takes an optional trailing `bundle` positional that falls back to `$OKF_BUNDLE`, then the cwd.
 
@@ -243,6 +243,7 @@ Edit a concept losslessly and invalidate its prior verification.
 | `--add <value>` | list<string> | no | Append an item to a list field, `key=value` (repeatable, idempotent) |
 | `--remove <value>` | list<string> | no | Remove matching item(s) from a list field, `key=value` (repeatable) |
 | `--add-source <value>` | list<string> | no | Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable) |
+| `--remove-source <value>` | list<string> | no | Remove sources matching `<path-or-uri>` or `resource=<path-or-uri>[,kind=<kind>]` (repeatable) |
 | `--set-body <value>` | string | no | Replace the whole body. Use `@file` to read a file or `-` for stdin |
 | `--append-body <value>` | string | no | Append a block to the body. Use `@file` or `-` (stdin) |
 | `--clear-body` | bool | no | Empty the body |

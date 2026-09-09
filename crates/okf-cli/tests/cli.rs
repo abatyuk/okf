@@ -499,6 +499,56 @@ fn structured_sources_can_be_added_and_refresh_can_fail_on_skips() {
 }
 
 #[test]
+fn structured_sources_can_be_removed_by_resource_or_kind() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_str().unwrap();
+    okf().args(["init", root, "--no-ontology"]).assert().success();
+    okf()
+        .args([
+            "add",
+            "notes/x",
+            root,
+            "--type",
+            "Note",
+            "--add-source",
+            "resource=shared,kind=file",
+            "--add-source",
+            "resource=shared,kind=url",
+            "--add-source",
+            "resource=other,kind=file",
+        ])
+        .assert()
+        .success();
+
+    let edited = okf()
+        .args([
+            "edit",
+            "notes/x",
+            root,
+            "--remove-source",
+            "resource=shared,kind=file",
+            "--remove-source",
+            "other",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(edited.status.success());
+    let changes = &ndjson(&edited.stdout)[0]["changes"];
+    assert_eq!(changes[0]["removed"], 1);
+    assert_eq!(changes[1]["removed"], 1);
+
+    let shown = okf()
+        .args(["show", "notes/x", root, "--json"])
+        .output()
+        .unwrap();
+    let sources = ndjson(&shown.stdout)[0]["sources"].as_array().unwrap().clone();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0]["resource"], "shared");
+    assert_eq!(sources[0]["kind"], "url");
+}
+
+#[test]
 fn ontology_show_lists_enum_values_and_update_can_remove_members() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().to_str().unwrap();
