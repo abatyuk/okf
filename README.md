@@ -7,7 +7,7 @@ deterministic "hands" beneath a set of agent skills that do the judgment work.
 
 - **Deterministic core** (`okf-core`) — parse, validate, lint, query, graph, fingerprint, render.
 - **Thin CLI** (`okf-cli`) — 28 commands, grouped by verb, with a machine-discoverable schema.
-- **Agent skills** (`skills/`) — packaged as the **`okf` plugin** for Claude Code and Codex:
+- **Agent skills** (`plugins/okf/skills/`) — packaged as the **`okf` plugin** for Claude Code and Codex:
   migrate, ingest, update, retrieve, manage ontology, etc. (see [Agent plugins](#agent-plugins)).
 
 See `INTENT.md` for the design rationale and `ARCHITECTURE.md` for the crate/module layout.
@@ -37,7 +37,7 @@ Requires a recent stable Rust. `git` on `PATH` is needed only for git-based sour
 ### Generated references
 
 Two doc surfaces are generated from `okf schema` and must be regenerated when the CLI changes:
-the per-skill CLI reference (`skills/*/okf-cli-reference.md`) and the `## Arguments`
+the per-skill CLI reference (`plugins/okf/skills/*/okf-cli-reference.md`) and the `## Arguments`
 section of each command concept (`knowledge/commands/*.md`). `cargo xtask install` / `cargo
 xtask build` do this for you; `cargo xtask docs` runs it on its own, and `cargo xtask docs
 --check` fails (exit 1) if anything is stale — wire that into CI. A bare `cargo build` /
@@ -162,13 +162,14 @@ it advisorily; `add` scaffolds from it. Manage it with `okf ontology add/update/
 ## Agent plugins
 
 The agent skills ship as an **`okf`** plugin for both Claude Code and Codex. This repository is a
-single-plugin marketplace for each agent. `skills/` is the canonical source; `cargo xtask docs`
-also mirrors it into the self-contained Codex package.
+single-plugin marketplace for each agent. Both marketplaces reference the same self-contained
+package under `plugins/okf/`, whose `skills/` directory is the canonical source.
 
 ### Claude Code
 
-Claude Code manifests live in `.claude-plugin/` (`marketplace.json` + `plugin.json`), and Claude
-auto-discovers the canonical `skills/` directory.
+Claude Code marketplace metadata lives in `.claude-plugin/marketplace.json`; the package manifest
+lives in `plugins/okf/.claude-plugin/plugin.json`. Claude auto-discovers the package's shared
+`skills/` directory.
 
 Install:
 
@@ -179,8 +180,9 @@ Install:
 
 ### Codex
 
-Codex marketplace metadata lives in `.agents/plugins/marketplace.json`, and its plugin package
-lives in `plugins/okf/`.
+Codex marketplace metadata lives in `.agents/plugins/marketplace.json`; its package manifest lives
+in `plugins/okf/.codex-plugin/plugin.json`. It uses the same `plugins/okf/skills/` directory as
+Claude Code.
 
 Install this repository as a marketplace, then install the plugin:
 
@@ -208,7 +210,7 @@ The skills are namespaced by the plugin in both agents:
 The skills drive the `okf` CLI, so install the binary too (`cargo install --path crates/okf-cli`,
 or `cargo xtask install`). Each skill bundles a generated `okf-cli-reference.md` it reads from its
 own directory, so it never has to probe the CLI to learn arguments. Run `cargo xtask docs --check`
-in CI to verify both plugin packages still contain the same skill content.
+in CI to verify the generated references are current.
 
 ## Development
 

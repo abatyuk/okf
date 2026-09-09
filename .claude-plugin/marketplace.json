@@ -3,10 +3,11 @@
   "owner": {
     "name": "Andrey Batyuk"
   },
+  "description": "OKF agent skills for creating, migrating, querying, validating, and maintaining knowledge bundles.",
   "plugins": [
     {
       "name": "okf",
-      "source": ".",
+      "source": "./plugins/okf",
       "description": "OKF bundle tooling: agent skills that drive the `okf` CLI to migrate, ingest, retrieve, update, attest, and reorganize knowledge bundles."
     }
   ]
