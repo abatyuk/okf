@@ -25,10 +25,16 @@ fn parses_intent_example() {
 
     // Concept keys preserved verbatim, including the spaced quoted key, in order.
     let keys: Vec<&str> = ont.concepts.keys().map(String::as_str).collect();
-    assert_eq!(keys, vec!["Policy", "Computation", "BigQuery Table", "Metric"]);
+    assert_eq!(
+        keys,
+        vec!["Policy", "Computation", "BigQuery Table", "Metric"]
+    );
 
     // Source kinds captured.
-    assert_eq!(ont.source_kinds.first().map(String::as_str), Some("git-commit"));
+    assert_eq!(
+        ont.source_kinds.first().map(String::as_str),
+        Some("git-commit")
+    );
 
     // Policy specifics.
     let policy = &ont.concepts["Policy"];
@@ -43,7 +49,10 @@ fn parses_intent_example() {
         policy.trust.as_ref().unwrap().min_tier.as_deref(),
         Some("human-reviewed")
     );
-    assert_eq!(policy.references["computations"].cardinality, Cardinality::ZeroN);
+    assert_eq!(
+        policy.references["computations"].cardinality,
+        Cardinality::ZeroN
+    );
 
     // Computation: attested + a union reference target.
     let comp = &ont.concepts["Computation"];
@@ -69,10 +78,7 @@ fn field_types_extends_and_object_composition() {
     let pm = resolve_type_name(&ont, "positive_money", &mut chain).unwrap();
     assert_eq!(pm.base, FieldType::String);
     assert!(pm.constraints.contains_key("pattern")); // inherited from `money`
-    assert_eq!(
-        pm.constraints.get("min").and_then(|v| v.as_i64()),
-        Some(0)
-    ); // added by derived def
+    assert_eq!(pm.constraints.get("min").and_then(|v| v.as_i64()), Some(0)); // added by derived def
 
     // `contact` object composes sub-fields.
     let mut chain = Vec::new();
@@ -96,7 +102,10 @@ concepts: {}
 "#;
     let err = parse_ontology(yaml).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("cycle"), "expected cycle rejection, got: {msg}");
+    assert!(
+        msg.contains("cycle"),
+        "expected cycle rejection, got: {msg}"
+    );
     // Cycles are a usage error (exit class 2).
     assert_eq!(err.exit_code(), 2);
 }
@@ -171,7 +180,10 @@ fn add_then_load_round_trip() {
     let reloaded = load_ontology(&out).unwrap();
 
     let dash = &reloaded.concepts["Dashboard"];
-    assert_eq!(dash.description.as_deref(), Some("A dashboard built on metrics."));
+    assert_eq!(
+        dash.description.as_deref(),
+        Some("A dashboard built on metrics.")
+    );
     assert!(dash.fields["layout"].required);
     assert_eq!(dash.references["metrics"].cardinality, Cardinality::OneN);
     assert!(dash.references["metrics"].target.allows("Metric"));

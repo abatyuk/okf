@@ -14,7 +14,7 @@ pub fn split_frontmatter(content: &str) -> (Option<String>, String) {
     // The block must open on the very first line.
     let first_line_end = content.find('\n').map(|i| i + 1).unwrap_or(content.len());
     let first_line = &content[..first_line_end];
-    if first_line.trim_end() != "---" {
+    if !is_delimiter(first_line) {
         return (None, content.to_string());
     }
 
@@ -26,7 +26,7 @@ pub fn split_frontmatter(content: &str) -> (Option<String>, String) {
             .map(|i| pos + i + 1)
             .unwrap_or(content.len());
         let line = &content[pos..nl];
-        if line.trim_end() == "---" {
+        if is_delimiter(line) {
             let fm = content[open_end..pos].to_string();
             let body = content[nl..].to_string();
             return (Some(fm), body);
@@ -36,6 +36,11 @@ pub fn split_frontmatter(content: &str) -> (Option<String>, String) {
 
     // No closing delimiter — be permissive and treat everything as body.
     (None, content.to_string())
+}
+
+fn is_delimiter(line: &str) -> bool {
+    let line = line.strip_suffix('\n').unwrap_or(line);
+    line.strip_suffix('\r').unwrap_or(line) == "---"
 }
 
 /// A located ATX-heading section within a body, expressed in `body.split('\n')` line
@@ -175,7 +180,14 @@ mod tests {
         assert_eq!(body, "just body\n");
     }
 
-    const DOC: &str = "# Title\n\nintro\n\n## Rates\n\nbody one\n\n### Nested\n\ndeep\n\n## Next\n\ntail\n";
+    #[test]
+    fn delimiter_must_be_on_its_own_line() {
+        assert!(split_frontmatter("---  \ntype: T\n---\n").0.is_none());
+        assert!(split_frontmatter("---\r\ntype: T\r\n---\r\n").0.is_some());
+    }
+
+    const DOC: &str =
+        "# Title\n\nintro\n\n## Rates\n\nbody one\n\n### Nested\n\ndeep\n\n## Next\n\ntail\n";
 
     #[test]
     fn find_section_spans_nested_stops_at_equal_level() {

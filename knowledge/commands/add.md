@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:06Z
 ---
 # okf add
 
-Adds a new concept document, scaffolded from the ontology so required fields and reference keys start present. --attested scaffolds an OKF Attested Computation.
+Adds a new concept document, scaffolded from the ontology so required fields and reference keys start present. `--attested` creates exact `type: Attested Computation` and requires a runtime plus either `--computation` or `--inline-computation`.
 
 ## Arguments
 
@@ -26,10 +26,19 @@ Adds a new concept document, scaffolded from the ontology so required fields and
 | `--type <value>` | string | no | Concept `type` (an ontology concept-type key). Optional with `--attested` |
 | `--title <value>` | string | no | Concept title |
 | `--description <value>` | string | no | Concept description |
-| `--attested` | bool | no | Scaffold an OKF Attested Computation (computation/executor/attester) |
+| `--attested` | bool | no | Scaffold exact `type: Attested Computation`; requires `--runtime` |
 | `--set <value>` | list<string> | no | Set a custom scalar field at creation, `key=value` (repeatable) |
 | `--ref <value>` | list<string> | no | Set a declared reference at creation, `key=link` (repeatable) |
-| `--add-source <value>` | list<string> | no | Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable) |
+| `--add-source <value>` | list<string> | no | Add a standard source, `resource=<path-or-uri>[,kind=<extension>][,id=...,...]` |
+| `--add-source-json <value>` | list<string> | no | Add a full source mapping as JSON/YAML or `@file` (repeatable) |
+| `--runtime <value>` | string | no | Runtime for an exact `type: Attested Computation` |
+| `--parameter <value>` | list<string> | no | Declared parameter `name:type[:required]` (repeatable) |
+| `--computation <value>` | string | no | Path to a computation file; omit to scaffold one inline computation fence |
+| `--inline-computation <value>` | string | no | Inline sanctioned computation text, literal, `@file`, or `-` for stdin |
+| `--executor-resource <value>` | string | no | Executor instructions/code resource |
+| `--receipt <value>` | list<string> | no | Required executor receipt field (repeatable) |
+| `--attester-resource <value>` | string | no | Deterministic attester code resource |
+| `--generated-by <value>` | string | no | Actor that generated this content |
 
 Every command also accepts global `--json` and an optional trailing `bundle` positional.
 

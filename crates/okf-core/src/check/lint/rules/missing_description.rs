@@ -9,7 +9,7 @@ pub const RULE: &str = "missing-description";
 pub fn run(ctx: &RuleContext) -> Vec<Finding> {
     let mut out = Vec::new();
     for concept in &ctx.bundle.concepts {
-        if concept.description().map_or(true, |d| d.trim().is_empty()) {
+        if concept.description().is_none_or(|d| d.trim().is_empty()) {
             out.push(Finding {
                 rule: RULE.to_string(),
                 severity: ctx.config.missing_description,

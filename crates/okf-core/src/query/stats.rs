@@ -1,5 +1,6 @@
 //! Bundle summary: counts by type, trust-tier distribution, stale, orphans.
 use crate::bundle::loader::Bundle;
+use crate::check::stale::check_stale;
 use crate::graph::build::build_graph;
 use crate::model::trust::TrustTier;
 use crate::ontology::schema::Ontology;
@@ -62,7 +63,7 @@ pub fn stats(bundle: &Bundle, ontology: Option<&Ontology>) -> Stats {
         total: bundle.concepts.len(),
         by_type,
         trust,
-        stale: None,
+        stale: Some(check_stale(bundle).concepts.len()),
         orphans,
     }
 }
@@ -93,7 +94,10 @@ mod tests {
             root: std::path::PathBuf::from("."),
             concepts: vec![
                 concept("a", "type: Policy\nrefs:\n- /b"),
-                concept("b", "type: Metric\nverified:\n- by: human:x"),
+                concept(
+                    "b",
+                    "type: Metric\nverified:\n- by: human:x\n  at: 2026-01-01T00:00:00Z",
+                ),
                 concept("c", "type: Metric"), // orphan: no links either way
             ],
         };
@@ -104,7 +108,7 @@ mod tests {
         assert_eq!(s.trust.unverified, 2);
         assert_eq!(s.trust.human_reviewed, 1);
         assert_eq!(s.orphans, 1); // c
-        assert_eq!(s.stale, None);
+        assert_eq!(s.stale, Some(0));
     }
 
     #[test]

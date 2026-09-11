@@ -1,7 +1,7 @@
 ---
 type: Component
 title: query module
-description: Read-only lookups, including specification-native index.md browsing and targeted concept queries.
+description: Read-only concept queries, corrected path resolution, and bounded artifact/computation inspection.
 layer: core
 depends_on:
 - /components/model
@@ -20,6 +20,6 @@ sources:
 ---
 # query module
 
-Read-only lookups: browse reads or synthesizes structural directory indexes; search and list locate concepts; show progressively reveals outlines and line ranges; resolve maps links and structural resources to paths; stats and diff summarize bundle state.
+Read-only lookups: browse reads or synthesizes structural directory indexes; search/list/show retrieve concepts; artifact commands safely resolve and retrieve path-valued resources; computation check inspects contracts without execution; stats and diff summarize state.
 
 Location: `crates/okf-core/src/query`.

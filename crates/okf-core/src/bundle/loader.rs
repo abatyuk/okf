@@ -2,8 +2,9 @@
 use crate::error::{OkfError, Result};
 use crate::model::concept::{Concept, ConceptId};
 use crate::parse::parse_concept;
-use ignore::WalkBuilder;
 use std::path::{Path, PathBuf};
+
+use super::walk::walk_markdown;
 
 /// Reserved filenames that are structural, not concepts.
 const RESERVED: [&str; 2] = ["index.md", "log.md"];
@@ -34,37 +35,20 @@ pub fn load_bundle(root: &Path) -> Result<Bundle> {
     }
 
     let mut concepts = Vec::new();
-    let walker = WalkBuilder::new(root)
-        .hidden(false) // include dotfiles that are not gitignored
-        .git_ignore(true)
-        .git_exclude(true)
-        .parents(true)
-        .build();
-
-    for entry in walker {
-        let entry = entry.map_err(|e| OkfError::Io(e.to_string()))?;
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
-        }
+    for rel in walk_markdown(root)? {
+        let path = root.join(&rel);
         let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if RESERVED.contains(&file_name) {
             continue;
         }
 
-        let rel = path
-            .strip_prefix(root)
-            .map_err(|e| OkfError::Internal(e.to_string()))?;
         let rel_str = rel.to_string_lossy();
         let stem = rel_str
             .strip_suffix(".md")
             .ok_or_else(|| OkfError::Internal(format!("expected .md suffix: {rel_str}")))?;
         let id = ConceptId::from_relative(stem);
 
-        let content = std::fs::read_to_string(path)
+        let content = std::fs::read_to_string(&path)
             .map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
         concepts.push(parse_concept(id, &content)?);
     }

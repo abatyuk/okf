@@ -5,7 +5,7 @@
 * [Cardinality](Cardinality.md) - How many targets a reference (or list field) may have: 0..1, 1..1, 0..n, or 1..n.
 * [Change record](Change.md) - The NDJSON record for a diff result: a concept that was added, removed, or changed versus a git ref.
 * [Concept](Concept.md) - A single knowledge unit: its ConceptId, parsed Frontmatter, and markdown body.
-* [Concept record (NDJSON)](ConceptRecord.md) - The machine representation of a concept: its Frontmatter serialized to JSON verbatim plus computed id and trust_tier.
+* [Concept record (NDJSON)](ConceptRecord.md) - The machine representation of a concept: frontmatter JSON plus collision-safe computed identity, trust, lifecycle, generation, and verification views.
 * [ConceptId](ConceptId.md) - A concept's identity, equal to its bundle-relative path without the .md suffix (for example /metrics/revenue).
 * [ConceptType](ConceptType.md) - An ontology entry: a named type with its typed fields and reference rules.
 * [Config](Config.md) - The okf config model: project-local settings (such as the bundle location) consulted during bundle resolution between the CLI arg and the environment.

@@ -19,6 +19,7 @@
 //! `okf_version`) so the write is lossless and idempotent. Concept files and `log.md` are
 //! never touched.
 use crate::bundle::loader::Bundle;
+use crate::check::validate::validate_document;
 use crate::error::Result;
 use crate::model::concept::Concept;
 use crate::parse::markdown::split_frontmatter;
@@ -109,10 +110,13 @@ fn render_dir_index(concepts: &[&Concept], child_dirs: &BTreeSet<String>) -> Str
         out.push_str(&format!("# {ty}\n\n"));
         for c in cs {
             let stem = stem_of(c.id.as_str());
-            let title = c.title().unwrap_or(stem);
-            let url = format!("{stem}.md");
+            let title = escape_label(c.title().unwrap_or(stem));
+            let url = escape_destination(&format!("{stem}.md"));
             match c.description() {
-                Some(d) => out.push_str(&format!("* [{title}]({url}) - {d}\n")),
+                Some(d) => out.push_str(&format!(
+                    "* [{title}]({url}) - {}\n",
+                    d.replace(['\n', '\r'], " ")
+                )),
                 None => out.push_str(&format!("* [{title}]({url})\n")),
             }
         }
@@ -127,10 +131,28 @@ fn render_dir_index(concepts: &[&Concept], child_dirs: &BTreeSet<String>) -> Str
         out.push('\n');
     }
 
+    if out.is_empty() {
+        out.push_str("# Concepts\n\nNo concepts are present in this directory.\n");
+    }
+
     // Normalize to exactly one trailing newline.
     let mut content = out.trim_end().to_string();
     content.push('\n');
     content
+}
+
+fn escape_label(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
+}
+
+fn escape_destination(value: &str) -> String {
+    value
+        .replace(' ', "%20")
+        .replace('(', "%28")
+        .replace(')', "%29")
 }
 
 /// Write a generated `index.md` into every directory of the bundle (backs
@@ -164,7 +186,26 @@ pub fn write_indexes(bundle: &Bundle) -> Result<Vec<PathBuf>> {
             idx.content.clone()
         };
 
-        std::fs::write(&target, final_content)
+        let rel = target
+            .strip_prefix(&bundle.root)
+            .map_err(|e| crate::error::OkfError::Internal(e.to_string()))?
+            .to_string_lossy();
+        let violations = validate_document(&rel, &final_content);
+        if !violations.is_empty() {
+            return Err(crate::error::OkfError::Internal(format!(
+                "generated nonconformant index {}: {}",
+                rel,
+                violations
+                    .iter()
+                    .map(|v| v.rule.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
+        let temp = target.with_extension("md.okf-tmp");
+        std::fs::write(&temp, final_content)
+            .map_err(|e| crate::error::OkfError::Io(format!("{}: {e}", temp.display())))?;
+        std::fs::rename(&temp, &target)
             .map_err(|e| crate::error::OkfError::Io(format!("{}: {e}", target.display())))?;
         written.push(target);
     }
@@ -174,8 +215,18 @@ pub fn write_indexes(bundle: &Bundle) -> Result<Vec<PathBuf>> {
 fn valid_root_frontmatter(frontmatter: &str) -> bool {
     parse_frontmatter(frontmatter).is_ok_and(|map| {
         map.len() == 1
-            && matches!(map.get("okf_version"), Some(serde_yaml::Value::String(version)) if !version.trim().is_empty())
+            && matches!(map.get("okf_version"), Some(serde_yaml::Value::String(version)) if valid_version(version))
     })
+}
+
+fn valid_version(version: &str) -> bool {
+    let Some((major, minor)) = version.trim().split_once('.') else {
+        return false;
+    };
+    !major.is_empty()
+        && !minor.is_empty()
+        && major.chars().all(|c| c.is_ascii_digit())
+        && minor.chars().all(|c| c.is_ascii_digit())
 }
 
 #[cfg(test)]
@@ -191,7 +242,7 @@ mod tests {
     fn index_for<'a>(files: &'a [IndexFile], dir: &str) -> &'a IndexFile {
         files
             .iter()
-            .find(|f| f.dir == PathBuf::from(dir))
+            .find(|f| f.dir == Path::new(dir))
             .unwrap_or_else(|| panic!("no index generated for {dir:?}"))
     }
 

@@ -2,7 +2,7 @@
 type: 'DesignDecision'
 title: 'Preserve comments in ontology.yaml edits'
 description: 'Typed serialization validates ontology edits; a key-path merge restores comments to surviving keys.'
-status: 'resolved'
+decision_status: 'resolved'
 affects:
   - /components/ontology
 ---

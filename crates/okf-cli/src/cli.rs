@@ -36,10 +36,18 @@ pub enum Command {
     Graph(GraphArgs),
     /// Resolve a link/concept-id to a concrete bundle-relative file path.
     Resolve(ResolveArgs),
+    /// List, resolve, or retrieve path-valued bundle artifacts without executing them.
+    #[command(subcommand)]
+    Artifact(ArtifactCmd),
+    /// Inspect Attested Computation contracts without executing them.
+    #[command(subcommand)]
+    Computation(ComputationCmd),
 
     // ---- CHECK ----
     /// Walk a bundle and report the candidate files that would be analyzed.
     Scan(BundleArgs),
+    /// Inventory every regular source file without parsing it as an OKF concept.
+    SourceScan(SourceScanArgs),
     /// Conformance validation — the spec's three hard rules only.
     Validate(BundleArgs),
     /// Advisory checks (broken links, missing fields, orphans, ontology violations).
@@ -52,6 +60,8 @@ pub enum Command {
     Diff(DiffArgs),
     /// Bundle summary: counts by type, trust distribution, orphans.
     Stats(FailOnArgs),
+    /// Diagnose compatibility and safely repair an existing bundle for OKF v0.2.
+    Doctor(DoctorArgs),
 
     // ---- MUTATE ----
     /// Create a new empty OKF bundle.
@@ -93,11 +103,33 @@ pub enum OntologyCmd {
     Remove(OntRemoveArgs),
 }
 
+#[derive(Debug, Subcommand)]
+pub enum ArtifactCmd {
+    /// List local artifacts and concepts under a bundle directory.
+    List(ArtifactListArgs),
+    /// Resolve any OKF path-valued resource with document context.
+    Resolve(ArtifactResolveArgs),
+    /// Retrieve a bounded local text artifact; binary files return metadata only.
+    Show(ArtifactShowArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ComputationCmd {
+    /// Check and display a computation contract; never executes code.
+    Check(IdArgs),
+}
+
 /// A bare bundle positional, shared by commands that take no other argument.
 #[derive(Debug, Args)]
 pub struct BundleArgs {
     /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
     pub bundle: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct SourceScanArgs {
+    /// Source directory to inventory; it need not be an OKF bundle.
+    pub directory: String,
 }
 
 #[derive(Debug, Args)]
@@ -172,6 +204,49 @@ pub struct ResolveArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ArtifactListArgs {
+    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    pub bundle: Option<String>,
+    /// Bundle-relative directory to inventory.
+    #[arg(long, default_value = "references")]
+    pub directory: String,
+    /// Compute SHA-256 digests (reads each file).
+    #[arg(long)]
+    pub digest: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ArtifactResolveArgs {
+    /// Resource path, URL, or scope descriptor.
+    pub resource: String,
+    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    pub bundle: Option<String>,
+    /// Resolve a relative resource against this declaring concept id.
+    #[arg(long)]
+    pub from: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ArtifactShowArgs {
+    /// Local artifact path to retrieve.
+    pub resource: String,
+    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    pub bundle: Option<String>,
+    /// Resolve a relative resource against this declaring concept id.
+    #[arg(long)]
+    pub from: Option<String>,
+    /// Retrieve only an inclusive, one-based START:END line range.
+    #[arg(long, value_name = "START:END")]
+    pub lines: Option<String>,
+    /// Maximum bytes read into output.
+    #[arg(long, default_value_t = 65_536)]
+    pub max_bytes: usize,
+    /// Explicitly request remote retrieval (requires a network-enabled build and policy).
+    #[arg(long)]
+    pub fetch: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct LintArgs {
     /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
     pub bundle: Option<String>,
@@ -222,6 +297,24 @@ pub struct DiffArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct DoctorArgs {
+    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    pub bundle: Option<String>,
+    /// Target OKF version.
+    #[arg(long, default_value = "0.2")]
+    pub target: String,
+    /// Enable the allow-listed safe repair set.
+    #[arg(long = "fix-safe")]
+    pub fix_safe: bool,
+    /// Show safe repairs without writing (the default without --yes).
+    #[arg(long)]
+    pub dry_run: bool,
+    /// Confirm applying --fix-safe changes non-interactively.
+    #[arg(long, requires = "fix_safe")]
+    pub yes: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct InitArgs {
     /// Bundle directory to create (defaults to $OKF_BUNDLE, then the current directory).
     pub bundle: Option<String>,
@@ -251,7 +344,7 @@ pub struct AddArgs {
     /// Concept description.
     #[arg(long)]
     pub description: Option<String>,
-    /// Scaffold an OKF Attested Computation (computation/executor/attester).
+    /// Scaffold exact `type: Attested Computation`; requires `--runtime`.
     #[arg(long)]
     pub attested: bool,
     /// Set a custom scalar field at creation, `key=value` (repeatable).
@@ -260,9 +353,36 @@ pub struct AddArgs {
     /// Set a declared reference at creation, `key=link` (repeatable).
     #[arg(long = "ref")]
     pub reference: Vec<String>,
-    /// Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable).
+    /// Add a standard source, `resource=<path-or-uri>[,kind=<extension>][,id=...,...]`.
     #[arg(long = "add-source")]
     pub add_source: Vec<String>,
+    /// Add a full source mapping as JSON/YAML or `@file` (repeatable).
+    #[arg(long = "add-source-json")]
+    pub add_source_json: Vec<String>,
+    /// Runtime for an exact `type: Attested Computation`.
+    #[arg(long)]
+    pub runtime: Option<String>,
+    /// Declared parameter `name:type[:required]` (repeatable).
+    #[arg(long = "parameter")]
+    pub parameter: Vec<String>,
+    /// Path to a computation file; omit to scaffold one inline computation fence.
+    #[arg(long, conflicts_with = "inline_computation")]
+    pub computation: Option<String>,
+    /// Inline sanctioned computation text, literal, `@file`, or `-` for stdin.
+    #[arg(long = "inline-computation", conflicts_with = "computation")]
+    pub inline_computation: Option<String>,
+    /// Executor instructions/code resource.
+    #[arg(long = "executor-resource")]
+    pub executor_resource: Option<String>,
+    /// Required executor receipt field (repeatable).
+    #[arg(long = "receipt")]
+    pub receipt: Vec<String>,
+    /// Deterministic attester code resource.
+    #[arg(long = "attester-resource")]
+    pub attester_resource: Option<String>,
+    /// Actor that generated this content.
+    #[arg(long = "generated-by")]
+    pub generated_by: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -283,9 +403,12 @@ pub struct EditArgs {
     /// Remove matching item(s) from a list field, `key=value` (repeatable).
     #[arg(long = "remove")]
     pub remove: Vec<String>,
-    /// Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable).
+    /// Add a standard source, `resource=<path-or-uri>[,kind=<extension>][,id=...,...]`.
     #[arg(long = "add-source")]
     pub add_source: Vec<String>,
+    /// Add a full source mapping as JSON/YAML or `@file` (repeatable).
+    #[arg(long = "add-source-json")]
+    pub add_source_json: Vec<String>,
     /// Remove sources matching `<path-or-uri>` or `resource=<path-or-uri>[,kind=<kind>]`
     /// (repeatable).
     #[arg(long = "remove-source")]
@@ -399,7 +522,7 @@ pub struct OntEditArgs {
     /// Remove a reference rule (update only; repeatable).
     #[arg(long = "remove-ref")]
     pub remove_reference: Vec<String>,
-    /// Mark the concept type as an attested computation.
+    /// Mark the exact `Attested Computation` type as standard attested.
     #[arg(long)]
     pub attested: bool,
 }

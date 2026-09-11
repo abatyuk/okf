@@ -1,5 +1,6 @@
 //! Trust tiers and the trust frontmatter families.
 use super::frontmatter::Frontmatter;
+use super::standard::{parse_timestamp, valid_actor};
 use serde_yaml::Value;
 
 /// Derived trust tier (lowest to highest), computed from the `verified` field's actors.
@@ -23,16 +24,12 @@ impl TrustTier {
 
 /// Extract the actor string from a single `verified` entry.
 ///
-/// An entry is normally a mapping with a `by` (or `actor`) key, but we also tolerate a
-/// bare string entry (`verified: ["human:andrey"]`).
+/// Only a standard `{ by, at }` mapping is a verification event. Malformed optional metadata
+/// remains consumable but does not elevate trust.
 fn entry_actor(entry: &Value) -> Option<&str> {
-    if let Some(s) = entry.as_str() {
-        return Some(s);
-    }
-    entry
-        .get("by")
-        .or_else(|| entry.get("actor"))
-        .and_then(Value::as_str)
+    let by = entry.get("by")?.as_str()?;
+    let at = entry.get("at")?.as_str()?;
+    (valid_actor(by) && parse_timestamp(at).is_some()).then_some(by)
 }
 
 /// Derive the trust tier from a concept's frontmatter per the decided rule:
@@ -59,8 +56,8 @@ pub fn derive_trust_tier(fm: &Frontmatter) -> TrustTier {
     let mut any = false;
     let mut human = false;
     for entry in entries {
-        any = true;
         if let Some(actor) = entry_actor(entry) {
+            any = true;
             if actor.starts_with("human:") {
                 human = true;
             }
@@ -93,18 +90,33 @@ mod tests {
 
     #[test]
     fn machine_only() {
-        let f = fm("verified:\n- by: process:ci\n  at: 2026-01-01");
+        let f = fm("verified:\n- by: process:ci\n  at: 2026-01-01T00:00:00Z");
         assert_eq!(derive_trust_tier(&f), TrustTier::MachineConfirmed);
     }
 
     #[test]
     fn any_human_is_human_reviewed() {
-        let f = fm("verified:\n- by: process:ci\n- by: human:andrey");
+        let f = fm("verified:\n- by: process:ci\n  at: 2026-01-01T00:00:00Z\n- by: human:andrey\n  at: 2026-01-02T00:00:00Z");
         assert_eq!(derive_trust_tier(&f), TrustTier::HumanReviewed);
     }
 
     #[test]
     fn empty_verified_is_unverified() {
-        assert_eq!(derive_trust_tier(&fm("verified: []")), TrustTier::Unverified);
+        assert_eq!(
+            derive_trust_tier(&fm("verified: []")),
+            TrustTier::Unverified
+        );
+    }
+
+    #[test]
+    fn malformed_verified_does_not_elevate_trust() {
+        assert_eq!(
+            derive_trust_tier(&fm("verified: {by: human:x}")),
+            TrustTier::Unverified
+        );
+        assert_eq!(
+            derive_trust_tier(&fm("verified: nonsense")),
+            TrustTier::Unverified
+        );
     }
 }

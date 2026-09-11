@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # TrustTier
 
-The derived trust level of a concept: unverified, machine-confirmed, or human-reviewed. Never asserted directly; computed from the concept's verified actors.
+The derived trust level of a concept: unverified, machine-confirmed, or human-reviewed. Never asserted directly; computed only from structurally valid `{by, at}` verification events using valid actor and timestamp syntax.
 
 ## Schema
 

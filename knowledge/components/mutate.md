@@ -1,7 +1,7 @@
 ---
 type: Component
 title: mutate module
-description: 'Lossless, self-validating writes to the bundle: init, add (scaffold from ontology), edit, mv (rename plus rewrite of every inbound link), rm, and the verify/refresh trust and fingerprint writers.'
+description: 'Atomic, self-validating concept writes that preserve unknown YAML meaning and body text while applying bundle mutations.'
 layer: core
 depends_on:
 - /components/model
@@ -17,6 +17,6 @@ last_modified: 2026-09-07T18:47:09Z
 ---
 # mutate module
 
-Lossless, self-validating writes to the bundle: init, add (scaffold from ontology), edit, mv (rename plus rewrite of every inbound link), rm, and the verify/refresh trust and fingerprint writers.
+Atomic, self-validating concept writes preserve unknown YAML meaning and body text while applying init, add, edit, mv, rm, verify, and refresh. YAML comments and scalar presentation may normalize.
 
 Location: `crates/okf-core/src/mutate`.

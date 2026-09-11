@@ -13,6 +13,7 @@ use okf_core::mutate::refresh::refresh;
 use okf_core::mutate::rm::rm;
 use okf_core::mutate::verify::verify;
 use okf_core::ontology::load::try_load;
+use okf_core::ports::clock::Clock;
 use okf_core::ports::clock::SystemClock;
 use okf_core::ports::fs::RealFs;
 use okf_core::ports::git::RealGit;
@@ -69,6 +70,8 @@ pub fn run_init(args: &InitArgs, json: bool) -> Result<i32> {
 pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let ontology = try_load(&root)?;
+    let clock = SystemClock;
+    let mut stdin_cache = None;
     let opts = AddOptions {
         concept_type: args.type_.clone(),
         title: args.title.clone(),
@@ -79,7 +82,16 @@ pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
             .map(|(k, v)| (k, okf_core::mutate::edit::parse_scalar(&v)))
             .collect(),
         references: parse_pairs("--ref", &args.reference)?,
-        sources: parse_source_args(&args.add_source)?,
+        sources: combined_sources(&args.add_source, &args.add_source_json)?,
+        runtime: args.runtime.clone(),
+        parameters: parse_parameters(&args.parameter)?,
+        computation: args.computation.clone(),
+        inline_computation: resolve_opt(&args.inline_computation, &mut stdin_cache)?,
+        executor_resource: args.executor_resource.clone(),
+        receipt: args.receipt.clone(),
+        attester_resource: args.attester_resource.clone(),
+        generated_by: args.generated_by.clone(),
+        generated_at: args.generated_by.as_ref().map(|_| clock.now_rfc3339()),
     };
     let r = add(&root, &args.path, ontology.as_ref(), &opts)?;
     if json {
@@ -102,6 +114,25 @@ pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
     Ok(0)
 }
 
+fn parse_parameters(args: &[String]) -> Result<Vec<(String, String, bool)>> {
+    use okf_core::error::OkfError;
+    args.iter()
+        .map(|raw| {
+            let parts: Vec<&str> = raw.split(':').collect();
+            if !(2..=3).contains(&parts.len())
+                || parts[0].trim().is_empty()
+                || parts[1].trim().is_empty()
+                || (parts.len() == 3 && parts[2] != "required")
+            {
+                return Err(OkfError::Usage(format!(
+                    "invalid --parameter {raw:?}: expected name:type[:required]"
+                )));
+            }
+            Ok((parts[0].to_string(), parts[1].to_string(), parts.len() == 3))
+        })
+        .collect()
+}
+
 /// `okf edit <concept> [bundle]` with frontmatter (`--set/--unset/--add/--remove`) and body
 /// (`--set-body/--append-body/--clear-body`, `--*-section`) operations.
 pub fn run_edit(args: &EditArgs, json: bool) -> Result<i32> {
@@ -113,7 +144,7 @@ pub fn run_edit(args: &EditArgs, json: bool) -> Result<i32> {
         unsets: args.unset.clone(),
         adds: parse_pairs("--add", &args.add)?,
         removes: parse_pairs("--remove", &args.remove)?,
-        add_sources: parse_source_args(&args.add_source)?,
+        add_sources: combined_sources(&args.add_source, &args.add_source_json)?,
         remove_sources: parse_source_selector_args(&args.remove_source)?,
         clear_body: args.clear_body,
         set_body: resolve_opt(&args.set_body, &mut stdin_cache)?,
@@ -144,18 +175,19 @@ fn parse_pairs(flag: &str, args: &[String]) -> Result<Vec<(String, String)>> {
     args.iter().map(|a| parse_kv(flag, a)).collect()
 }
 
-/// Parse `resource=...,kind=...` into a typed source. The comma delimiter is intentionally
-/// narrow; paths and URIs containing commas can use percent-encoding.
+/// Parse a compact standard source plus optional extension/signals. Full mappings and values
+/// containing commas should use `--add-source-json`.
 fn parse_source_args(args: &[String]) -> Result<Vec<Source>> {
     use okf_core::error::OkfError;
     args.iter()
         .map(|arg| {
             let mut resource = None;
             let mut kind = None;
+            let mut extra = indexmap::IndexMap::new();
             for part in arg.split(',') {
                 let (key, value) = part.split_once('=').ok_or_else(|| {
                     OkfError::Usage(format!(
-                        "invalid --add-source {arg:?}: expected resource=<value>,kind=<value>"
+                        "invalid --add-source {arg:?}: expected comma-separated key=value fields"
                     ))
                 })?;
                 match key.trim() {
@@ -163,9 +195,21 @@ fn parse_source_args(args: &[String]) -> Result<Vec<Source>> {
                         resource = Some(value.trim().to_string())
                     }
                     "kind" if !value.trim().is_empty() => kind = Some(value.trim().to_string()),
+                    "id" | "title" | "author" | "last_modified" if !value.trim().is_empty() => {
+                        extra.insert(
+                            key.trim().to_string(),
+                            serde_yaml::Value::String(value.trim().to_string()),
+                        );
+                    }
+                    "usage_count" if value.trim().parse::<u64>().is_ok() => {
+                        extra.insert(
+                            "usage_count".to_string(),
+                            serde_yaml::Value::Number(value.trim().parse::<u64>().unwrap().into()),
+                        );
+                    }
                     other => {
                         return Err(OkfError::Usage(format!(
-                            "invalid --add-source key {other:?}: expected resource and kind"
+                            "invalid --add-source key {other:?}: expected resource, kind, id, title, author, usage_count, or last_modified"
                         )))
                     }
                 }
@@ -173,14 +217,46 @@ fn parse_source_args(args: &[String]) -> Result<Vec<Source>> {
             let resource = resource.ok_or_else(|| {
                 OkfError::Usage("--add-source requires resource=<value>".to_string())
             })?;
-            let kind = kind
-                .ok_or_else(|| OkfError::Usage("--add-source requires kind=<value>".to_string()))?;
             Ok(Source {
                 resource,
-                kind: SourceKind::from_kind_str(&kind),
+                kind: kind
+                    .as_deref()
+                    .map(SourceKind::from_kind_str)
+                    .unwrap_or_else(|| SourceKind::Other(String::new())),
                 fingerprint: Fingerprint::default(),
-                extra: Default::default(),
+                extra,
             })
+        })
+        .collect()
+}
+
+fn combined_sources(compact: &[String], structured: &[String]) -> Result<Vec<Source>> {
+    let mut sources = parse_source_args(compact)?;
+    sources.extend(parse_source_json_args(structured)?);
+    Ok(sources)
+}
+
+fn parse_source_json_args(args: &[String]) -> Result<Vec<Source>> {
+    use okf_core::error::OkfError;
+    args.iter()
+        .map(|raw| {
+            let content = if let Some(path) = raw.strip_prefix('@') {
+                std::fs::read_to_string(path)
+                    .map_err(|e| OkfError::Environment(format!("cannot read {path}: {e}")))?
+            } else {
+                raw.clone()
+            };
+            let value: serde_yaml::Value = serde_yaml::from_str(&content)
+                .map_err(|e| OkfError::Usage(format!("invalid --add-source-json: {e}")))?;
+            let source = Source::from_value(&value).ok_or_else(|| {
+                OkfError::Usage("--add-source-json must be a source mapping".to_string())
+            })?;
+            if source.resource.trim().is_empty() {
+                return Err(OkfError::Usage(
+                    "--add-source-json requires non-empty resource".to_string(),
+                ));
+            }
+            Ok(source)
         })
         .collect()
 }
@@ -398,7 +474,7 @@ pub fn run_refresh(args: &RefreshArgs, json: bool) -> Result<i32> {
             "updated": r.updated,
             "unchanged": r.unchanged,
             "skipped": skipped,
-            "last_modified": r.last_modified,
+            "refreshed_at": r.refreshed_at,
         }))?;
     } else {
         println!(

@@ -46,9 +46,8 @@ impl RealGit {
                 .arg(anchor)
                 .args(["rev-parse", "--show-toplevel"]),
         )?;
-        let root = std::path::PathBuf::from(
-            String::from_utf8_lossy(&out.stdout).trim().to_string(),
-        );
+        let root =
+            std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim().to_string());
         let absolute = if path.is_absolute() {
             path.to_path_buf()
         } else {
@@ -57,7 +56,11 @@ impl RealGit {
                 .join(path)
         };
         let relative = absolute.strip_prefix(&root).map_err(|_| {
-            OkfError::Usage(format!("git source {} is outside worktree {}", path.display(), root.display()))
+            OkfError::Usage(format!(
+                "git source {} is outside worktree {}",
+                path.display(),
+                root.display()
+            ))
         })?;
         Ok((root, relative.to_path_buf()))
     }

@@ -25,7 +25,7 @@ concepts:
   DesignDecision:
     description: A design principle or cross-cutting architecture decision.
     fields:
-      status:
+      decision_status:
         type: string
     references:
       affects:

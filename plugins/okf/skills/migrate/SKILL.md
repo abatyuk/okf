@@ -1,83 +1,56 @@
 ---
 name: migrate
-description: Use this when the user wants to migrate existing documentation into an OKF bundle — "migrate this spec/plan/README into okf", "convert our docs to concepts", "import this markdown as OKF concepts", "turn these design docs into a bundle". Classifies each source document into an ontology concept type, writes conformant frontmatter, attributes the original as typed sources[], and validates the result. For raw-repo research/ingest use okf:ingest; for fresh bundles use okf:init.
+description: Convert existing documents or a prior OKF representation into faithful OKF v0.2 concepts with standard provenance. Use for authored docs; use ingest for repository research and repair when upgrading an existing bundle in place.
 ---
 
-# Migrate existing documentation into an OKF bundle
+# Migrate documents into OKF v0.2
 
-You are turning human-authored docs (specs, plans, READMEs, design notes) into OKF
-concepts. The CLI handles the deterministic writes and checks; you supply the classification,
-the rewritten frontmatter, and the source attribution.
+Preserve meaning and unknown data. The CLI handles writes and validation; classification,
+granularity, attribution, and unresolved legacy semantics require judgment.
 
-## Tool discipline
-**CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
+## CLI and conformance model
 
-Anything **already in the OKF bundle** is discovered and inspected **only through the `okf`
-CLI** — `okf browse`, `okf search`, `okf list`, `okf show`, `okf graph`, `okf backlinks`, `okf resolve`,
-`okf stats`, `okf ontology list`/`show` (add `--json` when parsing). Do **not** use Glob, Grep,
-`find`, or generic file-content search over the bundle: the CLI provides structural indexes and
-progressive disclosure, so grepping it is wasteful and defeats the design. When you must read a
-bundle markdown file directly, do so **only when you already know its exact path** (from
-`okf resolve` / an `okf show --json` record), prefer `okf show`, and read the **narrowest
-slice** needed — a known line range, section/heading, or symbol — never the whole file
-speculatively.
-For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
-relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
+Read this skill's generated `okf-cli-reference.md` before using flags. Prefer `OKF_BUNDLE` for a
+multi-step workflow. A fully qualified mutation is `okf add <path> <bundle> --type <Type>`.
 
-The **external source docs** being migrated (the specs/plans/READMEs, which are *not* yet an
-OKF bundle) are different: normal file-search tools (Glob, Grep, `find`, Read) are fine for
-inventorying and reading them, and `okf scan` can map a source tree — still target reads by
-known path/heading/line range rather than reading whole files speculatively. The CLI-only rule
-applies to anything already in the bundle.
+Conformance requires parseable frontmatter, a non-empty `type`, and valid reserved files.
+`title`, `description`, applicable `resource`, `tags`, structural Markdown, and absolute
+bundle-relative concept links are recommended. Provenance, trust, lifecycle, and computation
+families are optional. Ontology, source `kind`/`fingerprint`, and sync metadata are extensions;
+do not turn them into conformance requirements.
 
-## Steps
+## Workflow
 
-1. **Locate the target bundle and ontology.** Ensure a bundle exists (`okf init <bundle>` if
-   not) and inspect the concept types available: `okf ontology list`, `okf ontology show
-   <name>`. If no ontology fits the docs, pause and run `okf:ontology` (or `okf:infer-ontology`)
-   first — you classify against real types.
+1. Inventory external source documents with normal source tools or `okf source-scan
+   <directory>`. Inspect an existing target bundle only through targeted `okf` queries.
+2. Choose concept boundaries and exact type strings. An ontology may guide local policy, but an
+   unknown type is valid OKF. Preserve source meaning and surface large splits for review.
+3. Create each concept and migrate its body without inventing metadata. Treat the original as a
+   standard source first: every source entry needs `resource`; add a stable `id` when body
+   footnotes attribute claims. Add `title`, `author`, `usage_count`, `last_modified`, and
+   `usage_window` only when evidence supports them. Footnote labels must join to `sources[].id`.
+4. Add `kind` and `fingerprint` only when local drift tracking is desired; label them extensions.
+   `okf refresh <concept-id> <bundle>` records supported fingerprints only. It does not rewrite
+   standard source `last_modified` and cannot cure an expired `stale_after`.
+5. For v0.1 material, translate `timestamp` to `generated.at` only when the producer actor is
+   known. Otherwise preserve the legacy field and report the decision. Translate legacy
+   `# Citations` into sources without inventing titles or authors. Preserve lifecycle evidence;
+   absent `status` means stable.
+6. Reconnect portable body links and standard internal source lineage. Use ontology references
+   only as additional local modeling.
+7. Run `okf validate <bundle>`, advisory `okf lint <bundle> --fail-on never`, and index generation.
+   Unresolved optional evidence belongs in the report, not as a fabricated value.
 
-2. **Inventory the source docs.** For each markdown/text file to migrate, read it and decide:
-   - **Concept type** — which ontology type it maps to (or the closest; OKF tolerates unknown
-     types, but prefer a defined one so lint/scaffold work).
-   - **Granularity** — one doc may become one concept, or split into several (e.g. a spec with
-     independent sections). This is a judgment call; keep the human informed for big splits.
+## `references/` and artifacts
 
-3. **Create each concept.** Run `okf add <path> --type <Type> --title "…" --description "…"`
-   to scaffold conformant frontmatter from the ontology. Then move/rewrite the source prose
-   into the concept body. Keep the content faithful — migration preserves meaning, it does not
-   rewrite opinions.
+Use `references/` only for user-authorized durable local material. It is optional. Non-reserved
+Markdown beneath it is an ordinary concept; non-Markdown content is an opaque artifact. Keep the
+original external provenance and do not mirror by default. Resolve document-relative and
+bundle-relative resources with `okf artifact resolve <resource> <bundle> --from <concept-id>`;
+use `okf artifact show` only for the smallest useful line/byte range. Scope descriptors are
+provenance descriptions, not missing files. Keep local reads within the canonical bundle,
+require explicit policy for remote retrieval, and never execute inspected code.
 
-4. **Attribute sources.** For each concept, record where its content came from in `sources[]`,
-   using a typed source **kind** so `okf stale` can track drift later:
-   - `git-path` (a tracked file), `line-range` (a specific span), `markdown-heading` (a
-     section), `git-commit`, `file` (untracked), or `url`.
-   - Each entry carries `resource` plus `kind`; the fingerprint is recorded on first sync —
-     run `okf refresh <concept-id> --fail-on any` after setting sources so
-     `fingerprint`/`last_modified` get written and unresolved sources fail loudly. Author each
-     structured entry with `okf edit <concept-id> --add-source
-     resource=<git-root-relative-path>,kind=<kind>` (or the same `--add-source` on `okf add`).
-     A `git-path`/`git-commit` resource is relative to the repository root; file/text source
-     kinds remain relative to the bundle.
-
-5. **Wire references.** Reconnect cross-references between the migrated docs using the
-   ontology's reference keys (`okf edit <concept-id> --set <key>=<link>`), so backlinks and
-   the graph reflect the original document relationships.
-
-6. **Validate, lint, and index.**
-   - `okf validate <bundle>` — conformance (three hard rules); must pass.
-   - `okf lint <bundle>` — advisory; fix broken links, missing `title`/`description`, and
-     ontology violations you introduced, or note accepted ones.
-   - `okf refresh` any concept whose sources you set, so it starts in-sync rather than stale.
-   - `okf docs <bundle> --format index`, then `okf browse <bundle>` to verify the root view.
-
-7. **Report.** List each migrated concept (path + type), how the original doc mapped, and any
-   docs you deliberately did not migrate.
-
-## Guardrails
-- Do not fabricate metadata (owners, dates, versions). Leave optional fields empty rather than
-  guessing — OKF permits missing optional fields.
-- Every migrated concept should carry at least one `sources[]` entry pointing back at its
-  origin, so future drift is detectable.
-- Trust tier stays `unverified` after migration; raising it is the job of `okf:review-attest`.
-- Prefer `--json` output when parsing lint/validate results programmatically.
+Migration does not establish verification. Report migrated concepts, source joins, preserved
+legacy fields/extensions, lifecycle choices, validation, and advisory findings; route actual
+document review to `review-verify`.

@@ -18,10 +18,12 @@
 //! the CLI maps a non-conformant report to exit 1.
 use std::path::Path;
 
-use ignore::WalkBuilder;
+use pulldown_cmark::{Event, Parser, Tag};
 use serde_yaml::Value;
 
+use crate::bundle::walk::walk_markdown;
 use crate::error::{OkfError, Result};
+use crate::model::standard::parse_timestamp;
 use crate::parse::markdown::split_frontmatter;
 use crate::parse::yaml::parse_frontmatter;
 
@@ -31,24 +33,36 @@ const RESERVED: [&str; 2] = ["index.md", "log.md"];
 /// Which of the three conformance rules a [`Violation`] breaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValidateRule {
+    /// A concept does not contain a leading frontmatter block.
+    MissingFrontmatter,
     /// A `---` frontmatter block is present but its YAML does not parse.
     UnparseableFrontmatter,
+    /// A Markdown file is not valid UTF-8.
+    InvalidUtf8,
     /// A concept has no non-empty `type`.
     MissingType,
     /// A reserved file (`index.md` / `log.md`) declares a `type`, masquerading as a concept.
     ReservedIsConcept,
     /// A reserved file carries frontmatter outside the root-index `okf_version` exception.
     ReservedFrontmatter,
+    /// An index body does not follow §8's headed-section structure.
+    InvalidIndex,
+    /// A log body does not follow §9's date-grouped newest-first list structure.
+    InvalidLog,
 }
 
 impl ValidateRule {
     /// Stable machine identifier for the rule.
     pub fn as_str(self) -> &'static str {
         match self {
+            ValidateRule::MissingFrontmatter => "missing-frontmatter",
             ValidateRule::UnparseableFrontmatter => "unparseable-frontmatter",
+            ValidateRule::InvalidUtf8 => "invalid-utf8",
             ValidateRule::MissingType => "missing-type",
             ValidateRule::ReservedIsConcept => "reserved-is-concept",
             ValidateRule::ReservedFrontmatter => "reserved-frontmatter",
+            ValidateRule::InvalidIndex => "invalid-index",
+            ValidateRule::InvalidLog => "invalid-log",
         }
     }
 }
@@ -96,7 +110,7 @@ pub fn validate_document(rel_path: &str, content: &str) -> Vec<Violation> {
         // frontmatter, and that exception is limited to an `okf_version` string.
         if fm_text.is_none() && content.lines().next() == Some("---") {
             out.push(Violation {
-                file,
+                file: file.clone(),
                 rule: ValidateRule::ReservedFrontmatter,
                 message: "reserved-file frontmatter is unclosed".to_string(),
             });
@@ -104,23 +118,40 @@ pub fn validate_document(rel_path: &str, content: &str) -> Vec<Violation> {
         }
         match parsed.as_ref().map(|r| r.as_ref()) {
             Some(Ok(map)) if has_nonempty_type(map) => out.push(Violation {
-                file,
+                file: file.clone(),
                 rule: ValidateRule::ReservedIsConcept,
                 message: format!("reserved file {base:?} must not declare a `type`"),
             }),
             Some(Ok(map)) if !valid_root_index_frontmatter(&file, base.as_str(), map) => {
                 out.push(Violation {
-                    file,
+                    file: file.clone(),
                     rule: ValidateRule::ReservedFrontmatter,
                     message: "only the bundle-root index.md may carry frontmatter, limited to a string okf_version".to_string(),
                 })
             }
             Some(Err(_)) => out.push(Violation {
-                file,
+                file: file.clone(),
                 rule: ValidateRule::ReservedFrontmatter,
                 message: "reserved-file frontmatter is malformed or not permitted".to_string(),
             }),
             _ => {}
+        }
+        let body = split_frontmatter(content).1;
+        if base == "index.md" && !valid_index_body(&body) {
+            out.push(Violation {
+                file: file.clone(),
+                rule: ValidateRule::InvalidIndex,
+                message: "index.md must contain at least one Markdown heading section".to_string(),
+            });
+        }
+        if base == "log.md" {
+            if let Err(message) = valid_log_body(&body) {
+                out.push(Violation {
+                    file: file.clone(),
+                    rule: ValidateRule::InvalidLog,
+                    message,
+                });
+            }
         }
         return out;
     }
@@ -147,6 +178,11 @@ pub fn validate_document(rel_path: &str, content: &str) -> Vec<Violation> {
         }
         None => {
             out.push(Violation {
+                file: file.clone(),
+                rule: ValidateRule::MissingFrontmatter,
+                message: "concept has no leading YAML frontmatter block".to_string(),
+            });
+            out.push(Violation {
                 file,
                 rule: ValidateRule::MissingType,
                 message: "no frontmatter; missing `type`".to_string(),
@@ -170,7 +206,56 @@ fn valid_root_index_frontmatter(
     file == "index.md"
         && base == "index.md"
         && map.len() == 1
-        && matches!(map.get("okf_version"), Some(Value::String(version)) if !version.trim().is_empty())
+        && matches!(map.get("okf_version"), Some(Value::String(version)) if valid_version(version))
+}
+
+fn valid_version(version: &str) -> bool {
+    let Some((major, minor)) = version.trim().split_once('.') else {
+        return false;
+    };
+    !major.is_empty()
+        && !minor.is_empty()
+        && major.chars().all(|c| c.is_ascii_digit())
+        && minor.chars().all(|c| c.is_ascii_digit())
+}
+
+fn valid_index_body(body: &str) -> bool {
+    Parser::new(body).any(|event| matches!(event, Event::Start(Tag::Heading { .. })))
+}
+
+fn valid_log_body(body: &str) -> std::result::Result<(), String> {
+    let mut dates = Vec::new();
+    let mut entries_per_date = Vec::new();
+    let mut in_date = false;
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if let Some(heading) = trimmed.strip_prefix("## ") {
+            if heading.len() != 10 || parse_timestamp(&format!("{heading}T00:00:00Z")).is_none() {
+                return Err(format!(
+                    "log date heading must be ISO YYYY-MM-DD: {heading:?}"
+                ));
+            }
+            dates.push(heading.to_string());
+            entries_per_date.push(0usize);
+            in_date = true;
+        } else if trimmed.starts_with('#') && !trimmed.starts_with("# ") {
+            return Err(
+                "log.md may contain one title and level-two date headings only".to_string(),
+            );
+        } else if in_date && (trimmed.starts_with("* ") || trimmed.starts_with("- ")) {
+            *entries_per_date.last_mut().unwrap() += 1;
+        }
+    }
+    if dates.is_empty() {
+        return Err("log.md must contain at least one ## YYYY-MM-DD date group".to_string());
+    }
+    if entries_per_date.contains(&0) {
+        return Err("each log date group must contain at least one flat list entry".to_string());
+    }
+    if dates.windows(2).any(|pair| pair[0] < pair[1]) {
+        return Err("log date groups must be newest first".to_string());
+    }
+    Ok(())
 }
 
 /// Validate every `*.md` under a bundle root (reserved files included, per rule 3), collecting
@@ -185,30 +270,19 @@ pub fn validate_bundle(root: &Path) -> Result<ValidateReport> {
     }
 
     let mut violations = Vec::new();
-    let walker = WalkBuilder::new(root)
-        .hidden(false)
-        .git_ignore(true)
-        .git_exclude(true)
-        .parents(true)
-        .build();
-
-    for entry in walker {
-        let entry = entry.map_err(|e| OkfError::Io(e.to_string()))?;
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
+    for rel_path in walk_markdown(root)? {
+        let path = root.join(&rel_path);
+        let rel = rel_path.to_string_lossy().to_string();
+        let bytes =
+            std::fs::read(&path).map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
+        match String::from_utf8(bytes) {
+            Ok(content) => violations.extend(validate_document(&rel, &content)),
+            Err(_) => violations.push(Violation {
+                file: rel.replace('\\', "/"),
+                rule: ValidateRule::InvalidUtf8,
+                message: "Markdown document is not valid UTF-8".to_string(),
+            }),
         }
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
-        }
-        let rel = path
-            .strip_prefix(root)
-            .map_err(|e| OkfError::Internal(e.to_string()))?
-            .to_string_lossy()
-            .to_string();
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
-        violations.extend(validate_document(&rel, &content));
     }
 
     // Deterministic ordering by file, then rule.
@@ -260,8 +334,9 @@ mod tests {
     #[test]
     fn no_frontmatter_is_missing_type() {
         let v = validate_document("notes/n.md", "just a body, no frontmatter\n");
-        assert_eq!(v.len(), 1);
-        assert_eq!(v[0].rule, ValidateRule::MissingType);
+        assert_eq!(v.len(), 2);
+        assert!(v.iter().any(|v| v.rule == ValidateRule::MissingFrontmatter));
+        assert!(v.iter().any(|v| v.rule == ValidateRule::MissingType));
     }
 
     #[test]
@@ -274,9 +349,9 @@ mod tests {
 
     #[test]
     fn reserved_structure_and_root_version_exception() {
-        let v = validate_document("index.md", "---\nokf_version: \"0.2\"\n---\nwelcome\n");
+        let v = validate_document("index.md", "---\nokf_version: \"0.2\"\n---\n# Welcome\n");
         assert!(v.is_empty());
-        let v = validate_document("sub/log.md", "# changelog\n");
+        let v = validate_document("sub/log.md", "# changelog\n\n## 2026-01-01\n* Update\n");
         assert!(v.is_empty());
 
         let v = validate_document("sub/index.md", "---\nokf_version: \"0.2\"\n---\n");
@@ -291,8 +366,21 @@ mod tests {
 
     #[test]
     fn reserved_with_type_flagged() {
-        let v = validate_document("index.md", "---\ntype: Table\n---\n");
-        assert_eq!(v.len(), 1);
-        assert_eq!(v[0].rule, ValidateRule::ReservedIsConcept);
+        let v = validate_document("index.md", "---\ntype: Table\n---\n# Index\n");
+        assert!(v.iter().any(|v| v.rule == ValidateRule::ReservedIsConcept));
+    }
+
+    #[test]
+    fn validates_index_and_log_bodies() {
+        assert_eq!(
+            validate_document("index.md", "plain prose\n")[0].rule,
+            ValidateRule::InvalidIndex
+        );
+        assert!(validate_document("index.md", "# Concepts\n").is_empty());
+        let bad = validate_document(
+            "log.md",
+            "# Log\n## 2026-01-01\n* old\n## 2026-02-01\n* new\n",
+        );
+        assert!(bad.iter().any(|v| v.rule == ValidateRule::InvalidLog));
     }
 }

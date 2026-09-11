@@ -1,76 +1,38 @@
 ---
 name: ontology
-description: Use this when the user wants to manage the OKF ontology — "add a concept type", "define a new type with these fields", "update the ontology", "add a reference rule between types", "remove a concept type", "change field requirements". Shapes concept types (typed fields + typed reference rules with cardinality) and commits them via okf ontology add/update/remove so ontology.yaml stays valid and lossless. To reverse-engineer an ontology from an existing bundle, use okf:infer-ontology instead.
+description: Author and maintain the optional tool-local ontology.yaml with advisory typed fields and reference rules. Use for local modeling, not OKF conformance; exact Attested Computation semantics remain built into OKF v0.2.
 ---
 
-# Manage the ontology (ontology.yaml)
+# Manage the tool-local ontology
 
-The ontology is a tool-local sidecar (`ontology.yaml`, spec-external) that defines concept
-types, their typed fields, advisory trust expectations, and typed reference rules. You shape
-*what* a type should be; you commit it through the deterministic `okf ontology` commands so
-the file stays valid and lossless. **Never hand-edit `ontology.yaml`.**
+`ontology.yaml` is a spec-external sidecar. It is neither required for an OKF bundle nor a type
+registry. Unknown types are conformant; ontology findings are advisory.
 
-## Tool discipline
-**CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
+Read this skill's generated `okf-cli-reference.md`. Prefer `OKF_BUNDLE`; explicit forms are
+`okf ontology show <name> <bundle>` and `okf ontology add <name> <bundle>`. Use ontology commands
+for deterministic writes rather than editing the sidecar directly.
 
-Discover and inspect everything in the bundle **only through the `okf` CLI** — `okf ontology
-list`/`show`, `okf browse`, `okf search`, `okf list`, `okf show`, `okf graph`, `okf backlinks`, `okf resolve`,
-`okf stats` (add `--json` when parsing). Do **not** use Glob, Grep, `find`, or generic
-file-content search over the bundle: the CLI provides structural indexes and targeted
-disclosure, so grepping it is wasteful and defeats the design. Read a bundle markdown file
-directly **only when you already know its exact path** (from `okf resolve` or an `okf show
---json` record), and prefer `okf show` over a raw read. When a raw read is unavoidable, read the
-**narrowest slice** needed — a known line range, a section/heading, or a named symbol — never
-the whole file speculatively.
-For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
-relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
+## Workflow
 
-## Key facts
-- Each key under `concepts:` **is the OKF `type` string verbatim** — types may contain spaces,
-  so they're quoted (e.g. `"BigQuery Table"`). Use the exact string the concepts use.
-- Field `type` vocabulary: `string`, `text`, `int`, `bool`, `date`, `datetime`, `uri`, `enum`
-  (+`values`), `list` (+item type), `object` (+nested `fields`), or any name from `field_types`.
-  Every field takes `required` (default false).
-- Reference rules map a frontmatter key on the source concept to target type(s) with a
-  cardinality from `0..1`, `1..1`, `0..n`, `1..n`. Targets may be a union (a list of types).
-- `lint` enforces all of this **advisorily** (findings, never conformance failures); `add`
-  uses it to scaffold new concepts.
+1. Inspect `okf ontology list <bundle>`, relevant `okf ontology show <name> <bundle>`, observed
+   concepts, and baseline `okf lint <bundle> --fail-on never`.
+2. Design exact type keys, custom typed fields, and custom reference rules/cardinality with the
+   user. Separate portable OKF fields (`type`, title/description/resource/tags, sources,
+   generated/verified, lifecycle, computation family) from ontology-only requirements.
+   Recommended or optional OKF fields must not be presented as conformance blockers.
+3. `Attested Computation` is the only standard computation type, recognized by that exact string
+   and its built-in contract. `--attested` may mark only this exact ontology type. Do not grant
+   attested semantics to an alias or arbitrary custom type.
+4. Apply the reviewed change with `okf ontology add`, `okf ontology update`, or
+   `okf ontology remove` using the schema-derived flag forms. Removing or tightening rules needs
+   an impact review; do not mass-edit concepts merely to silence advisory findings.
+5. Run `okf validate <bundle>` for portable spec conformance and then `okf lint <bundle>
+   --fail-on never` for ontology/spec recommendations. Report results in separate groups.
 
-## Steps
+If a custom resource field points into optional `references/`, remember that Markdown targets are
+ordinary concepts and non-Markdown targets are opaque artifacts. Resolve with document context
+through `okf artifact resolve`, retrieve bounded text only, stay within canonical bundle scope,
+and never treat inspection as execution permission.
 
-1. **Inspect the current state.** `okf ontology list` for all defined types;
-   `okf ontology show <name>` for one type's fields and reference rules. Understand what
-   exists before changing it.
-
-2. **Design the change (the judgment part).** With the user, decide:
-   - the type name (exact OKF `type` string), and whether it's `attested: true` (scaffolds as
-     an OKF Attested Computation via `okf add --attested`),
-   - required OKF built-ins (`requires:`) and custom `fields` (name → type, required?),
-   - typed `references` (key → target type(s) + cardinality),
-   - any advisory `trust.min_tier` expectation.
-   Reuse `field_types` for repeated shapes (they compose via `extends`; object types nest
-   `fields`) rather than duplicating field definitions.
-
-3. **Commit the change deterministically.**
-   - Add a type: `okf ontology add <name> --field <name>=<type>[:required] ...
-     --ref <key>=<target>:<cardinality> ...`
-   - Modify a type: `okf ontology update <name> ...` (change/add fields and references).
-   - Remove a type: `okf ontology remove <name>`.
-   Use the flag forms the CLI accepts; the command validates and writes losslessly.
-
-4. **Verify it loaded and check impact.**
-   - `okf ontology show <name>` to confirm the result.
-   - `okf lint <bundle>` to see how existing concepts now measure up (new required fields or
-     reference rules may surface advisory violations). Report these; don't silently mass-edit
-     concepts to satisfy a new rule without confirming.
-
-5. **Report.** State the type(s) added/updated/removed, their fields and reference rules, and
-   any new lint findings the change introduced across the bundle.
-
-## Guardrails
-- Removing a type or tightening `required`/cardinality can invalidate existing concepts —
-  surface the blast radius (`okf lint`) and keep the human in the loop before cascading edits.
-- Ontology edits preserve comments attached to keys, including inline comments. Layout may be
-  normalized, so keep rationale attached to the field/type it explains.
-- Keep concept-type keys byte-identical to the `type` strings concepts actually use, spaces
-  and all.
+Report sidecar changes, portable versus custom fields, exact computation treatment, and advisory
+impact without implying that ontology controls OKF validity.

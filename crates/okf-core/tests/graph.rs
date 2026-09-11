@@ -140,7 +140,7 @@ fn stats_summarize_bundle() {
     assert_eq!(s.trust.machine_confirmed, 1); // revenue
     assert_eq!(s.trust.unverified, 3); // mileage, orphan, travel
     assert_eq!(s.orphans, 1); // notes/orphan
-    assert_eq!(s.stale, None);
+    assert_eq!(s.stale, Some(0));
 }
 
 #[test]

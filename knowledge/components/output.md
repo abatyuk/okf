@@ -14,6 +14,6 @@ last_modified: 2026-09-07T18:47:09Z
 ---
 # output module
 
-NDJSON record types and their serializer. The Concept record wraps Frontmatter verbatim plus computed id and trust_tier; Finding, Affected, and Change records back the other machine outputs.
+NDJSON record types and their serializer. Concept records preserve frontmatter values and add collision-safe identity, trust, lifecycle, generation, and verification views; findings and change records back other machine outputs.
 
 Location: `crates/okf-core/src/output`.

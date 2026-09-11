@@ -1,7 +1,7 @@
 ---
 type: Command
 title: okf stats
-description: 'Bundle summary: counts by type, trust-tier distribution, and orphan count.'
+description: 'Bundle summary: counts by type, trust-tier distribution, corrected stale count, and orphan count.'
 group: check
 mutates: false
 implemented_by:
@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # okf stats
 
-Bundle summary: counts by type, trust-tier distribution, and orphan count.
+Bundle summary: counts by type, trust-tier distribution, corrected stale count, and orphan count.
 
 ## Arguments
 

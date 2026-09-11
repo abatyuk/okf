@@ -13,6 +13,8 @@ path = "src/main.rs"
 okf-core = { path = "../okf-core" }
 clap = { version = "4", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+indexmap = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -21,3 +23,7 @@ libc = "0.2"
 assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
+
+[features]
+default = []
+url-sources = ["okf-core/url-sources"]

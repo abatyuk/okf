@@ -1,7 +1,7 @@
 ---
 type: DomainType
 title: Concept record (NDJSON)
-description: 'The machine representation of a concept: its Frontmatter serialized to JSON verbatim plus computed id and trust_tier.'
+description: 'The machine representation of a concept: frontmatter JSON plus collision-safe computed identity, trust, lifecycle, generation, and verification views.'
 module: output
 defined_in:
 - /components/output
@@ -14,17 +14,19 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Concept record (NDJSON)
 
-The machine representation of a concept: its Frontmatter serialized to JSON verbatim plus computed id and trust_tier. Wraps Frontmatter rather than re-declaring fields.
+The machine representation of a concept: frontmatter JSON plus collision-safe computed identity, trust, lifecycle, generation, and verification views. A colliding frontmatter extension is retained under `frontmatter_conflicts`.
 
 ## Schema
 
 ```jsonc
-// `--json` `concept` record: the frontmatter serialized VERBATIM (key order preserved),
-// plus two computed keys. Built by okf-core::output::record::concept_record.
+// `--json` concept record: frontmatter values and order plus computed semantic views.
 {
   "id": "/metrics/revenue",        // computed: bundle-relative path w/o `.md`
   "type": "Metric",                 // …all frontmatter keys, verbatim…
-  "verified": [{"by": "process:dbt", "at": "2026-02-01"}],
-  "trust_tier": "machine-confirmed" // computed from `verified`
+  "verified": [{"by": "process:dbt", "at": "2026-02-01T00:00:00Z"}],
+  "trust_tier": "machine-confirmed", // computed from valid `verified`
+  "effective_status": "stable",
+  "latest_verified_at": "2026-02-01T00:00:00Z",
+  "verification_current": null
 }
 ```

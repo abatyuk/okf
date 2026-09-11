@@ -1,4 +1,4 @@
-//! Lossless serialization back to disk (round-trip guarantee).
+//! Semantic serialization back to disk (unknown keys/values and body preserved).
 use crate::error::Result;
 use crate::model::concept::Concept;
 
@@ -18,7 +18,7 @@ pub fn assemble(frontmatter: &str, body: &str) -> String {
     out
 }
 
-/// Re-serialize a concept to its on-disk string form, losslessly.
+/// Re-serialize a concept while preserving frontmatter meaning/order and the body text.
 pub fn write_concept(concept: &Concept) -> Result<String> {
     let fm = super::yaml::serialize_frontmatter(&concept.frontmatter.map)?;
     Ok(assemble(&fm, &concept.body))

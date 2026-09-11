@@ -1,10 +1,10 @@
 //! Re-record fingerprints after a change is acknowledged (the "it's in sync again" op).
 //!
 //! `refresh` recomputes the current fingerprint for each of a concept's `sources[]` via
-//! [`fingerprint::Engine`] and rewrites the entries losslessly — `resource`, `kind` and every
+//! [`fingerprint::Engine`] and rewrites only the fingerprint value — `resource`, `kind` and every
 //! `extra` key (`id`, `author`, `usage_count`, …) are preserved via [`Source`]'s round-trip;
-//! only `fingerprint` is replaced. It also stamps the concept's top-level `last_modified` with
-//! `clock`'s "now". Because `okf stale` derives drift by comparing recorded vs. recomputed
+//! only `fingerprint` is replaced. The operation time is returned as runtime output, not written
+//! into standard source metadata. Because `okf stale` derives drift by comparing recorded vs. recomputed
 //! fingerprints, refreshing them is exactly what clears a concept's stale status.
 //!
 //! A source whose fingerprint cannot be recomputed (unknown kind, missing artifact, `url`
@@ -40,13 +40,14 @@ pub struct RefreshResult {
     pub unchanged: Vec<String>,
     /// Resources that could not be fingerprinted (left as-is).
     pub skipped: Vec<SkippedSource>,
-    pub last_modified: String,
+    /// Runtime observation time, not standard `sources[].last_modified` metadata.
+    pub refreshed_at: String,
 }
 
 /// Recompute and rewrite the `sources[]` fingerprints of the concept `id`, and update its
 /// `last_modified`. `engine`'s `root` is the base that source resource paths resolve against.
 pub fn refresh(root: &Path, id: &str, engine: &Engine, clock: &dyn Clock) -> Result<RefreshResult> {
-    let cid = ConceptId::from_relative(id);
+    let cid = ConceptId::parse(id)?;
     let mut concept = load_concept(root, &cid)?;
 
     let mut updated = Vec::new();
@@ -57,25 +58,28 @@ pub fn refresh(root: &Path, id: &str, engine: &Engine, clock: &dyn Clock) -> Res
         if let Value::Sequence(entries) = sources_val {
             let mut rebuilt = Vec::with_capacity(entries.len());
             for (index, original) in entries.into_iter().enumerate() {
-                let Some(mut source) = Source::from_value(&original) else {
+                let Some(source) = Source::from_value(&original) else {
                     skipped.push(SkippedSource {
                         resource: format!("sources[{index}]"),
-                        reason: "malformed source: expected a mapping with resource and kind"
-                            .to_string(),
+                        reason: "malformed source: expected a mapping with resource".to_string(),
                     });
                     rebuilt.push(original);
                     continue;
                 };
-                if source.resource.trim().is_empty() || source.kind.as_kind_str().trim().is_empty()
-                {
+                if source.resource.trim().is_empty() {
                     skipped.push(SkippedSource {
-                        resource: if source.resource.is_empty() {
-                            format!("sources[{index}]")
-                        } else {
-                            source.resource.clone()
-                        },
-                        reason: "malformed source: resource and kind must be non-empty strings"
-                            .to_string(),
+                        resource: format!("sources[{index}]"),
+                        reason: "malformed source: resource must be a non-empty string".to_string(),
+                    });
+                    rebuilt.push(original);
+                    continue;
+                }
+                if source.kind.as_kind_str().trim().is_empty() {
+                    skipped.push(SkippedSource {
+                        resource: source.resource.clone(),
+                        reason:
+                            "standard source has no fingerprint `kind` extension; left unchanged"
+                                .to_string(),
                     });
                     rebuilt.push(original);
                     continue;
@@ -84,11 +88,15 @@ pub fn refresh(root: &Path, id: &str, engine: &Engine, clock: &dyn Clock) -> Res
                     Ok(fp) => {
                         if fp != source.fingerprint {
                             updated.push(source.resource.clone());
-                            source.fingerprint = fp;
+                            let mut updated_entry = original.clone();
+                            if let Some(map) = updated_entry.as_mapping_mut() {
+                                map.insert(Value::String("fingerprint".to_string()), fp.to_value());
+                            }
+                            rebuilt.push(updated_entry);
                         } else {
                             unchanged.push(source.resource.clone());
+                            rebuilt.push(original);
                         }
-                        rebuilt.push(source.to_value());
                     }
                     Err(e) => {
                         skipped.push(SkippedSource {
@@ -111,12 +119,7 @@ pub fn refresh(root: &Path, id: &str, engine: &Engine, clock: &dyn Clock) -> Res
         }
     }
 
-    let last_modified = clock.now_rfc3339();
-    // Update in place (position preserved) or append.
-    concept.frontmatter.map.insert(
-        "last_modified".to_string(),
-        Value::String(last_modified.clone()),
-    );
+    let refreshed_at = clock.now_rfc3339();
 
     let path = save_concept(root, &concept)?;
     Ok(RefreshResult {
@@ -125,6 +128,6 @@ pub fn refresh(root: &Path, id: &str, engine: &Engine, clock: &dyn Clock) -> Res
         updated,
         unchanged,
         skipped,
-        last_modified,
+        refreshed_at,
     })
 }

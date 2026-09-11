@@ -278,6 +278,10 @@ fn schema_is_valid_ndjson_with_all_commands() {
         "backlinks",
         "graph",
         "resolve",
+        "artifact list",
+        "artifact resolve",
+        "artifact show",
+        "computation check",
         "scan",
         "validate",
         "lint",
@@ -285,6 +289,8 @@ fn schema_is_valid_ndjson_with_all_commands() {
         "affected",
         "diff",
         "stats",
+        "doctor",
+        "source-scan",
         "init",
         "add",
         "edit",
@@ -345,6 +351,120 @@ fn schema_is_valid_ndjson_with_all_commands() {
         .collect();
     assert!(ontology_arg_names.contains(&"ref"));
     assert!(!ontology_arg_names.contains(&"reference"));
+}
+
+#[test]
+fn artifact_commands_resolve_and_show_reference_file() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("references")).unwrap();
+    std::fs::write(root.path().join("references/query.sql"), "select 1;\n").unwrap();
+
+    let out = okf()
+        .args([
+            "artifact",
+            "resolve",
+            "references/query.sql",
+            root.path().to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let records = ndjson(&out.stdout);
+    assert_eq!(records[0]["artifact_kind"], "artifact");
+
+    okf()
+        .args([
+            "artifact",
+            "show",
+            "references/query.sql",
+            root.path().to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout("select 1;\n");
+}
+
+#[test]
+fn doctor_reports_nonconformance_and_always_emits_summary() {
+    let out = okf()
+        .args([
+            "doctor",
+            fixture("nonconformant-bundle").to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let records = ndjson(&out.stdout);
+    assert!(records.iter().any(|r| r["kind"] == "doctor-finding"));
+    assert_eq!(records.last().unwrap()["kind"], "doctor-summary");
+    assert_eq!(records.last().unwrap()["ready"], false);
+}
+
+#[test]
+fn doctor_safe_fix_repairs_empty_index_only_when_confirmed() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("index.md"), "").unwrap();
+    let dry = okf()
+        .args([
+            "doctor",
+            root.path().to_str().unwrap(),
+            "--fix-safe",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(dry.status.code(), Some(1));
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("index.md")).unwrap(),
+        ""
+    );
+
+    okf()
+        .args([
+            "doctor",
+            root.path().to_str().unwrap(),
+            "--fix-safe",
+            "--yes",
+        ])
+        .assert()
+        .success();
+    assert!(std::fs::read_to_string(root.path().join("index.md"))
+        .unwrap()
+        .starts_with("# Concepts"));
+}
+
+#[test]
+fn attested_add_requires_runtime_and_uses_exact_type() {
+    let root = tempfile::tempdir().unwrap();
+    let missing = okf()
+        .args([
+            "add",
+            "computations/x",
+            root.path().to_str().unwrap(),
+            "--attested",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(missing.status.code(), Some(2));
+
+    okf()
+        .args([
+            "add",
+            "computations/x",
+            root.path().to_str().unwrap(),
+            "--attested",
+            "--runtime",
+            "python",
+            "--inline-computation",
+            "print(1)",
+        ])
+        .assert()
+        .success();
+    let text = std::fs::read_to_string(root.path().join("computations/x.md")).unwrap();
+    assert!(text.contains("type: Attested Computation"));
+    assert!(text.contains("runtime: python"));
 }
 
 #[test]
@@ -479,6 +599,8 @@ fn structured_sources_can_be_added_and_refresh_can_fail_on_skips() {
             "status=active",
             "--add-source",
             "resource=missing.txt,kind=file",
+            "--add-source-json",
+            r#"{"resource":"https://example.com/spec","id":"spec","title":"Specification"}"#,
         ])
         .assert()
         .success();
@@ -490,6 +612,8 @@ fn structured_sources_can_be_added_and_refresh_can_fail_on_skips() {
     assert_eq!(record["status"], "active");
     assert_eq!(record["sources"][0]["resource"], "missing.txt");
     assert_eq!(record["sources"][0]["kind"], "file");
+    assert_eq!(record["sources"][1]["id"], "spec");
+    assert!(record["sources"][1].get("kind").is_none());
 
     okf()
         .args(["refresh", "notes/x", root, "--fail-on", "any"])
@@ -502,7 +626,10 @@ fn structured_sources_can_be_added_and_refresh_can_fail_on_skips() {
 fn structured_sources_can_be_removed_by_resource_or_kind() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().to_str().unwrap();
-    okf().args(["init", root, "--no-ontology"]).assert().success();
+    okf()
+        .args(["init", root, "--no-ontology"])
+        .assert()
+        .success();
     okf()
         .args([
             "add",
@@ -542,7 +669,10 @@ fn structured_sources_can_be_removed_by_resource_or_kind() {
         .args(["show", "notes/x", root, "--json"])
         .output()
         .unwrap();
-    let sources = ndjson(&shown.stdout)[0]["sources"].as_array().unwrap().clone();
+    let sources = ndjson(&shown.stdout)[0]["sources"]
+        .as_array()
+        .unwrap()
+        .clone();
     assert_eq!(sources.len(), 1);
     assert_eq!(sources[0]["resource"], "shared");
     assert_eq!(sources[0]["kind"], "url");

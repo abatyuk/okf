@@ -2,7 +2,7 @@
 type: 'DesignDecision'
 title: 'Pure core; all effects go through ports'
 description: 'fs, git, clock, and net are traits with real implementations in production and fakes in tests.'
-status: 'decided'
+decision_status: 'decided'
 affects:
   - /components/ports
   - /components/fingerprint

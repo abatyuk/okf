@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Actor
 
-Who performed a verification, carried as a prefixed string such as human: or process:. A human: actor lifts a concept to human-reviewed; other actors give machine-confirmed.
+Who performed a generation or verification event. Valid forms are `human:<id>`, `process:<id>`, or `<producer>/<version>`. A valid human verification lifts trust to human-reviewed; other valid verification actors give machine-confirmed.
 
 ## Schema
 
@@ -23,4 +23,4 @@ prefixed string:
 
 - `human:<id>`  — e.g. `human:andrey` → derives trust tier **human-reviewed**
 - `process:<id>` — e.g. `process:ci` / `process:dbt` → **machine-confirmed**
-- any other non-`human:` prefix → **machine-confirmed**
+- `<producer>/<version>` — an agent/tool producer → **machine-confirmed** when used in a valid verification event

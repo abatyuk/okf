@@ -1,10 +1,14 @@
 //! scan, validate, lint, stale, affected, diff, stats.
 use std::io::{BufRead, IsTerminal};
 
-use crate::cli::{AffectedArgs, BundleArgs, DiffArgs, FailOnArgs, LintArgs};
+use crate::cli::{
+    AffectedArgs, BundleArgs, DiffArgs, DoctorArgs, FailOnArgs, LintArgs, SourceScanArgs,
+};
 use crate::output;
 use okf_core::bundle::loader::load_bundle;
 use okf_core::bundle::resolve::resolve_bundle;
+use okf_core::bundle::walk::{walk_files, walk_markdown};
+use okf_core::check::doctor::doctor;
 use okf_core::check::lint::{lint_bundle, meets_threshold, FailOn, LintConfig};
 use okf_core::check::stale::check_stale;
 use okf_core::check::validate::validate_bundle;
@@ -16,25 +20,50 @@ use okf_core::ports::git::RealGit;
 use okf_core::query::diff::diff;
 use okf_core::query::stats::stats;
 use serde_json::json;
+use std::path::Path;
 use std::str::FromStr;
 
 /// `okf scan [bundle]` — report the candidate concept files the loader would analyze.
 pub fn run_scan(args: &BundleArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
-    let bundle = load_bundle(&root)?;
+    let paths = walk_markdown(&root)?;
     if json {
-        for c in &bundle.concepts {
+        for path in &paths {
+            let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
             output::print_line(&json!({
                 "kind": "scan",
-                "id": c.id.0,
-                "file": format!("{}.md", c.id.0.trim_start_matches('/')),
-                "type": c.concept_type(),
+                "file": path.to_string_lossy(),
+                "reserved": matches!(name, "index.md" | "log.md"),
             }))?;
         }
     } else {
-        println!("{} candidate file(s):", bundle.concepts.len());
-        for c in &bundle.concepts {
-            println!("  {}.md", c.id.0.trim_start_matches('/'));
+        println!("{} Markdown file(s):", paths.len());
+        for path in &paths {
+            println!("  {}", path.display());
+        }
+    }
+    Ok(0)
+}
+
+pub fn run_source_scan(args: &SourceScanArgs, json_output: bool) -> Result<i32> {
+    let root = Path::new(&args.directory);
+    let files = walk_files(root)?;
+    if json_output {
+        for path in files {
+            let abs = root.join(&path);
+            let size = std::fs::metadata(&abs)
+                .map_err(|e| OkfError::Io(format!("{}: {e}", abs.display())))?
+                .len();
+            output::print_line(&json!({
+                "kind": "source-file",
+                "file": path.to_string_lossy(),
+                "extension": path.extension().and_then(|s| s.to_str()),
+                "size": size,
+            }))?;
+        }
+    } else {
+        for path in files {
+            println!("{}", path.display());
         }
     }
     Ok(0)
@@ -151,7 +180,7 @@ pub fn run_stale(args: &FailOnArgs, json: bool) -> Result<i32> {
             }
         }
     }
-    Ok(discovery_exit(&args.fail_on, report.is_empty())?)
+    discovery_exit(&args.fail_on, report.is_empty())
 }
 
 /// `okf affected [bundle] --changed <..> [--transitive] [--depth N]` (also reads stdin).
@@ -196,7 +225,7 @@ pub fn run_affected(args: &AffectedArgs, json: bool) -> Result<i32> {
             println!("{}", id.0);
         }
     }
-    Ok(discovery_exit(&args.fail_on, ids.is_empty())?)
+    discovery_exit(&args.fail_on, ids.is_empty())
 }
 
 /// `okf diff <git-ref> [bundle] [--fail-on <sev>]`.
@@ -229,7 +258,7 @@ pub fn run_diff(args: &DiffArgs, json: bool) -> Result<i32> {
             println!("modified\t{}", id.0);
         }
     }
-    Ok(discovery_exit(&args.fail_on, d.is_empty())?)
+    discovery_exit(&args.fail_on, d.is_empty())
 }
 
 /// `okf stats [bundle] [--fail-on <sev>]`.
@@ -268,7 +297,7 @@ pub fn run_stats(args: &FailOnArgs, json: bool) -> Result<i32> {
         }
     }
     // Stats is purely informational; only `--fail-on` (non-never) with a non-empty bundle fails.
-    Ok(discovery_exit(&args.fail_on, s.total == 0)?)
+    discovery_exit(&args.fail_on, s.total == 0)
 }
 
 /// Exit code for the informational discovery commands: `0` unless `--fail-on` is set to
@@ -285,4 +314,59 @@ fn discovery_exit(fail_on: &Option<String>, empty: bool) -> Result<i32> {
             })
         }
     }
+}
+
+/// Compatibility-first preflight and conservative repair for existing bundles.
+pub fn run_doctor(args: &DoctorArgs, json_output: bool) -> Result<i32> {
+    let root = resolve_bundle(args.bundle.as_deref())?;
+    let apply = args.fix_safe && args.yes && !args.dry_run;
+    let report = doctor(&root, &args.target, args.fix_safe, apply)?;
+    if json_output {
+        for finding in &report.findings {
+            output::print_line(&json!({
+                "kind": "doctor-finding",
+                "id": finding.id,
+                "rule": finding.rule,
+                "path": finding.path,
+                "severity": finding.severity.as_str(),
+                "repair": finding.repair.as_str(),
+                "message": finding.message,
+                "current": finding.current,
+                "target": finding.target,
+                "proposed_action": finding.proposed_action,
+                "applied": finding.applied,
+            }))?;
+        }
+        output::print_line(&json!({
+            "kind": "doctor-summary",
+            "target": report.target,
+            "ready": report.ready(),
+            "files_inspected": report.files_inspected,
+            "concepts_inspected": report.concepts_inspected,
+            "findings": report.findings.len(),
+            "applied": apply,
+        }))?;
+    } else {
+        for finding in &report.findings {
+            println!(
+                "{}\t{}\t{}\t{}\t{}",
+                finding.severity.as_str(),
+                finding.id,
+                finding.repair.as_str(),
+                finding.path.as_deref().unwrap_or("-"),
+                finding.message
+            );
+        }
+        println!(
+            "doctor: {} file(s), {} concept(s), {} finding(s), ready={}",
+            report.files_inspected,
+            report.concepts_inspected,
+            report.findings.len(),
+            report.ready()
+        );
+        if args.fix_safe && !apply {
+            eprintln!("safe fixes were dry-run only; pass --fix-safe --yes to apply");
+        }
+    }
+    Ok(if report.ready() { 0 } else { 1 })
 }

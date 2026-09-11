@@ -59,10 +59,19 @@ pub fn print_concepts(concepts: &[&Concept], json: bool) -> Result<()> {
         .unwrap_or(4)
         .max(4);
     let tier_w = 17; // widest tier string, "machine-confirmed"
+    let status_w = concepts
+        .iter()
+        .map(|c| c.effective_status().len())
+        .max()
+        .unwrap_or(6)
+        .max(6);
 
     println!(
         "{:<id_w$}  {:<ty_w$}  {:<tier_w$}  {}",
-        "ID", "TYPE", "TRUST", "TITLE"
+        "ID",
+        "TYPE",
+        "TRUST",
+        format_args!("{:<status_w$}  {}", "STATUS", "TITLE")
     );
     for c in concepts {
         println!(
@@ -70,7 +79,11 @@ pub fn print_concepts(concepts: &[&Concept], json: bool) -> Result<()> {
             c.id.0,
             c.concept_type().unwrap_or("-"),
             c.trust_tier().as_str(),
-            c.title().unwrap_or(""),
+            format_args!(
+                "{:<status_w$}  {}",
+                c.effective_status(),
+                c.title().unwrap_or("")
+            ),
         );
     }
     Ok(())

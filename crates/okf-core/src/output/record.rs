@@ -61,12 +61,52 @@ fn yaml_scalar_key(v: &Yaml) -> String {
 pub fn concept_record(concept: &Concept) -> Json {
     let mut obj = Map::new();
     obj.insert("id".to_string(), Json::String(concept.id.0.clone()));
+    let mut conflicts = Map::new();
     for (k, v) in &concept.frontmatter.map {
-        obj.insert(k.clone(), yaml_to_json(v));
+        if matches!(
+            k.as_str(),
+            "id" | "trust_tier"
+                | "effective_status"
+                | "effective_generated_at"
+                | "latest_verified_at"
+                | "verification_current"
+        ) {
+            conflicts.insert(k.clone(), yaml_to_json(v));
+        } else {
+            obj.insert(k.clone(), yaml_to_json(v));
+        }
     }
     obj.insert(
         "trust_tier".to_string(),
         Json::String(concept.trust_tier().as_str().to_string()),
     );
+    obj.insert(
+        "effective_status".to_string(),
+        Json::String(concept.effective_status().to_string()),
+    );
+    obj.insert(
+        "effective_generated_at".to_string(),
+        concept
+            .generated_at()
+            .map(|s| Json::String(s.to_string()))
+            .unwrap_or(Json::Null),
+    );
+    obj.insert(
+        "latest_verified_at".to_string(),
+        concept
+            .latest_verified_at()
+            .map(|s| Json::String(s.to_string()))
+            .unwrap_or(Json::Null),
+    );
+    obj.insert(
+        "verification_current".to_string(),
+        concept
+            .verification_current()
+            .map(Json::Bool)
+            .unwrap_or(Json::Null),
+    );
+    if !conflicts.is_empty() {
+        obj.insert("frontmatter_conflicts".to_string(), Json::Object(conflicts));
+    }
     Json::Object(obj)
 }

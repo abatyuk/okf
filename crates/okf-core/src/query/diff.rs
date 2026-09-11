@@ -49,8 +49,11 @@ pub fn diff(bundle: &Bundle, git: &dyn Git, rev: &str) -> Result<DiffResult> {
     }
 
     // Current concepts, keyed by id.
-    let current: BTreeMap<&str, &Concept> =
-        bundle.concepts.iter().map(|c| (c.id.0.as_str(), c)).collect();
+    let current: BTreeMap<&str, &Concept> = bundle
+        .concepts
+        .iter()
+        .map(|c| (c.id.0.as_str(), c))
+        .collect();
 
     let mut result = DiffResult::default();
 
@@ -122,12 +125,20 @@ mod tests {
                 vec![
                     "tables/customers.md".to_string(),
                     "tables/gone.md".to_string(),
-                    "index.md".to_string(), // reserved → ignored
+                    "index.md".to_string(),   // reserved → ignored
                     "README.txt".to_string(), // non-md → ignored
                 ],
             )
-            .with_show("HEAD", "tables/customers.md", b"---\ntype: T\n---\noriginal body\n".to_vec())
-            .with_show("HEAD", "tables/gone.md", b"---\ntype: T\n---\ngone\n".to_vec());
+            .with_show(
+                "HEAD",
+                "tables/customers.md",
+                b"---\ntype: T\n---\noriginal body\n".to_vec(),
+            )
+            .with_show(
+                "HEAD",
+                "tables/gone.md",
+                b"---\ntype: T\n---\ngone\n".to_vec(),
+            );
 
         let d = diff(&bundle, &git, "HEAD").unwrap();
         assert_eq!(ids(&d.added), vec!["/tables/new"]);
@@ -154,9 +165,12 @@ mod tests {
         let bundle = bundle(vec![{
             let mut c = concept("a", "body\n");
             c.frontmatter = Frontmatter::from_map(
-                [("type".to_string(), serde_yaml::Value::String("U".to_string()))]
-                    .into_iter()
-                    .collect(),
+                [(
+                    "type".to_string(),
+                    serde_yaml::Value::String("U".to_string()),
+                )]
+                .into_iter()
+                .collect(),
             );
             c
         }]);

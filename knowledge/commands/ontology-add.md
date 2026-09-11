@@ -28,7 +28,7 @@ Defines a new concept type with its typed fields and reference rules, written to
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
 | `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
 | `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
-| `--attested` | bool | no | Mark the concept type as an attested computation |
+| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested |
 
 Every command also accepts global `--json` and an optional trailing `bundle` positional.
 

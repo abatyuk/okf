@@ -67,7 +67,9 @@ mod tests {
                 },
             );
         assert_eq!(
-            url_fp(Some(&net), "https://a").unwrap().get("last_modified"),
+            url_fp(Some(&net), "https://a")
+                .unwrap()
+                .get("last_modified"),
             Some("2026-08-01T00:00:00Z")
         );
         assert_eq!(

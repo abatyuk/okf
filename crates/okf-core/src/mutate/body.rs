@@ -32,7 +32,10 @@ pub fn set_section(body: &str, heading: &str, text: &str) -> Result<String> {
     let span = find_section(body, heading)
         .ok_or_else(|| OkfError::Usage(format!("edit: heading not found: {heading:?}")))?;
     let lines: Vec<&str> = body.split('\n').collect();
-    let mut out: Vec<String> = lines[..span.content_start].iter().map(|s| s.to_string()).collect();
+    let mut out: Vec<String> = lines[..span.content_start]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     out.push(String::new());
     out.extend(text.trim_matches('\n').split('\n').map(|s| s.to_string()));
     out.push(String::new());
@@ -66,7 +69,10 @@ pub fn remove_section(body: &str, heading: &str) -> Result<String> {
     let span = find_section(body, heading)
         .ok_or_else(|| OkfError::Usage(format!("edit: heading not found: {heading:?}")))?;
     let lines: Vec<&str> = body.split('\n').collect();
-    let mut out: Vec<String> = lines[..span.heading_line].iter().map(|s| s.to_string()).collect();
+    let mut out: Vec<String> = lines[..span.heading_line]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     out.extend(lines[span.end..].iter().map(|s| s.to_string()));
     Ok(normalize(&out.join("\n")))
 }

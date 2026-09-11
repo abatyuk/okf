@@ -50,7 +50,11 @@ fn matches(concept: &Concept, filter: &SearchFilter) -> bool {
 
 /// Return the concepts matching `filter`, in bundle order.
 pub fn search<'a>(bundle: &'a Bundle, filter: &SearchFilter) -> Vec<&'a Concept> {
-    bundle.concepts.iter().filter(|c| matches(c, filter)).collect()
+    bundle
+        .concepts
+        .iter()
+        .filter(|c| matches(c, filter))
+        .collect()
 }
 
 /// List all concepts (search with no filter).

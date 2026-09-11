@@ -1,8 +1,8 @@
-//! Losslessly edit a concept's frontmatter and body.
+//! Semantically preserve unknown frontmatter while editing a concept and body.
 //!
 //! `edit` applies a batch of operations while preserving unknown frontmatter keys and their
 //! on-disk order: an existing key is updated *in place* (its position is retained), a new key
-//! is appended, and everything else round-trips byte-stably through
+//! is appended, and everything else round-trips semantically through
 //! [`parse_concept`]/[`write_concept`].
 //!
 //! **Frontmatter ops.** `--set key=value` sets a scalar (`true`/`false` → bool, canonical
@@ -24,37 +24,80 @@ use std::path::{Path, PathBuf};
 
 use serde_yaml::Value;
 
+use crate::check::validate::validate_document;
 use crate::error::{OkfError, Result};
 use crate::model::concept::{Concept, ConceptId};
 use crate::model::frontmatter::Frontmatter;
 use crate::model::source::{Source, SourceKind};
 use crate::mutate::body;
 use crate::parse::{parse_concept, writer::write_concept};
+use crate::ports::clock::{Clock, SystemClock};
 
 /// The on-disk path a concept id maps to (`/policies/travel` → `<root>/policies/travel.md`).
-pub(crate) fn id_to_path(root: &Path, id: &ConceptId) -> PathBuf {
+pub(crate) fn id_to_path(root: &Path, id: &ConceptId) -> Result<PathBuf> {
     let rel = id.0.trim_start_matches('/');
-    root.join(format!("{rel}.md"))
+    let path = root.join(format!("{rel}.md"));
+    ensure_contained(root, &path)?;
+    Ok(path)
+}
+
+fn ensure_contained(root: &Path, path: &Path) -> Result<()> {
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|e| OkfError::Environment(format!("{}: {e}", root.display())))?;
+    let mut existing = path;
+    while !existing.exists() {
+        existing = existing
+            .parent()
+            .ok_or_else(|| OkfError::Usage(format!("path escapes bundle: {}", path.display())))?;
+    }
+    let canonical_existing = existing
+        .canonicalize()
+        .map_err(|e| OkfError::Environment(format!("{}: {e}", existing.display())))?;
+    if !canonical_existing.starts_with(&canonical_root) {
+        return Err(OkfError::Usage(format!(
+            "path escapes bundle through a symlink: {}",
+            path.display()
+        )));
+    }
+    Ok(())
 }
 
 /// Read + parse the concept at `id` from disk. A missing file is an environment error.
 pub(crate) fn load_concept(root: &Path, id: &ConceptId) -> Result<Concept> {
-    let path = id_to_path(root, id);
+    let path = id_to_path(root, id)?;
     let content = std::fs::read_to_string(&path)
         .map_err(|e| OkfError::Environment(format!("cannot read {}: {e}", path.display())))?;
     parse_concept(id.clone(), &content)
 }
 
-/// Serialize `concept` losslessly and write it to its id-derived path (creating parent
-/// directories as needed). Returns the path written.
+/// Serialize `concept` semantically and atomically write its validated id-derived path.
 pub(crate) fn save_concept(root: &Path, concept: &Concept) -> Result<PathBuf> {
-    let path = id_to_path(root, &concept.id);
+    let path = id_to_path(root, &concept.id)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| OkfError::Io(format!("{}: {e}", parent.display())))?;
     }
     let text = write_concept(concept)?;
-    std::fs::write(&path, text).map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
+    let rel = path
+        .strip_prefix(root)
+        .map_err(|e| OkfError::Internal(e.to_string()))?
+        .to_string_lossy();
+    let violations = validate_document(&rel, &text);
+    if !violations.is_empty() {
+        return Err(OkfError::Usage(format!(
+            "refusing to write nonconformant concept {}: {}",
+            concept.id,
+            violations
+                .iter()
+                .map(|v| v.rule.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )));
+    }
+    let temp = path.with_extension("md.okf-tmp");
+    std::fs::write(&temp, text).map_err(|e| OkfError::Io(format!("{}: {e}", temp.display())))?;
+    std::fs::rename(&temp, &path).map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
     Ok(path)
 }
 
@@ -228,7 +271,7 @@ fn apply_remove(fm: &mut Frontmatter, key: &str, value: Value) -> Result<usize> 
 }
 
 /// Remove every well-formed source matching `selector`, preserving non-mapping entries and
-/// unrelated source metadata byte-for-byte. A missing `sources` field is a no-op.
+/// unrelated source metadata values and order. A missing `sources` field is a no-op.
 fn apply_remove_source(fm: &mut Frontmatter, selector: &SourceSelector) -> Result<usize> {
     match fm.map.get_mut("sources") {
         None => Ok(0),
@@ -256,13 +299,15 @@ fn apply_remove_source(fm: &mut Frontmatter, selector: &SourceSelector) -> Resul
 ///
 /// Operations run in a fixed order (unset, set, add, remove, whole-body, section edits) so the
 /// result is deterministic regardless of flag order. Existing keys are updated in place; new
-/// keys are appended; untouched keys and body regions are preserved byte-stably.
+/// keys are appended; untouched keys preserve value/order and body regions preserve text.
 pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
     if spec.is_empty() {
         return Err(OkfError::Usage("edit: no operations specified".to_string()));
     }
-    let cid = ConceptId::from_relative(id);
+    let cid = ConceptId::parse(id)?;
     let mut concept = load_concept(root, &cid)?;
+    let original_frontmatter = concept.frontmatter.clone();
+    let original_body = concept.body.clone();
     let mut changes = Vec::new();
 
     for key in &spec.unsets {
@@ -350,12 +395,21 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
         });
     }
 
-    // Verification attests to the document as reviewed. Any edit makes that attestation stale,
-    // regardless of which field or body region was touched. Keep this last so failed edits do
-    // not invalidate a document that was never written.
-    if let Some(verified) = concept.frontmatter.map.shift_remove("verified") {
-        let removed = verified.as_sequence().map(Vec::len).unwrap_or(1);
-        changes.push(EditChange::InvalidateVerification { removed });
+    let meaningful_change =
+        concept.frontmatter != original_frontmatter || concept.body != original_body;
+    if meaningful_change {
+        // `generated.at` records the current content's last meaningful change when the family is
+        // already in use. Preserve `generated.by`; producers choose identity explicitly.
+        if let Some(Value::Mapping(generated)) = concept.frontmatter.map.get_mut("generated") {
+            generated.insert(
+                Value::String("at".to_string()),
+                Value::String(SystemClock.now_rfc3339()),
+            );
+        }
+        if let Some(verified) = concept.frontmatter.map.shift_remove("verified") {
+            let removed = verified.as_sequence().map(Vec::len).unwrap_or(1);
+            changes.push(EditChange::InvalidateVerification { removed });
+        }
     }
 
     let path = save_concept(root, &concept)?;

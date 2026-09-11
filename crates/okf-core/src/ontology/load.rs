@@ -48,9 +48,8 @@ pub fn validate_ontology(ontology: &Ontology) -> Result<()> {
 /// Load and validate the ontology at an explicit path. Errors if the file is
 /// unreadable, unparseable or structurally invalid.
 pub fn load_ontology(path: &Path) -> Result<Ontology> {
-    let text = std::fs::read_to_string(path).map_err(|e| {
-        OkfError::Environment(format!("cannot read {}: {e}", path.display()))
-    })?;
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| OkfError::Environment(format!("cannot read {}: {e}", path.display())))?;
     parse_ontology(&text)
 }
 

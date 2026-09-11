@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:06Z
 ---
 # okf refresh
 
-Re-records source fingerprints after a change has been acknowledged, clearing the drift that stale would report.
+Re-records extension source fingerprints after a change has been acknowledged. It does not overwrite standard source modification time or clear an expired `stale_after`.
 
 ## Arguments
 

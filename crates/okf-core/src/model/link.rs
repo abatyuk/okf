@@ -7,8 +7,8 @@
 //!   `/tables/customers.md` → id `/tables/customers`.
 //! - **relative** — `./other.md`, `../metrics/x.md`, resolved against the *directory* of the
 //!   concept that contains the link.
-//! - **bare** — no leading slash and no `./`/`../`, treated as a bundle-root id
-//!   (`tables/customers` → `/tables/customers`).
+//! - **bare relative** — no leading slash and no `./`/`../`, resolved like standard Markdown
+//!   against the containing document (`other.md` is a sibling).
 //! - **external** — anything with a URI scheme (`https://…`, `bigquery://…`, `mailto:…`) or a
 //!   pure `#fragment`; never a concept edge.
 //!
@@ -30,7 +30,7 @@ pub enum LinkKind {
     BundleRelative,
     /// `./` or `../`: resolved against the containing concept's directory.
     Relative,
-    /// No leading slash and not dot-relative: a bundle-root id.
+    /// No leading slash and not dot-relative: a standard document-relative path.
     Bare,
     /// A URI (scheme) or a pure `#fragment`: never a concept edge.
     External,
@@ -92,11 +92,11 @@ pub fn resolve_link(from: &ConceptId, link: &str) -> ConceptId {
     let s = s.strip_suffix(".md").unwrap_or(s);
 
     let joined = match classify(link) {
-        LinkKind::Relative => {
+        LinkKind::Relative | LinkKind::Bare => {
             let base = parent_dir(from);
             format!("{base}/{s}")
         }
-        // Bundle-relative, bare, and (defensively) external all normalize from the root.
+        // Bundle-relative and (defensively) external normalize from the root.
         _ => s.to_string(),
     };
     normalize_id(&joined)
@@ -157,6 +157,21 @@ fn collect_from_body(body: &str, out: &mut Vec<String>) {
 /// and markdown links in the body, in a stable order (frontmatter first, then body).
 pub fn raw_links(concept: &Concept, ontology: Option<&Ontology>) -> Vec<String> {
     let mut raw = Vec::new();
+    // Standard OKF lineage: an internal Markdown source is a relationship even without a
+    // tool-local ontology. Scope descriptors and opaque artifacts are not concept graph edges.
+    if let Some(Value::Sequence(sources)) = concept.frontmatter.get("sources") {
+        for source in sources {
+            if let Some(resource) = source.get("resource").and_then(Value::as_str) {
+                if resource
+                    .split(['#', '?'])
+                    .next()
+                    .is_some_and(|p| p.ends_with(".md"))
+                {
+                    raw.push(resource.to_string());
+                }
+            }
+        }
+    }
     if let Some(ct) = concept
         .concept_type()
         .and_then(|name| ontology.and_then(|o| o.concepts.get(name)))
@@ -235,10 +250,14 @@ mod tests {
     }
 
     #[test]
-    fn resolves_bare_from_root() {
+    fn resolves_bare_relative_to_containing_document() {
         assert_eq!(
             resolve_link(&id("policies/travel"), "tables/customers"),
-            id("tables/customers")
+            id("policies/tables/customers")
+        );
+        assert_eq!(
+            resolve_link(&id("policies/travel"), "other.md"),
+            id("policies/other")
         );
     }
 
@@ -305,5 +324,15 @@ mod tests {
         );
         let outs = outbound_links(&c, Some(&ontology));
         assert_eq!(outs, vec![id("contracts/base")]);
+    }
+
+    #[test]
+    fn standard_markdown_sources_are_edges_without_an_ontology() {
+        let c = concept(
+            "metrics/revenue",
+            "type: Metric\nsources:\n- resource: ../policies/revenue.md\n- resource: all queries in project X",
+            "",
+        );
+        assert_eq!(outbound_links(&c, None), vec![id("policies/revenue")]);
     }
 }

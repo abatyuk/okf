@@ -38,7 +38,11 @@ fn conformant_bundle_validates_clean() {
 fn linked_bundle_with_broken_links_still_conformant() {
     // linked-bundle has a broken link and an unknown `Note` type — both spec-legal.
     let report = validate_bundle(&fixtures().join("linked-bundle")).unwrap();
-    assert!(report.is_conformant(), "validate must not flag opinions: {:?}", report.violations);
+    assert!(
+        report.is_conformant(),
+        "validate must not flag opinions: {:?}",
+        report.violations
+    );
 }
 
 #[test]
@@ -53,7 +57,10 @@ fn nonconformant_bundle_reports_each_offender() {
             .find(|v| v.file == file)
             .map(|v| v.rule)
     };
-    assert_eq!(rule_for("bad/missing_type.md"), Some(ValidateRule::MissingType));
+    assert_eq!(
+        rule_for("bad/missing_type.md"),
+        Some(ValidateRule::MissingType)
+    );
     assert_eq!(
         rule_for("bad/unparseable.md"),
         Some(ValidateRule::UnparseableFrontmatter)
@@ -62,6 +69,20 @@ fn nonconformant_bundle_reports_each_offender() {
     // The conformant file is not flagged despite its broken link.
     assert!(rule_for("good/ok.md").is_none());
     assert_eq!(report.violations.len(), 3);
+}
+
+#[test]
+fn validate_includes_gitignored_markdown_and_reports_invalid_utf8_per_file() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join(".gitignore"), "ignored.md\n").unwrap();
+    std::fs::write(root.path().join("ignored.md"), "no frontmatter\n").unwrap();
+    std::fs::write(root.path().join("binary.md"), [0xff, 0xfe]).unwrap();
+    let report = validate_bundle(root.path()).unwrap();
+    assert!(report.violations.iter().any(|v| v.file == "ignored.md"));
+    assert!(report
+        .violations
+        .iter()
+        .any(|v| v.file == "binary.md" && v.rule == ValidateRule::InvalidUtf8));
 }
 
 // --- lint engine + rules ----------------------------------------------------
@@ -78,7 +99,10 @@ fn lint_without_ontology_fires_expected_rules() {
     assert!(bl.message.contains("/tables/ghost"));
 
     // Every concept lacks `description`; all carry a `title`.
-    assert_eq!(count(&findings, "missing-description"), bundle.concepts.len());
+    assert_eq!(
+        count(&findings, "missing-description"),
+        bundle.concepts.len()
+    );
     assert_eq!(count(&findings, "missing-title"), 0);
 
     // Only the orphan note is disconnected.
@@ -96,12 +120,17 @@ fn lint_with_ontology_flags_violations() {
     let ontology = load_ontology(&fixtures().join("ontology/ontology.yaml")).unwrap();
     let findings = lint_bundle(&bundle, Some(&ontology), &LintConfig::default());
 
-    let onto: Vec<&Finding> = findings.iter().filter(|f| f.rule == "ontology-violation").collect();
+    let onto: Vec<&Finding> = findings
+        .iter()
+        .filter(|f| f.rule == "ontology-violation")
+        .collect();
     assert!(!onto.is_empty(), "ontology present → violations expected");
 
     let msgs: Vec<&str> = onto.iter().map(|f| f.message.as_str()).collect();
     // `Note` is not defined in the ontology.
-    assert!(msgs.iter().any(|m| m.contains("Note") && m.contains("not defined")));
+    assert!(msgs
+        .iter()
+        .any(|m| m.contains("Note") && m.contains("not defined")));
     // Policy requires the `description` built-in, which travel lacks.
     assert!(msgs.iter().any(|m| m.contains("description")));
     // Computation requires `runtime`, which mileage lacks.
@@ -114,8 +143,10 @@ fn lint_with_ontology_flags_violations() {
 #[test]
 fn lint_severity_overrides_apply() {
     let bundle = load_bundle(&fixtures().join("linked-bundle")).unwrap();
-    let mut config = LintConfig::default();
-    config.orphan = Severity::Error; // bump orphan from Info to Error
+    let config = LintConfig {
+        orphan: Severity::Error,
+        ..LintConfig::default()
+    }; // bump orphan from Info to Error
     let findings = lint_bundle(&bundle, None, &config);
     let orphan = findings.iter().find(|f| f.rule == "orphan").unwrap();
     assert_eq!(orphan.severity, Severity::Error);
@@ -170,7 +201,11 @@ fn stale_checker_detects_drift_over_fakes() {
     let checker = StaleChecker::new(Path::new(""), &fs, &git, None, &clock);
     let report = checker.check_bundle(&bundle);
 
-    assert_eq!(report.concepts.len(), 1, "only the drifted concept is reported");
+    assert_eq!(
+        report.concepts.len(),
+        1,
+        "only the drifted concept is reported"
+    );
     let drift = &report.concepts[0];
     assert_eq!(drift.concept, "/computations/drifted");
     assert_eq!(drift.sources[0].drift, DriftKind::Drifted);

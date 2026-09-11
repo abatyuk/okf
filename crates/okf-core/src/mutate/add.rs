@@ -3,8 +3,8 @@
 //! `add` builds a fresh concept's frontmatter from an ontology concept type: it always writes
 //! `type`, `title` and `description`, then fills the type's required OKF built-ins (`requires`),
 //! its required custom `fields`, and its required reference keys with empty placeholders. With
-//! `--attested` it additionally scaffolds an OKF Attested Computation block (`computation`,
-//! `executor`, `attester`). The concept is written via the lossless [`write_concept`] path, so
+//! `--attested` it scaffolds the exact OKF `Attested Computation` type and requires `runtime`.
+//! The concept is written via the semantic-preservation [`write_concept`] path, so
 //! even a scaffold round-trips cleanly. `add` refuses to overwrite an existing file.
 //!
 //! Placeholders are intentionally empty/typed-neutral (empty string, `false`, `0`, empty list,
@@ -17,6 +17,7 @@ use crate::error::{OkfError, Result};
 use crate::model::concept::{Concept, ConceptId};
 use crate::model::frontmatter::Frontmatter;
 use crate::model::source::Source;
+use crate::model::standard::valid_actor;
 use crate::ontology::field_types::resolve_field;
 use crate::ontology::schema::{ConceptType, FieldType, Ontology};
 
@@ -29,7 +30,7 @@ pub struct AddOptions {
     pub concept_type: Option<String>,
     pub title: Option<String>,
     pub description: Option<String>,
-    /// Scaffold an OKF Attested Computation (`computation`/`executor`/`attester`).
+    /// Scaffold the exact OKF `Attested Computation` type.
     pub attested: bool,
     /// Custom scalar values supplied at creation.
     pub sets: Vec<(String, Value)>,
@@ -37,6 +38,15 @@ pub struct AddOptions {
     pub references: Vec<(String, String)>,
     /// Structured source entries supplied at creation.
     pub sources: Vec<Source>,
+    pub runtime: Option<String>,
+    pub parameters: Vec<(String, String, bool)>,
+    pub computation: Option<String>,
+    pub inline_computation: Option<String>,
+    pub executor_resource: Option<String>,
+    pub receipt: Vec<String>,
+    pub attester_resource: Option<String>,
+    pub generated_by: Option<String>,
+    pub generated_at: Option<String>,
 }
 
 /// What `add` created.
@@ -57,8 +67,8 @@ pub fn add(
     opts: &AddOptions,
 ) -> Result<AddResult> {
     let stem = rel_path.strip_suffix(".md").unwrap_or(rel_path);
-    let id = ConceptId::from_relative(stem);
-    let path = id_to_path(root, &id);
+    let id = ConceptId::parse(rel_path)?;
+    let path = id_to_path(root, &id)?;
     if path.exists() {
         return Err(OkfError::Usage(format!(
             "refusing to add: {} already exists",
@@ -68,7 +78,7 @@ pub fn add(
 
     let concept_type = resolve_type_name(ontology, opts)?;
     let ct: Option<&ConceptType> = ontology.and_then(|o| o.concepts.get(&concept_type));
-    let attested = opts.attested || ct.map(|c| c.attested).unwrap_or(false);
+    let attested = concept_type == "Attested Computation";
 
     let title = opts.title.clone().unwrap_or_default();
     let description = opts.description.clone().unwrap_or_default();
@@ -103,13 +113,6 @@ pub fn add(
                 };
                 map.insert(key.clone(), placeholder);
             }
-        }
-    }
-
-    if attested {
-        for key in ["computation", "executor", "attester"] {
-            map.entry(key.to_string())
-                .or_insert_with(|| Value::String(String::new()));
         }
     }
 
@@ -159,12 +162,102 @@ pub fn add(
         );
     }
 
+    if attested {
+        let runtime = opts
+            .runtime
+            .clone()
+            .or_else(|| {
+                map.get("runtime")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| {
+                OkfError::Usage("add --attested requires --runtime <name>".to_string())
+            })?;
+        map.insert("runtime".to_string(), Value::String(runtime.clone()));
+        if opts.computation.is_none() && opts.inline_computation.is_none() {
+            return Err(OkfError::Usage(
+                "Attested Computation requires --computation <path> or --inline-computation <text>"
+                    .to_string(),
+            ));
+        }
+        if !opts.parameters.is_empty() {
+            let parameters = opts
+                .parameters
+                .iter()
+                .map(|(name, ty, required)| {
+                    let mut parameter = Mapping::new();
+                    parameter.insert(
+                        Value::String("name".to_string()),
+                        Value::String(name.clone()),
+                    );
+                    parameter.insert(Value::String("type".to_string()), Value::String(ty.clone()));
+                    parameter.insert(
+                        Value::String("required".to_string()),
+                        Value::Bool(*required),
+                    );
+                    Value::Mapping(parameter)
+                })
+                .collect();
+            map.insert("parameters".to_string(), Value::Sequence(parameters));
+        }
+        if let Some(path) = &opts.computation {
+            map.insert("computation".to_string(), Value::String(path.clone()));
+        }
+        if opts.executor_resource.is_some() || !opts.receipt.is_empty() {
+            let mut executor = Mapping::new();
+            if let Some(resource) = &opts.executor_resource {
+                executor.insert(
+                    Value::String("resource".to_string()),
+                    Value::String(resource.clone()),
+                );
+            }
+            if !opts.receipt.is_empty() {
+                executor.insert(
+                    Value::String("receipt".to_string()),
+                    Value::Sequence(opts.receipt.iter().cloned().map(Value::String).collect()),
+                );
+            }
+            map.insert("executor".to_string(), Value::Mapping(executor));
+        }
+        if let Some(resource) = &opts.attester_resource {
+            let mut attester = Mapping::new();
+            attester.insert(
+                Value::String("resource".to_string()),
+                Value::String(resource.clone()),
+            );
+            map.insert("attester".to_string(), Value::Mapping(attester));
+        }
+    }
+    if let Some(by) = &opts.generated_by {
+        if !valid_actor(by) {
+            return Err(OkfError::Usage("add: invalid generated actor".to_string()));
+        }
+        let at = opts.generated_at.as_ref().ok_or_else(|| {
+            OkfError::Internal("generated_at missing for generated_by".to_string())
+        })?;
+        let mut generated = Mapping::new();
+        generated.insert(Value::String("by".to_string()), Value::String(by.clone()));
+        generated.insert(Value::String("at".to_string()), Value::String(at.clone()));
+        map.insert("generated".to_string(), Value::Mapping(generated));
+    }
+
     let heading = if title.is_empty() {
         stem.rsplit('/').next().unwrap_or(stem)
     } else {
         title.as_str()
     };
-    let body = format!("# {heading}\n");
+    let body = if attested && opts.computation.is_none() {
+        let runtime = map.get("runtime").and_then(Value::as_str).unwrap_or("");
+        let computation = opts.inline_computation.as_deref().unwrap_or("");
+        format!(
+            "# {heading}\n\n# Computation\n\n```{runtime}\n{}\n```\n",
+            computation.trim_end()
+        )
+    } else {
+        format!("# {heading}\n")
+    };
 
     let concept = Concept {
         id: id.clone(),
@@ -182,25 +275,24 @@ pub fn add(
 }
 
 /// Decide the concept `type` string. Uses `--type` if given; otherwise, with `--attested`,
-/// defaults to the ontology's attested concept type (or `Computation`). Errors if neither a
-/// type nor `--attested` is supplied.
+/// uses exact `Attested Computation`. Errors if neither a type nor `--attested` is supplied.
 fn resolve_type_name(ontology: Option<&Ontology>, opts: &AddOptions) -> Result<String> {
+    if opts.attested {
+        if let Some(t) = &opts.concept_type {
+            if t != "Attested Computation" {
+                return Err(OkfError::Usage(
+                    "--attested requires exact --type 'Attested Computation' (or omit --type)"
+                        .to_string(),
+                ));
+            }
+        }
+        return Ok("Attested Computation".to_string());
+    }
     if let Some(t) = &opts.concept_type {
         if t.trim().is_empty() {
             return Err(OkfError::Usage("add: --type must not be empty".to_string()));
         }
         return Ok(t.clone());
-    }
-    if opts.attested {
-        let name = ontology
-            .and_then(|o| {
-                o.concepts
-                    .iter()
-                    .find(|(_, ct)| ct.attested)
-                    .map(|(name, _)| name.clone())
-            })
-            .unwrap_or_else(|| "Computation".to_string());
-        return Ok(name);
     }
     Err(OkfError::Usage(
         "add: specify --type <ConceptType> (or --attested)".to_string(),

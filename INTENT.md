@@ -1,7 +1,7 @@
 # Intent: an agent-agnostic harness for OKF
 
 I want to build an agent-agnostic harness to support **OKF** (Open Knowledge Format,
-spec: https://raw.githubusercontent.com/GoogleCloudPlatform/open-knowledge-format/refs/heads/main/SPEC.md).
+spec: https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog/refs/heads/main/okf/SPEC.md).
 
 The harness is deliberately **two layers**:
 
@@ -40,10 +40,10 @@ human output (text/markdown) and machine output (JSON).
   **typed constraints**: a rule declares which type may reference which (e.g. a `Policy` may
   reference a `Computation`), with cardinality (0..1, 0..n, 1..n). `lint` enforces these as
   advisory findings. The bundle stays spec-pure and portable; the ontology travels separately.
-- **Writes are idempotent and lossless.** Any command that writes files (`add`, `edit`,
+- **Writes are idempotent and semantically preserving.** Any command that writes files (`add`, `edit`,
   `mv`, `rm`, `verify`, `refresh`, `lint --fix`, `docs --format index`, `ontology` edits)
-  MUST preserve unknown frontmatter keys and key order on round-trip (spec requires
-  preserving unknown keys). No diff churn, no metadata loss.
+  MUST preserve unknown frontmatter keys, values, and key order on round-trip (spec recommends
+  preserving unknown keys). YAML comments/scalar presentation may normalize.
 - **Machine output is NDJSON that mirrors frontmatter.** With `--json`, every command emits
   newline-delimited JSON, one object per line. A concept record carries **the same fields as
   the concept's frontmatter verbatim** (if a doc has a `version` key, the record has it too),
@@ -84,21 +84,27 @@ consistent across all commands. Commands are grouped by verb category.
 - `okf search <bundle> [--tag] [--type] [--text] [--field]` — search by tag, type, text, or field.
 - `okf list <bundle>` — **alias of `okf search` with no filter**; lists all concepts (ID,
   type, title, status, trust tier).
-- `okf show <bundle> <concept-id>` — show one concept's full content.
-- `okf backlinks <bundle> <concept-id>` — concepts that link to a given concept.
+- `okf show <concept-id> [bundle]` — show one concept's full content.
+- `okf backlinks <concept-id> [bundle]` — concepts that link to a given concept.
 - `okf graph <bundle> [subtree] [--format mermaid|...]` — e.g. `okf graph . --format mermaid`,
   `okf graph api`, `okf graph layers`, `okf graph domains`.
-- `okf resolve <bundle> <link>` — resolve a link/concept-ID to a concrete file path (agent utility).
+- `okf resolve <link> [bundle]` — resolve a link/concept-ID to a concrete file path (agent utility).
+- `okf artifact list/resolve/show` — inventory, resolve, and retrieve bounded path-valued
+  artifacts, including the optional `references/` convention. Opaque artifacts are never
+  executed; remote retrieval is explicit and policy-gated.
 - `okf ontology list` / `okf ontology show <name>` — inspect defined types and their rules.
 
 ### CHECK (read-only diagnostics)
 - `okf scan <bundle>` — recursively scan a repository and report what would be analyzed.
+- `okf source-scan <directory>` — inventory all source files without concept parsing.
+- `okf doctor <bundle>` — compatibility-first preflight for existing bundles; safe fixes are
+  opt-in, atomic, and never invent semantic metadata.
 - `okf validate <bundle>` — **conformance only** (the spec's three hard rules).
 - `okf lint <bundle>` — advisory checks (broken links, missing descriptions, ontology
   violations, orphaned concepts) with configurable `error`/`warn`/`info` severities.
   (`--fix` moves it into MUTATE, below.)
-- `okf stale <bundle>` — **drift detection (automatic).** For each concept, resolve
-  `resource` / `sources[]` and compare a recorded fingerprint against the current artifact;
+- `okf stale <bundle>` — **drift detection (automatic).** For each concept, resolve typed
+  `sources[]` fingerprint extensions and compare a recorded fingerprint against the current artifact;
   report what drifted. Each source declares a **kind** (`git-commit`, `git-path`,
   `markdown-heading`, `line-range`, `file`, `url`, …) and the checker dispatches on it — a
   `git-path` compares blob SHA, a `markdown-heading` compares the hash of that section's
@@ -108,10 +114,12 @@ consistent across all commands. Commands are grouped by verb category.
   updated links/concept-IDs/resources (args or stdin), walk the reverse-link graph
   (backlinks, `sources`) to report every concept that needs review. Direct dependents by
   default; `--transitive [--depth N]` follows the cascade (unbounded, or capped at N hops).
-- `okf diff <bundle> <git-ref>` — concept-level diff vs a git ref: which concepts were
+- `okf diff <git-ref> [bundle]` — concept-level diff vs a git ref: which concepts were
   added / removed / modified. Feeds the update workflow.
 - `okf stats <bundle>` — summary: concept counts by type, trust-tier distribution, stale
   count, orphan count. A dashboard for humans and agents.
+- `okf computation check <concept-id>` — inspect a standard computation contract and artifact
+  resolution without executing it.
 
 `stale` finds drift you didn't know about; `affected` computes the blast radius of changes
 you already know; `diff` tells you what changed vs a baseline. Together they are the
@@ -121,15 +129,15 @@ deterministic foundation of the "update docs" skill.
 - `okf init <bundle>` — create a new empty OKF bundle.
 - `okf add <path>` — add a new concept document (scaffolded from the ontology).
   - `okf add policies/travel_expenses --type Policy --title "Travel and expense policy" --description "Rules and reimbursement rates for business travel."`
-  - `okf add computations/mileage_calc --attested --title "Mileage reimbursement calculator"`
+  - `okf add computations/mileage_calc --attested --runtime python --computation references/computations/mileage.py --title "Mileage reimbursement calculator"`
 - `okf edit <concept-id> --set <key>=<value>...` — set/update frontmatter fields losslessly.
 - `okf mv <old-id> <new-id>` — move/rename a concept **and rewrite every inbound link**
   (concept ID = file path, so a naive rename silently breaks references).
 - `okf rm <concept-id>` — remove a concept; refuse (or warn) if backlinks would dangle unless `--force`.
 - `okf verify <concept-id> --by <actor>` — append a `verified` entry (the write-side of
   trust; records human/machine review with actor + timestamp).
-- `okf refresh <concept-id>` — re-record `last_modified`/hash fingerprints after a change is
-  acknowledged (marks a concept re-synced without touching prose; clears `stale`).
+- `okf refresh <concept-id>` — re-record extension fingerprints after a change is acknowledged
+  without overwriting standard source `last_modified`; an expired `stale_after` remains expired.
 - `okf lint <bundle> --fix` — apply auto-fixable lint findings.
 - `okf ontology add <name> [--field ...] [--ref ...]` — define a new concept type with its
   fields and typed reference rules.
@@ -142,9 +150,11 @@ deterministic foundation of the "update docs" skill.
   disclosure); the other formats emit external artifacts. (Absorbs the former `okf index`.)
 - `okf pack <bundle>` — package the bundle as a tarball for distribution *(candidate)*.
 
-### Trust / attestation (v1 = compute only)
-- Trust tier is surfaced by `okf list` / `okf show` (derived from `verified`); written by `okf verify`.
-- `okf attest --run` (later, opt-in, sandboxed) — execute computations and check receipts.
+### Trust / attestation
+- Trust tier is surfaced by `okf list` / `okf show` (derived from document-level `verified`);
+  written by `okf verify` after checking a concept against its sources.
+- Runtime attestation is separate. `okf computation check` only inspects a standard contract;
+  execution and receipt attestation remain a later, opt-in, sandboxed capability.
 
 ---
 
@@ -165,8 +175,10 @@ deterministic foundation of the "update docs" skill.
 - **Infer an ontology** — analyze an existing bundle and *propose* an `ontology.yaml`
   (observed types, common fields, reference patterns). The reverse of authoring it by hand;
   a fast on-ramp for the migrate/ingest skills.
-- **Review & attest** — walk a human or agent through verifying concepts and appending
-  `verified` entries via `okf verify`; drives concepts up the trust tiers.
+- **Review & verify** — check concepts against their declared sources and append document-level
+  `verified` entries via `okf verify`; never substitute this for runtime attestation.
+- **Repair / upgrade** — run compatibility-first `okf doctor`, preview allow-listed safe repairs,
+  preserve extensions, and stop for user decisions where target semantics are ambiguous.
 - **Reorganize / refactor a bundle** — restructure the directory tree using `okf mv` so all
   inbound links stay intact.
 - **Bundle health report** — run `stats` + `lint` + `stale` and summarize with prioritized
@@ -219,12 +231,12 @@ concepts:
     trust:
       min_tier: human-reviewed         # lint warns if the concept's derived tier is lower
     references:
-      computations: { target: Computation, cardinality: 0..n }
+      computations: { target: "Attested Computation", cardinality: 0..n }
       supersedes:   { target: Policy, cardinality: 0..1 }
 
-  Computation:
+  "Attested Computation":
     description: A sanctioned way to compute a value.
-    attested: true                     # `okf add --attested`; scaffold as OKF Attested Computation
+    attested: true                     # reserved for this exact standard OKF type
     fields:
       runtime: { type: enum, values: [bigquery, dbt, python], required: true }
     references:
@@ -238,7 +250,7 @@ concepts:
   Metric:
     description: A named measurable quantity.
     references:
-      computed_by: { target: Computation, cardinality: 1..1 }
+      computed_by: { target: "Attested Computation", cardinality: 1..1 }
 ```
 
 **Field `type` vocabulary (draft):** `string`, `text`, `int`, `bool`, `date`, `datetime`,
@@ -284,8 +296,8 @@ sources:
 
 - `okf stale` recomputes the current fingerprint per `kind` and flags any that differ from
   the recorded one (also flags missing artifacts and `stale_after` expiry).
-- `okf refresh <id>` re-reads the artifacts and rewrites `fingerprint` (and `last_modified`),
-  losslessly — the "I've reviewed this, it's in sync again" operation.
+- `okf refresh <id>` re-reads the artifacts and rewrites only the extension `fingerprint`,
+  preserving standard source signals — the "I've reviewed this fingerprint baseline" operation.
 - `fingerprint` is a small `kind`-specific map, so new kinds bring their own fields without a
   schema migration.
 
@@ -341,7 +353,7 @@ subsequent line describes one command. Every line is a standalone JSON object so
 stream and filter without a JSON-array parser.
 
 ```jsonl
-{"kind":"schema","tool":"okf","tool_version":"0.1.5","okf_spec":["0.2"],"ndjson_schema":"1"}
+{"kind":"schema","tool":"okf","tool_version":"0.2.0","okf_spec":["0.2"],"ndjson_schema":"1"}
 {"kind":"command","name":"list","group":"query","mutates":false,"summary":"List concepts with id, type, title, status, trust tier.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."}],"output":{"kind":"query","stream":"concept"}}
 {"kind":"command","name":"affected","group":"check","mutates":false,"summary":"Concepts needing review given changed links.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."},{"name":"changed","kind":"flag","type":"list<string>","required":true,"repeatable":true,"stdin":true},{"name":"transitive","kind":"flag","type":"bool","default":false},{"name":"depth","kind":"flag","type":"int","required":false}],"output":{"kind":"query","stream":"affected"}}
 {"kind":"command","name":"add","group":"mutate","mutates":true,"summary":"Add a concept scaffolded from the ontology.","args":[{"name":"path","kind":"positional","type":"path","required":true},{"name":"type","kind":"flag","type":"string","required":false},{"name":"title","kind":"flag","type":"string"},{"name":"attested","kind":"flag","type":"bool","default":false}],"output":{"kind":"mutation","stream":"change"}}

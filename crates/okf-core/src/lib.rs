@@ -4,16 +4,16 @@
 //! [`ports`]. See ARCHITECTURE.md for the module map and rationale.
 #![allow(dead_code, unused)]
 
-pub mod error;
-pub mod model;
 pub mod bundle;
-pub mod parse;
-pub mod ontology;
-pub mod graph;
-pub mod fingerprint;
 pub mod check;
-pub mod query;
+pub mod error;
+pub mod fingerprint;
+pub mod graph;
+pub mod model;
 pub mod mutate;
-pub mod render;
+pub mod ontology;
 pub mod output;
+pub mod parse;
 pub mod ports;
+pub mod query;
+pub mod render;

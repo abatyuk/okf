@@ -8,7 +8,7 @@
     {
       "name": "okf",
       "source": "./plugins/okf",
-      "description": "OKF bundle tooling: agent skills that drive the `okf` CLI to migrate, ingest, retrieve, update, attest, and reorganize knowledge bundles."
+      "description": "OKF v0.2 bundle tooling: agent skills that drive the `okf` CLI to create, migrate, retrieve, verify, repair, update, and reorganize knowledge bundles."
     }
   ]
 }

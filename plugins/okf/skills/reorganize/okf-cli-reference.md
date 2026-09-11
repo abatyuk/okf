@@ -1,6 +1,6 @@
 # okf CLI — argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.1.5, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.0, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 **For skills:** consult this file to learn a command's arguments. **Do not** run `okf <cmd> --help` or `okf schema` first just to discover flags — they are all listed here. Every command also accepts the global `--json` flag (NDJSON output) and takes an optional trailing `bundle` positional that falls back to `$OKF_BUNDLE`, then the cwd.
 
@@ -23,6 +23,45 @@ _No arguments._
 Output stream: `version`.
 
 ## query
+
+### `okf artifact list`
+
+List local artifacts and concepts under a bundle directory.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `--directory <value>` | string | no | Bundle-relative directory to inventory (default: `references`) |
+| `--digest` | bool | no | Compute SHA-256 digests (reads each file) |
+
+Output stream: `artifact`.
+
+### `okf artifact resolve`
+
+Resolve any OKF path-valued resource with document context.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<resource>` | positional | yes | Resource path, URL, or scope descriptor |
+| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
+
+Output stream: `artifact-resolution`.
+
+### `okf artifact show`
+
+Retrieve a bounded local text artifact; binary files return metadata only.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<resource>` | positional | yes | Local artifact path to retrieve |
+| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
+| `--lines <value>` | string | no | Retrieve only an inclusive, one-based START:END line range |
+| `--max-bytes <value>` | string | no | Maximum bytes read into output (default: `65536`) |
+| `--fetch` | bool | no | Explicitly request remote retrieval (requires a network-enabled build and policy) |
+
+Output stream: `artifact-content`.
 
 ### `okf backlinks`
 
@@ -144,6 +183,17 @@ Impact query: concepts needing review given a set of changed links.
 
 Output stream: `affected`.
 
+### `okf computation check`
+
+Check and display a computation contract; never executes code.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
+| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+
+Output stream: `computation-contract`.
+
 ### `okf diff`
 
 Concept-level diff of the working tree vs a git ref.
@@ -155,6 +205,20 @@ Concept-level diff of the working tree vs a git ref.
 | `--fail-on <value>` | string | no | Fail (exit 1) on any change: never (default) | info | warn | error | any |
 
 Output stream: `diff`.
+
+### `okf doctor` · _mutates_
+
+Diagnose compatibility and safely repair an existing bundle for OKF v0.2.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `--target <value>` | string | no | Target OKF version (default: `0.2`) |
+| `--fix-safe` | bool | no | Enable the allow-listed safe repair set |
+| `--dry-run` | bool | no | Show safe repairs without writing (the default without --yes) |
+| `--yes` | bool | no | Confirm applying --fix-safe changes non-interactively |
+
+Output stream: `doctor-finding,doctor-summary`.
 
 ### `okf lint`
 
@@ -177,6 +241,16 @@ Walk a bundle and report the candidate files that would be analyzed.
 | `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
 
 Output stream: `scan`.
+
+### `okf source-scan`
+
+Inventory every regular source file without parsing it as an OKF concept.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<directory>` | positional | yes | Source directory to inventory; it need not be an OKF bundle |
+
+Output stream: `source-file`.
 
 ### `okf stale`
 
@@ -223,10 +297,19 @@ Add a new concept document, scaffolded from the ontology.
 | `--type <value>` | string | no | Concept `type` (an ontology concept-type key). Optional with `--attested` |
 | `--title <value>` | string | no | Concept title |
 | `--description <value>` | string | no | Concept description |
-| `--attested` | bool | no | Scaffold an OKF Attested Computation (computation/executor/attester) |
+| `--attested` | bool | no | Scaffold exact `type: Attested Computation`; requires `--runtime` |
 | `--set <value>` | list<string> | no | Set a custom scalar field at creation, `key=value` (repeatable) |
 | `--ref <value>` | list<string> | no | Set a declared reference at creation, `key=link` (repeatable) |
-| `--add-source <value>` | list<string> | no | Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable) |
+| `--add-source <value>` | list<string> | no | Add a standard source, `resource=<path-or-uri>[,kind=<extension>][,id=...,...]` |
+| `--add-source-json <value>` | list<string> | no | Add a full source mapping as JSON/YAML or `@file` (repeatable) |
+| `--runtime <value>` | string | no | Runtime for an exact `type: Attested Computation` |
+| `--parameter <value>` | list<string> | no | Declared parameter `name:type[:required]` (repeatable) |
+| `--computation <value>` | string | no | Path to a computation file; omit to scaffold one inline computation fence |
+| `--inline-computation <value>` | string | no | Inline sanctioned computation text, literal, `@file`, or `-` for stdin |
+| `--executor-resource <value>` | string | no | Executor instructions/code resource |
+| `--receipt <value>` | list<string> | no | Required executor receipt field (repeatable) |
+| `--attester-resource <value>` | string | no | Deterministic attester code resource |
+| `--generated-by <value>` | string | no | Actor that generated this content |
 
 Output stream: `change`.
 
@@ -242,7 +325,8 @@ Edit a concept losslessly and invalidate its prior verification.
 | `--unset <value>` | list<string> | no | Remove a field entirely, `key` (repeatable) |
 | `--add <value>` | list<string> | no | Append an item to a list field, `key=value` (repeatable, idempotent) |
 | `--remove <value>` | list<string> | no | Remove matching item(s) from a list field, `key=value` (repeatable) |
-| `--add-source <value>` | list<string> | no | Add a structured source, `resource=<path-or-uri>,kind=<kind>` (repeatable) |
+| `--add-source <value>` | list<string> | no | Add a standard source, `resource=<path-or-uri>[,kind=<extension>][,id=...,...]` |
+| `--add-source-json <value>` | list<string> | no | Add a full source mapping as JSON/YAML or `@file` (repeatable) |
 | `--remove-source <value>` | list<string> | no | Remove sources matching `<path-or-uri>` or `resource=<path-or-uri>[,kind=<kind>]` (repeatable) |
 | `--set-body <value>` | string | no | Replace the whole body. Use `@file` to read a file or `-` for stdin |
 | `--append-body <value>` | string | no | Append a block to the body. Use `@file` or `-` (stdin) |
@@ -291,7 +375,7 @@ Define a new concept type with its fields and reference rules.
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
 | `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
 | `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
-| `--attested` | bool | no | Mark the concept type as an attested computation |
+| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested |
 
 Output stream: `change`.
 
@@ -319,7 +403,7 @@ Modify fields/references of an existing concept type.
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
 | `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
 | `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
-| `--attested` | bool | no | Mark the concept type as an attested computation |
+| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested |
 
 Output stream: `change`.
 

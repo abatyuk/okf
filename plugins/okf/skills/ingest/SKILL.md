@@ -1,80 +1,57 @@
 ---
 name: ingest
-description: Use this when the user wants to research a directory or repository and ingest its knowledge into an OKF bundle — "ingest this repo into okf", "scan the codebase and create concepts", "build a bundle from this project", "analyze this directory and document it as concepts". Scans a repo, researches its structure and artifacts, then adds concepts attributed back to the source files. For pre-written docs that just need converting, prefer okf:migrate; for a fresh empty bundle, use okf:init.
+description: Research a repository or directory and author grounded OKF v0.2 concepts with standard provenance. Use for source-code or mixed-artifact research; use migrate for pre-written docs and init for an empty bundle.
 ---
 
-# Research a repository and ingest it as concepts
+# Research and ingest a repository
 
-This skill turns a codebase or directory into OKF concepts. The CLI scans and writes
-deterministically; you do the research and decide what is worth capturing as a concept.
+Use `okf source-scan <directory>` for a complete source inventory without parsing files as OKF.
+Use normal code-search tools on that external source, but query existing bundle content through
+the CLI and retrieve only targeted slices.
 
-## Tool discipline
-**CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
+## CLI and output rules
 
-Anything **already in the OKF bundle** is discovered and inspected **only through the `okf`
-CLI** — `okf scan` for the source map, `okf browse`, `okf search`, `okf list`, `okf show`, `okf graph`,
-`okf backlinks`, `okf resolve`, `okf stats`, `okf ontology list`/`show` (add `--json` when
-parsing). Do **not** use Glob, Grep, `find`, or generic file-content search over the bundle:
-the CLI provides structural indexes and targeted queries, so grepping it is wasteful and
-defeats the design. When you must read a bundle markdown file directly, do so **only when you
-already know its exact path** (from `okf resolve` / an `okf show --json` record), prefer
-`okf show`, and read the **narrowest slice** needed — a known line range, section/heading, or
-symbol — never the whole file speculatively.
-For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
-relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
+Read `okf-cli-reference.md` in this skill directory. Prefer `OKF_BUNDLE` during multi-step work;
+one explicit form is `okf edit <concept-id> <bundle> --add-source resource=<path>`.
 
-The **external source material** being ingested (the repo/dir, which is *not* yet an OKF
-bundle) is different: normal code-search tools (Glob, Grep, `find`, Read) are fine there, but
-let `okf scan` be your map and still target reads by known path/symbol/line range rather than
-reading whole files speculatively. The CLI-only rule applies to anything already in the bundle.
+Producer rubric:
 
-## Steps
+- Conformance requires parseable frontmatter, non-empty `type`, and valid reserved files.
+- Recommended fields are `title`, `description`, applicable `resource`, `tags`, structured
+  Markdown, and absolute bundle-relative concept links.
+- Provenance, trust, lifecycle, and computation families are optional with defined semantics.
+- Ontology and source `kind`/`fingerprint` are tool extensions, never conformance requirements.
 
-1. **Scan the source.** Run `okf scan <source-dir>` to get a deterministic report of what
-   would be analyzed (files, structure, existing markdown). Use `--json` to parse it. This is
-   your map — it does not create anything.
+## Workflow
 
-2. **Locate/create the target bundle and ontology.** `okf init <bundle>` if none exists.
-   Review concept types with `okf ontology list` / `okf ontology show <name>`. If the repo's
-   domain isn't covered, run `okf:ontology` or `okf:infer-ontology` first so you classify
-   against real types.
+1. Run `okf source-scan <source-directory> --json`. Exclude secrets, credentials, generated
+   build output, and anything the user did not authorize examining or storing.
+2. Research meaningful concepts rather than producing one concept per file. Ground every claim
+   in inspected evidence. Use an ontology only as advisory classification; unknown types remain
+   valid OKF.
+3. Add concepts with `okf add <path> <bundle> --type <Type>`. When generation provenance is
+   enabled, record the actual agent/tool with `--generated-by` and an explicit-offset time.
+4. Author standard sources first. Each entry needs `resource`; use stable `id` values and matching
+   Markdown footnotes for per-claim attribution. Add credibility or usage fields only from
+   evidence. `kind`/`fingerprint` may be added for local drift tracking. Having sources is a
+   recommended ingest policy when known, not an OKF conformance rule.
+5. Use direct Markdown links for portable relationships. Ontology reference fields may add a
+   local typed view but must not replace standard links or source lineage.
+6. Create an exact Attested Computation only for a sanctioned declared computation: use
+   `--attested --runtime`, declared `--parameter` values, one inline/file computation, and any
+   reviewed executor/receipt/attester contract. Never convert arbitrary executable code merely
+   because it can run. `okf computation check` inspects; it does not execute or attest.
+7. Run `okf validate <bundle>`, advisory `okf lint <bundle> --fail-on never`, and generate indexes.
 
-3. **Research, then decide what to ingest.** Read the scanned artifacts (source modules,
-   configs, existing docs, schemas). For each meaningful unit of knowledge, decide:
-   - whether it deserves a concept at all (avoid one-concept-per-file noise; capture concepts,
-     not files),
-   - which ontology **type** it is,
-   - what the accurate title/description/prose should be. Ground every claim in what you
-     actually read — do not infer behavior you can't see.
+## Local supporting artifacts
 
-4. **Add each concept.** `okf add <path> --type <Type> --title "…" --description "…"`
-   (add `--attested` for attested computation types). Write the body from your research.
+`references/` is optional. Use it only when the bundle should carry a durable authorized copy;
+otherwise keep the canonical repository path or URL in `sources[].resource`. Markdown files in
+it are concepts; SQL, Python, schemas, instructions, and binaries are opaque artifacts. Preserve
+original provenance. Verify copies with `okf artifact resolve` and bounded `okf artifact show`.
+Local resolution must remain within the canonical bundle; remote retrieval needs explicit
+authorization and no ambient credentials. Reading executor, attester, or computation code is
+not permission to run it.
 
-5. **Attribute typed sources.** Point each concept back at the code/artifact it describes,
-   using the right source **kind** so drift is detectable:
-   - `git-path` for a tracked file, `line-range` for a function/span, `markdown-heading` for a
-     doc section, `git-commit` to pin a revision, `url` for external references, `file` for
-     untracked artifacts.
-   - Add each entry with `okf edit <concept-id> --add-source
-     resource=<git-root-relative-path>,kind=<kind>` (or use `--add-source` on `okf add`). Then
-     run `okf refresh <concept-id> --fail-on any` to record the initial
-     `fingerprint`/`last_modified`. This is what lets `okf stale` later notice the code moved.
-
-6. **Wire references.** Connect concepts using the ontology's reference keys via
-   `okf edit <concept-id> --set <key>=<link>`, mirroring real dependencies you found (e.g. a
-   metric computed by a computation, a policy referencing a computation).
-
-7. **Validate, lint, index.**
-   - `okf validate <bundle>` (must pass), `okf lint <bundle>` (resolve/accept findings).
-   - `okf docs <bundle> --format index` to write progressive-disclosure `index.md` files;
-     verify the root view with `okf browse <bundle>`.
-
-8. **Report.** Summarize concepts created (path + type), which parts of the repo they cover,
-   and notable areas you intentionally skipped.
-
-## Guardrails
-- Fidelity over coverage: a small set of accurate, well-sourced concepts beats an exhaustive
-  hallucinated one. Keep the human in the loop on scope.
-- Every concept must have at least one typed `sources[]` entry so `okf stale`/`okf affected`
-  can track it against the code.
-- Concepts start `unverified`; use `okf:review-attest` to raise trust.
+Report created concepts, standard sources and claim joins, optional extensions, copied artifacts
+with provenance, validation, advisory findings, and intentionally skipped areas.

@@ -3,6 +3,7 @@
 //! Handlers return the *success* exit code: `0` for ok/clean, `1` for reportable findings
 //! at/above a command's threshold. Errors bubble as [`OkfError`] and are mapped to 2/3/4 by
 //! [`crate::exit`]. Core never calls `process::exit`.
+pub mod artifact;
 pub mod check;
 pub mod mutate;
 pub mod ontology;
@@ -10,7 +11,7 @@ pub mod query;
 pub mod render;
 pub mod schema;
 
-use crate::cli::{Cli, Command, OntologyCmd};
+use crate::cli::{ArtifactCmd, Cli, Command, ComputationCmd, OntologyCmd};
 use okf_core::error::Result;
 
 /// Dispatch a parsed CLI invocation to its command handler, returning an exit code.
@@ -28,14 +29,24 @@ pub fn run(cli: Cli) -> Result<i32> {
         Command::Backlinks(a) => query::run_backlinks(a, json),
         Command::Graph(a) => query::run_graph(a, json),
         Command::Resolve(a) => query::run_resolve(a, json),
+        Command::Artifact(cmd) => match cmd {
+            ArtifactCmd::List(a) => artifact::run_list(a, json),
+            ArtifactCmd::Resolve(a) => artifact::run_resolve(a, json),
+            ArtifactCmd::Show(a) => artifact::run_show(a, json),
+        },
+        Command::Computation(cmd) => match cmd {
+            ComputationCmd::Check(a) => artifact::run_computation_check(a, json),
+        },
         // CHECK
         Command::Scan(a) => check::run_scan(a, json),
+        Command::SourceScan(a) => check::run_source_scan(a, json),
         Command::Validate(a) => check::run_validate(a, json),
         Command::Lint(a) => check::run_lint(a, json),
         Command::Stale(a) => check::run_stale(a, json),
         Command::Affected(a) => check::run_affected(a, json),
         Command::Diff(a) => check::run_diff(a, json),
         Command::Stats(a) => check::run_stats(a, json),
+        Command::Doctor(a) => check::run_doctor(a, json),
         // MUTATE
         Command::Init(a) => mutate::run_init(a, json),
         Command::Add(a) => mutate::run_add(a, json),

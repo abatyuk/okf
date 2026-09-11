@@ -23,7 +23,7 @@ A parsed reference to another concept, classified as bundle-relative, relative, 
 pub enum LinkKind {
     BundleRelative,  // leading `/`  — from the bundle root
     Relative,        // `./` or `../` — from the concept's directory
-    Bare,            // no prefix     — a bundle-root id
+    Bare,            // no prefix     — relative to the concept directory
     External,        // URI scheme or `#fragment` — never a concept edge
 }
 // fn classify(&str) -> LinkKind; fn resolve_link(from, raw) -> ConceptId

@@ -59,10 +59,7 @@ pub fn run_schema(_json: bool) -> Result<i32> {
 /// Build the `{"kind":"command",...}` record for one leaf command.
 fn command_record(full_name: &str, cmd: &ClapCommand) -> Value {
     let (group, mutates, stream) = meta(full_name);
-    let summary = cmd
-        .get_about()
-        .map(|s| s.to_string())
-        .unwrap_or_default();
+    let summary = cmd.get_about().map(|s| s.to_string()).unwrap_or_default();
 
     let args: Vec<Value> = cmd
         .get_arguments()
@@ -157,16 +154,22 @@ fn meta(name: &str) -> (&'static str, bool, &'static str) {
         "backlinks" => ("query", false, "concept"),
         "graph" => ("query", false, "graph"),
         "resolve" => ("query", false, "resolved"),
+        "artifact list" => ("query", false, "artifact"),
+        "artifact resolve" => ("query", false, "artifact-resolution"),
+        "artifact show" => ("query", false, "artifact-content"),
+        "computation check" => ("check", false, "computation-contract"),
         "ontology list" => ("query", false, "ontology_type"),
         "ontology show" => ("query", false, "ontology_type"),
 
         "scan" => ("check", false, "scan"),
+        "source-scan" => ("check", false, "source-file"),
         "validate" => ("check", false, "violation"),
         "lint" => ("check", false, "finding"),
         "stale" => ("check", false, "drift"),
         "affected" => ("check", false, "affected"),
         "diff" => ("check", false, "diff"),
         "stats" => ("check", false, "stats"),
+        "doctor" => ("check", true, "doctor-finding,doctor-summary"),
 
         "init" => ("mutate", true, "change"),
         "add" => ("mutate", true, "change"),

@@ -1,7 +1,7 @@
 ---
 type: Component
 title: check module
-description: Read-only diagnostics, including OKF reserved-file conformance.
+description: Conformance, optional-family, lifecycle, drift, and compatibility diagnostics.
 layer: core
 depends_on:
 - /components/model
@@ -17,6 +17,6 @@ sources:
 ---
 # check module
 
-Read-only diagnostics. Validate enforces the three conformance rules, including the root-only `okf_version` frontmatter exception for `index.md`; the lint engine emits Findings; stale detects drift between recorded and recomputed source fingerprints.
+Diagnostics. Validate enforces all three conformance rules including index/log structure and root version syntax; lint checks optional families advisorily; stale compares corrected instants and fingerprint extensions; doctor performs tolerant upgrade preflight and safe repair.
 
 Location: `crates/okf-core/src/check`.

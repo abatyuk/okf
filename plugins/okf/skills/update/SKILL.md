@@ -1,76 +1,55 @@
 ---
 name: update
-description: Use this when the user wants to bring OKF documentation back in sync with recent changes — "update the docs for these changes", "which concepts are stale?", "what's affected by this commit/file change?", "refresh the bundle after the refactor", "the code changed, fix the concepts". Uses okf stale (automatic drift), okf affected (blast radius of known changes), and okf diff (vs a git ref) to find what needs work; you rewrite the prose and re-attribute sources, then okf refresh to re-fingerprint.
+description: Reconcile OKF concepts after source or concept changes using lifecycle, source metadata, fingerprint drift, affected analysis, and git diff. Use for documentation sync; refresh fingerprints only after review and route meaningful rewrites to re-verification.
 ---
 
-# Update documentation from recent changes
+# Update concepts after changes
 
-The CLI finds *what* drifted or is impacted deterministically. Your job is *how* to rewrite
-the prose and re-attribute sources. Three complementary detectors feed you:
+Read the generated `okf-cli-reference.md` in this skill directory. Prefer `OKF_BUNDLE` for a
+workflow. Fully qualified examples include `okf diff <git-ref> <bundle>` and
+`okf affected <bundle> --changed <resource>`.
 
-- `okf stale` — drift you didn't know about (recorded fingerprint vs. current artifact).
-- `okf affected --changed <link>...` — blast radius of changes you already know about.
-- `okf diff <git-ref>` — what changed vs a baseline commit.
+## Detect and classify
 
-## Tool discipline
-**CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
+Use the relevant detectors and keep their meanings separate:
 
-Discover and inspect everything in the bundle **only through the `okf` CLI** — `okf browse`, `okf search`,
-`okf list`, `okf show`, `okf graph`, `okf backlinks`, `okf resolve`, `okf stats`, plus the
-drift detectors above (add `--json` when parsing). Do **not** use Glob, Grep, `find`, or generic
-file-content search over the bundle: the CLI provides structural indexes and targeted
-disclosure, so grepping it is wasteful and defeats the design. Read a bundle markdown file
-directly **only when you already know its exact path** (from `okf resolve` or an `okf show
---json` record), and prefer `okf show` over a raw read. When a raw read is unavoidable, read the
-**narrowest slice** needed — a known line range, a section/heading, or a named symbol — never
-the whole file speculatively. (Reading the *external artifacts* a concept sources — the code or
-docs it points at — by known path/line-range to check drift is expected; the CLI-only rule is
-about bundle content.)
-For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
-relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
+- `okf stale <bundle>` reports `stale_after` expiry and supported source fingerprint drift. It
+  does not claim every top-level resource is fingerprinted.
+- Standard source `last_modified`, credibility, and usage signals inform review but are not the
+  same as local fingerprint drift.
+- `okf affected <bundle> --changed <link-or-resource>` follows corrected body and standard source
+  graph edges; add `--transitive --depth <N>` when needed.
+- `okf diff <git-ref> <bundle>` reports concept-level change versus a Git baseline.
 
-## Steps
+Triage findings as lifecycle expiry, standard source evidence change, tool fingerprint drift,
+or actual concept-content change. A concept may have more than one.
 
-1. **Find the work.** Pick the detector(s) that match the situation (use `--json` to parse):
-   - Routine sync / CI: `okf stale <bundle>`. It resolves each concept's `resource`/`sources[]`
-     and reports every source whose fingerprint no longer matches (dispatching per `kind` —
-     git-path blob SHA, markdown-heading section hash, git-commit, line-range, url etag, etc.),
-     plus missing artifacts and `stale_after` expiry.
-   - You know specific things changed: `okf affected <bundle> --changed <link-or-path>...`
-     (args or stdin). Add `--transitive [--depth N]` to follow the cascade through the
-     reverse-link graph, not just direct dependents.
-   - Working from a commit range: `okf diff <bundle> <git-ref>` for concept-level added /
-     removed / modified. Feed changed paths from the diff into `okf affected --changed`.
+## Reconcile
 
-2. **Triage.** Group the reported concepts. For each, open it with `okf show <concept-id>` and
-   read the drifted source (the artifact it points at). Decide whether the prose actually needs
-   to change or whether the artifact moved in a way that doesn't affect meaning.
+1. Inspect the concept with targeted `okf show` reads and the changed evidence. For a path-valued
+   source, use `okf artifact resolve <resource> <bundle> --from <concept-id>` and bounded
+   `okf artifact show`; use `okf show` when it resolves to a concept.
+2. If meaning changed, update body/frontmatter with `okf edit <concept-id> <bundle>`. The CLI
+   updates existing `generated.at` and invalidates verification for meaningful edits; report the
+   need for `review-verify`.
+3. If only the local fingerprint baseline changed and the content remains correct, run
+   `okf refresh <concept-id> <bundle>`. Refresh updates the fingerprint extension only. It does
+   not alter standard `sources[].last_modified`, regenerate content, change status, or cure an
+   expired `stale_after`.
+4. Change `stale_after` or lifecycle status only from evidence and with user judgment. These are
+   distinct from refresh.
+5. If a concept moved, use `okf mv <old-id> <new-id> <bundle>`. When an opaque artifact moves,
+   update its declaring standard path field and preserve provenance; never execute it.
+6. Re-run stale/affected checks, `okf validate <bundle>`, and advisory `okf lint <bundle>
+   --fail-on never`. Regenerate indexes only when appropriate.
 
-3. **Rewrite the prose (the judgment part).** For concepts whose content is now wrong or
-   incomplete, edit the body to reflect reality. Keep changes grounded in the actual diff/artifact
-   — don't rewrite beyond what changed. Update frontmatter fields via
-   `okf edit <concept-id> --set <key>=<value>` where facts (version, status, owner) changed.
+## `references/` safety
 
-4. **Re-attribute sources if the artifact moved.** If a source file was renamed, split, or a
-   heading changed, update the `sources[]` `resource`/`kind` so it points at the new location.
-   For renamed *concepts*, use `okf mv` (never a manual rename) so inbound links are rewritten.
+`references/` is optional. Markdown there is concept content; non-Markdown is opaque. Resolve
+document-relative paths with declaring context, distinguish scope/missing/blocked results, and
+stay inside the canonical bundle after symlinks. Remote fetch requires explicit policy and no
+ambient credentials. Reading changed computation/executor/attester code grants no execution
+authority.
 
-5. **Re-fingerprint.** Once a concept is genuinely back in sync, run `okf refresh <concept-id>`.
-   This re-reads the artifacts, rewrites `fingerprint`/`last_modified` losslessly, and clears
-   `stale` — the "I've reviewed this, it matches again" operation. Do NOT refresh a concept you
-   haven't actually reconciled; that would hide real drift.
-
-6. **Re-check and regenerate indexes.** Run `okf stale <bundle>` again to confirm nothing you
-   touched still drifts, `okf lint <bundle>` to catch links you may have broken, then
-   `okf docs <bundle> --format index`. Verify the root view with `okf browse <bundle>`.
-
-7. **Report.** List concepts updated (what changed and why), sources re-attributed, concepts
-   refreshed, and any drift you deliberately left (e.g. needs a human decision).
-
-## Guardrails
-- `refresh` is an acknowledgement, not a fix — only refresh after the prose truly matches.
-- Never rename a concept file by hand; `okf mv` keeps backlinks intact.
-- Keep the human in the loop on ambiguous drift and on any content whose correct new value you
-  can't determine from the artifact.
-- Every `okf edit` automatically removes prior `verified` entries because they attest to the
-  pre-edit document. Route every edited concept through okf:review-attest for re-verification.
+Report each trigger category, prose/path changes, fingerprint-only refreshes, unchanged expiry,
+generation/verification consequences, validation, and unresolved decisions.

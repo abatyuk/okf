@@ -61,18 +61,12 @@ mod tests {
 
     #[test]
     fn trailing_whitespace_is_stripped_per_line() {
-        assert_eq!(
-            canonicalize_text("a  \nb\t\n"),
-            canonicalize_text("a\nb\n")
-        );
+        assert_eq!(canonicalize_text("a  \nb\t\n"), canonicalize_text("a\nb\n"));
     }
 
     #[test]
     fn leading_and_trailing_blank_lines_are_stripped() {
-        assert_eq!(
-            canonicalize_text("\n\n  \nkeep\nme\n \n\n"),
-            "keep\nme"
-        );
+        assert_eq!(canonicalize_text("\n\n  \nkeep\nme\n \n\n"), "keep\nme");
     }
 
     #[test]

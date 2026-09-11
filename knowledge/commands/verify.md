@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # okf verify
 
-Appends a verified entry, the write side of trust, raising a concept's derived tier (unverified to machine-confirmed to human-reviewed).
+Appends a valid document-level `{by, at}` verification event after content has been checked against its sources or resource. This is distinct from per-run computation attestation.
 
 ## Arguments
 

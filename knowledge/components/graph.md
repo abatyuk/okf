@@ -14,6 +14,6 @@ last_modified: 2026-09-07T18:47:09Z
 ---
 # graph module
 
-Forward and reverse adjacency built from concept links. Powers backlinks, the affected impact reverse walk, and the mermaid/dot/graphml renderers.
+Forward and reverse adjacency built from body links, ontology references, and standard internal Markdown `sources[].resource` lineage. Broken targets remain edges. Powers backlinks, affected analysis, move/remove safety, and graph renderers.
 
 Location: `crates/okf-core/src/graph`.

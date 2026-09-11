@@ -2,7 +2,7 @@
 type: 'DesignDecision'
 title: 'Trust tiers are derived, never asserted'
 description: 'A concept''s tier is computed from its verified actors (a human: actor gives human-reviewed, other actors give machine-confirmed, none gives unverified).'
-status: 'decided'
+decision_status: 'decided'
 affects:
   - /components/model
 ---

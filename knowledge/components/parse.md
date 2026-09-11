@@ -1,7 +1,7 @@
 ---
 type: Component
 title: parse module
-description: 'Lossless markdown and YAML handling: split frontmatter from body, build the heading tree, extract sections, load YAML order-preservingly, and serialize back with a round-trip guarantee.'
+description: 'Semantic markdown and YAML handling that preserves unknown keys, values, order, and body text while YAML presentation may normalize.'
 layer: core
 depends_on:
 - /components/model
@@ -14,6 +14,6 @@ last_modified: 2026-09-07T18:47:09Z
 ---
 # parse module
 
-Lossless markdown and YAML handling: split frontmatter from body, build the heading tree, extract sections, load YAML order-preservingly, and serialize back with a round-trip guarantee.
+Semantic markdown and YAML handling: split frontmatter from body, build the heading tree, extract sections, retain unknown keys/values and top-level order, and serialize back. Body text is preserved; YAML comments and presentation may normalize.
 
 Location: `crates/okf-core/src/parse`.

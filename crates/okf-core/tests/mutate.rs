@@ -142,6 +142,18 @@ fn add_scaffolds_from_ontology_required_fields() {
 }
 
 #[test]
+fn mutators_reject_traversal_and_reserved_concept_ids() {
+    let tmp = temp_bundle();
+    let opts = add::AddOptions {
+        concept_type: Some("Note".to_string()),
+        ..Default::default()
+    };
+    assert!(add::add(tmp.path(), "../escape", None, &opts).is_err());
+    assert!(add::add(tmp.path(), "index", None, &opts).is_err());
+    assert!(!tmp.path().parent().unwrap().join("escape.md").exists());
+}
+
+#[test]
 fn add_attested_defaults_type_and_scaffolds_block() {
     let tmp = temp_bundle();
     let root = tmp.path();
@@ -156,12 +168,13 @@ fn add_attested_defaults_type_and_scaffolds_block() {
             title: Some("Mileage calc".to_string()),
             description: None,
             attested: true,
+            runtime: Some("python".to_string()),
+            inline_computation: Some("return 1".to_string()),
             ..Default::default()
         },
     )
     .unwrap();
-    // No --type + --attested resolves to the ontology's attested concept type.
-    assert_eq!(res.concept_type, "Computation");
+    assert_eq!(res.concept_type, "Attested Computation");
     assert!(res.attested);
 
     let c = parse_concept(
@@ -169,11 +182,9 @@ fn add_attested_defaults_type_and_scaffolds_block() {
         &read_file(root, "computations/mileage_calc.md"),
     )
     .unwrap();
-    // Required enums stay unset rather than being silently guessed.
-    assert_eq!(c.frontmatter.get_str("runtime"), None);
-    for key in ["computation", "executor", "attester"] {
-        assert!(c.frontmatter.get(key).is_some(), "missing {key}");
-    }
+    assert_eq!(c.frontmatter.get_str("runtime"), Some("python"));
+    assert!(c.body.contains("# Computation"));
+    assert!(c.frontmatter.get("computation").is_none());
 }
 
 // ---------------------------------------------------------------------------- edit
@@ -420,6 +431,52 @@ fn edit_with_no_operations_errors() {
     assert!(edit::edit(root, "c/e", &edit::EditSpec::default()).is_err());
 }
 
+#[test]
+fn edit_refuses_to_write_a_nonconformant_concept() {
+    let tmp = temp_bundle();
+    let root = tmp.path();
+    write_file(root, "a.md", "---\ntype: T\n---\nbody\n");
+    let before = read_file(root, "a.md");
+    let result = edit::edit(
+        root,
+        "a",
+        &edit::EditSpec {
+            unsets: vec!["type".to_string()],
+            ..Default::default()
+        },
+    );
+    assert!(result.is_err());
+    assert_eq!(read_file(root, "a.md"), before);
+}
+
+#[test]
+fn meaningful_edit_updates_existing_generated_timestamp() {
+    let tmp = temp_bundle();
+    let root = tmp.path();
+    write_file(
+        root,
+        "a.md",
+        "---\ntype: T\ntitle: Old\ngenerated: {by: agent/v1, at: 2000-01-01T00:00:00Z}\n---\nbody\n",
+    );
+    edit::edit(
+        root,
+        "a",
+        &edit::EditSpec {
+            sets: vec![("title".to_string(), "New".to_string())],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let concept = parse_concept(ConceptId::from_relative("a"), &read_file(root, "a.md")).unwrap();
+    let at = concept
+        .frontmatter
+        .get("generated")
+        .and_then(|v| v.get("at"))
+        .and_then(|v| v.as_str())
+        .unwrap();
+    assert_ne!(at, "2000-01-01T00:00:00Z");
+}
+
 // ---------------------------------------------------------------------------- mv
 
 #[test]
@@ -452,12 +509,23 @@ fn mv_rewrites_every_inbound_link_and_rebases_moved_relative_links() {
         "tables/orders.md",
         "---\ntype: Table\nrel:\n- ./customers\n---\nLink [c](./customers.md).\n",
     );
+    // Standard provenance edge requires no ontology declaration.
+    write_file(
+        root,
+        "notes/source.md",
+        "---\ntype: T\nsources:\n- resource: ../tables/customers.md\n---\n",
+    );
 
     let res = mv::mv(root, "tables/customers", "warehouse/east/customers").unwrap();
     let rewritten: Vec<&str> = res.rewritten.iter().map(|c| c.0.as_str()).collect();
     assert_eq!(
         rewritten,
-        vec!["/metrics/revenue", "/policies/travel", "/tables/orders"]
+        vec![
+            "/metrics/revenue",
+            "/notes/source",
+            "/policies/travel",
+            "/tables/orders"
+        ]
     );
 
     // Old file gone, new file present.
@@ -492,6 +560,12 @@ fn mv_rewrites_every_inbound_link_and_rebases_moved_relative_links() {
     assert!(
         orders.contains("[c](../warehouse/east/customers.md)"),
         "{orders}"
+    );
+
+    let source = read_file(root, "notes/source.md");
+    assert!(
+        source.contains("resource: ../warehouse/east/customers.md"),
+        "{source}"
     );
 
     // Moved file's OWN relative links rebased to the new depth.
@@ -590,10 +664,18 @@ fn verify_appends_entry_and_promotes_bare_mapping_to_list() {
     );
 }
 
+#[test]
+fn verify_rejects_invalid_actor_convention() {
+    let tmp = temp_bundle();
+    write_file(tmp.path(), "a.md", "---\ntype: T\n---\n");
+    let clock = FixedClock("2026-09-07T00:00:00Z".to_string());
+    assert!(verify::verify(tmp.path(), "a", "alice", &clock).is_err());
+}
+
 // ---------------------------------------------------------------------------- refresh
 
 #[test]
-fn refresh_recomputes_fingerprints_preserving_extras_and_updating_last_modified() {
+fn refresh_recomputes_fingerprints_without_overwriting_standard_source_metadata() {
     let tmp = temp_bundle();
     let root = tmp.path();
     write_file(
@@ -624,12 +706,12 @@ fn refresh_recomputes_fingerprints_preserving_extras_and_updating_last_modified(
     assert_eq!(res.updated, vec!["src/x.py".to_string()]);
     assert_eq!(res.skipped.len(), 1, "unknown kind is skipped, not fatal");
     assert_eq!(res.skipped[0].resource, "weird");
-    assert_eq!(res.last_modified, "2026-09-07T12:00:00Z");
+    assert_eq!(res.refreshed_at, "2026-09-07T12:00:00Z");
 
     let c = parse_concept(res.id.clone(), &read_file(root, "computations/mileage.md")).unwrap();
     assert_eq!(
         c.frontmatter.get_str("last_modified"),
-        Some("2026-09-07T12:00:00Z")
+        Some("2020-01-01T00:00:00Z")
     );
     let sources = parse_sources(c.frontmatter.get("sources").unwrap());
     assert_eq!(sources[0].fingerprint.get("blob_sha"), Some("newsha"));

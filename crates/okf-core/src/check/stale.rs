@@ -20,6 +20,7 @@ use crate::bundle::loader::Bundle;
 use crate::fingerprint::{Engine, Fingerprinter};
 use crate::model::concept::Concept;
 use crate::model::source::{parse_sources, Fingerprint, Source};
+use crate::model::standard::parse_timestamp;
 use crate::ports::clock::{Clock, SystemClock};
 use crate::ports::fs::{FileSystem, RealFs};
 use crate::ports::git::{Git, RealGit};
@@ -203,10 +204,9 @@ impl<'a> StaleChecker<'a> {
         if stale_after.is_empty() {
             return None;
         }
-        let now = self.clock.now_rfc3339();
-        // ISO-8601 timestamps sort lexicographically, so a plain string comparison over the
-        // shared prefix decides expiry without a date dependency.
-        if now.as_str() > stale_after {
+        let now = parse_timestamp(&self.clock.now_rfc3339())?;
+        let deadline = parse_timestamp(stale_after)?;
+        if now >= deadline {
             Some(stale_after.to_string())
         } else {
             None
@@ -305,7 +305,10 @@ mod tests {
         assert_eq!(cd.concept, "/computations/mileage");
         assert_eq!(cd.sources.len(), 1);
         assert_eq!(cd.sources[0].drift, DriftKind::Drifted);
-        assert_eq!(cd.sources[0].current.as_ref().unwrap().get("blob_sha"), Some("bbb"));
+        assert_eq!(
+            cd.sources[0].current.as_ref().unwrap().get("blob_sha"),
+            Some("bbb")
+        );
     }
 
     #[test]
@@ -328,7 +331,10 @@ mod tests {
         );
         let fs = FakeFs::new().with_file("data/raw.bin", b"abc".to_vec());
         let report = check(&bundle(vec![c]), &fs, &FakeGit::new());
-        assert!(report.is_empty(), "sha256 of 'abc' matches recorded → in sync");
+        assert!(
+            report.is_empty(),
+            "sha256 of 'abc' matches recorded → in sync"
+        );
     }
 
     #[test]
@@ -344,17 +350,33 @@ mod tests {
 
     #[test]
     fn stale_after_expiry_is_flagged() {
-        let c = concept("policies/p", "type: Policy\nstale_after: 2026-08-01");
+        let c = concept(
+            "policies/p",
+            "type: Policy\nstale_after: 2026-08-01T00:00:00Z",
+        );
         let report = check(&bundle(vec![c]), &FakeFs::new(), &FakeGit::new());
         assert_eq!(report.concepts.len(), 1);
-        assert_eq!(report.concepts[0].expired.as_deref(), Some("2026-08-01"));
+        assert_eq!(
+            report.concepts[0].expired.as_deref(),
+            Some("2026-08-01T00:00:00Z")
+        );
         assert!(report.concepts[0].sources.is_empty());
     }
 
     #[test]
     fn stale_after_in_future_is_not_flagged() {
-        let c = concept("policies/p", "type: Policy\nstale_after: 2027-01-01");
+        let c = concept(
+            "policies/p",
+            "type: Policy\nstale_after: 2027-01-01T00:00:00Z",
+        );
         let report = check(&bundle(vec![c]), &FakeFs::new(), &FakeGit::new());
         assert!(report.is_empty());
+    }
+
+    #[test]
+    fn stale_after_is_inclusive_and_offset_aware() {
+        let c = concept("p", "type: Policy\nstale_after: 2026-09-06T17:00:00-07:00");
+        let report = check(&bundle(vec![c]), &FakeFs::new(), &FakeGit::new());
+        assert_eq!(report.concepts.len(), 1);
     }
 }

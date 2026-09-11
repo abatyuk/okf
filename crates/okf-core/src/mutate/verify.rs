@@ -10,13 +10,14 @@
 //!
 //! The derived trust tier (`model::trust`) then recomputes automatically from the actor
 //! prefixes (`human:` → human-reviewed, else machine-confirmed).
-use std::path::PathBuf;
 use std::path::Path;
+use std::path::PathBuf;
 
 use serde_yaml::{Mapping, Value};
 
 use crate::error::{OkfError, Result};
 use crate::model::concept::ConceptId;
+use crate::model::standard::valid_actor;
 use crate::ports::clock::Clock;
 
 use super::edit::{load_concept, save_concept};
@@ -33,15 +34,20 @@ pub struct VerifyResult {
 /// Append a `verified` entry for `actor` (e.g. `human:andrey`) to the concept at `id`,
 /// timestamped by `clock`. Losslessly rewrites the file.
 pub fn verify(root: &Path, id: &str, actor: &str, clock: &dyn Clock) -> Result<VerifyResult> {
-    if actor.trim().is_empty() {
-        return Err(OkfError::Usage("verify: --by actor must not be empty".to_string()));
+    if !valid_actor(actor) {
+        return Err(OkfError::Usage(
+            "verify: --by must be <producer>/<version>, human:<id>, or process:<id>".to_string(),
+        ));
     }
-    let cid = ConceptId::from_relative(id);
+    let cid = ConceptId::parse(id)?;
     let mut concept = load_concept(root, &cid)?;
 
     let at = clock.now_rfc3339();
     let mut entry = Mapping::new();
-    entry.insert(Value::String("by".to_string()), Value::String(actor.to_string()));
+    entry.insert(
+        Value::String("by".to_string()),
+        Value::String(actor.to_string()),
+    );
     entry.insert(Value::String("at".to_string()), Value::String(at.clone()));
     let entry = Value::Mapping(entry);
 

@@ -1,15 +1,11 @@
 ---
 type: Skill
 title: okf:update skill
-description: Finds what drifted with stale, affected, and diff, then rewrites prose, re-attributes sources, and re-fingerprints with refresh.
-trigger: resync docs after code changes
-uses:
-- /commands/stale
-- /commands/affected
-- /commands/diff
-- /commands/refresh
-- /commands/edit
+description: Separately triages lifecycle expiry, standard source evidence, fingerprint drift, and content changes, then reconciles concepts without overstating refresh.
+trigger: resync concepts after source changes
+uses: [/commands/stale, /commands/affected, /commands/diff, /commands/refresh, /commands/edit]
 ---
 # okf:update skill
 
-Finds what drifted with stale, affected, and diff, then rewrites prose, re-attributes sources, and re-fingerprints with refresh.
+Refresh updates supported fingerprint extensions only; meaningful rewrites update generation
+state and require a new document review.

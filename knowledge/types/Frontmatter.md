@@ -14,13 +14,13 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Frontmatter
 
-The order-preserving, unknown-key-preserving YAML mapping at the top of a concept. The linchpin type: everything round-trips through it, and the NDJSON concept record is this map serialized verbatim plus computed id and trust_tier.
+The order-preserving, unknown-key/value-preserving YAML mapping at the top of a concept. It round-trips semantic values and top-level order; YAML comments and presentation may normalize. NDJSON adds collision-safe computed lifecycle, generation, verification, identity, and trust views.
 
 ## Schema
 
 ```rust
 pub struct Frontmatter {
-    /// Insertion-ordered key/value pairs, preserving on-disk order and unknown keys verbatim.
+    /// Insertion-ordered key/value pairs, preserving semantic values and top-level key order.
     pub map: IndexMap<String, serde_yaml::Value>,
 }
 ```

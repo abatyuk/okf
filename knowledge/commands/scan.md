@@ -1,7 +1,7 @@
 ---
 type: Command
 title: okf scan
-description: Walks a bundle and reports the candidate files that would be analyzed, without loading them as concepts.
+description: Walks the physical bundle tree and reports every Markdown file without parsing concepts.
 group: check
 mutates: false
 implemented_by:
@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:06Z
 ---
 # okf scan
 
-Walks a bundle and reports the candidate files that would be analyzed, without loading them as concepts.
+Walks the physical bundle tree and reports every Markdown file, including reserved and Git-ignored files, without parsing concepts. Use `okf source-scan` for a general repository inventory.
 
 ## Arguments
 

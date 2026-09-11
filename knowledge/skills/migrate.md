@@ -1,13 +1,11 @@
 ---
 type: Skill
 title: okf:migrate skill
-description: Classifies each source document into an ontology concept type, writes conformant frontmatter, attributes the original as a typed source, and validates the result.
+description: Faithfully migrates authored or legacy documents into OKF v0.2 with standard sources, claim footnotes, and preserved extensions.
 trigger: convert existing docs into concepts
-uses:
-- /commands/add
-- /commands/edit
-- /commands/validate
+uses: [/commands/add, /commands/edit, /commands/validate, /commands/artifact-resolve]
 ---
 # okf:migrate skill
 
-Classifies each source document into an ontology concept type, writes conformant frontmatter, attributes the original as a typed source, and validates the result.
+Migrates documentation without inventing provenance, translates legacy fields only when their
+semantics are known, and keeps verification separate from migration.

@@ -1,15 +1,11 @@
 ---
 type: Skill
 title: okf:retrieval skill
-description: The primary consumer skill.
+description: Answers from a bundle through progressive disclosure, source lineage, bounded artifact retrieval, and explicit lifecycle, verification, and runtime caveats.
 trigger: answer questions from a bundle
-uses:
-- /commands/search
-- /commands/show
-- /commands/graph
-- /commands/backlinks
-- /commands/browse
+uses: [/commands/browse, /commands/search, /commands/show, /commands/artifact-show]
 ---
 # okf:retrieval skill
 
-The primary consumer skill. It follows the specification's progressive-disclosure path by browsing `index.md` directory by directory, then uses search for targeted discovery, show for selective concept loading, and graph/backlinks for relationships.
+The primary read-only consumer skill. It follows concepts, claim sources, and optional artifacts
+without bulk loading or confusing a verified computation definition with an attested run.

@@ -1,12 +1,12 @@
 # okf — an agent-agnostic harness for the Open Knowledge Format
 
-`okf` is a single Rust binary for working with [OKF](https://github.com/GoogleCloudPlatform/open-knowledge-format)
+`okf` is a single Rust binary for working with [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 bundles — directories of markdown-with-frontmatter "concepts". It is designed to be driven
 equally by **humans** (readable text output) and **agents** (line-delimited JSON), and is the
 deterministic "hands" beneath a set of agent skills that do the judgment work.
 
 - **Deterministic core** (`okf-core`) — parse, validate, lint, query, graph, fingerprint, render.
-- **Thin CLI** (`okf-cli`) — 28 commands, grouped by verb, with a machine-discoverable schema.
+- **Thin CLI** (`okf-cli`) — 35 commands, grouped by verb, with a machine-discoverable schema.
 - **Agent skills** (`plugins/okf/skills/`) — packaged as the **`okf` plugin** for Claude Code and Codex:
   migrate, ingest, update, retrieve, manage ontology, etc. (see [Agent plugins](#agent-plugins)).
 
@@ -28,7 +28,7 @@ Build without installing:
 cargo xtask build --release  # cargo build --release, then regenerate docs (binary: target/release/okf)
 cargo build --release        # plain build, no doc regeneration
 # optional network fingerprints for `url` sources:
-cargo build --release -p okf-core --features url-sources
+cargo build --release -p okf-cli --features url-sources
 ```
 
 Requires a recent stable Rust. `git` on `PATH` is needed only for git-based source kinds and
@@ -55,6 +55,8 @@ okf list mybundle                     # human table: id, type, trust tier, title
 okf list mybundle --json              # one JSON object per concept (NDJSON)
 okf validate mybundle                 # conformance only (exit 1 if nonconformant)
 okf lint mybundle                     # advisory findings (broken links, missing desc, …)
+okf doctor mybundle                   # compatibility preflight for existing bundles
+okf artifact list mybundle            # inspect optional references/ artifacts
 okf graph mybundle --format mermaid   # render the link graph
 okf docs mybundle --format index      # write progressive-disclosure index.md files
 ```
@@ -111,8 +113,8 @@ without hard-coding them.
 | Group | Commands |
 |-------|----------|
 | **meta** | `schema`, `version` |
-| **query** | `list`, `search`, `show`, `backlinks`, `graph`, `resolve`, `ontology list`, `ontology show` |
-| **check** | `scan`, `validate`, `lint`, `stale`, `affected`, `diff`, `stats` |
+| **query** | `list`, `search`, `show`, `backlinks`, `graph`, `resolve`, `artifact list/resolve/show`, `ontology list`, `ontology show` |
+| **check** | `scan`, `source-scan`, `validate`, `lint`, `doctor`, `stale`, `affected`, `diff`, `stats`, `computation check` |
 | **mutate** | `init`, `add`, `edit`, `mv`, `rm`, `verify`, `refresh`, `ontology add/update/remove` |
 | **render** | `docs` (`--format html\|md\|pdf\|graphml\|obsidian\|index`) |
 
@@ -121,9 +123,16 @@ Highlights:
 - **`validate` vs `lint`** — `validate` enforces only OKF's three conformance rules (parseable
   frontmatter, non-empty `type`, reserved-filename structure) and stays permissive about
   everything else. `lint` is where opinions live, with `error`/`warn`/`info` severities.
+- **`doctor`** uses a tolerant physical-tree scan to show conformance blockers and behavior
+  changes before an existing bundle adopts corrected v0.2 semantics. It is read-only unless
+  allow-listed `--fix-safe` repairs are explicitly confirmed.
+- **`artifact`** supports the optional `references/` convention and standard path-valued fields.
+  It distinguishes concepts, opaque files, URLs, scope descriptors, missing paths, and blocked
+  paths. Retrieval is bounded and never executes code.
 - **`mv`** rewrites every inbound link when it renames a concept (a concept's id *is* its path,
   so a naive move would break references).
-- **`edit`** losslessly changes both frontmatter and body. Frontmatter: `--set key=value`
+- **`edit`** changes both frontmatter and body while preserving unknown YAML values and key order.
+  YAML comments and scalar presentation may normalize. Frontmatter: `--set key=value`
   (scalar), `--unset key`, `--add key=value` (append a list item, idempotent), `--remove
   key=value` (drop list items). Body: `--set-body` / `--append-body` / `--clear-body`, or the
   section-aware `--set-section <heading> <text>` / `--append-section` / `--remove-section`
@@ -148,10 +157,14 @@ Highlights:
 
 Trust tiers are **derived**, never asserted: a concept's `verified` actors decide its tier
 (`human:` prefix → human-reviewed; other actors → machine-confirmed; none → unverified).
-Source drift uses **typed source kinds** (`git-commit`, `git-path`, `markdown-heading`,
+Source drift can additionally use **typed source kinds** (`git-commit`, `git-path`, `markdown-heading`,
 `line-range`, `file`, `url`) recorded in `sources[]` with a `kind` + `fingerprint`; `refresh`
 re-records them after you've reconciled a change. Git source paths resolve from the Git
 worktree root; file and text-excerpt source paths resolve from the bundle root.
+
+`kind` and `fingerprint` are tool extensions; a standard OKF source needs only `resource`.
+The optional `references/` directory may hold ordinary Markdown concepts or opaque artifacts
+such as SQL, Python, schemas, and run instructions. Use `okf artifact` to inspect the latter.
 
 ## Ontology
 
@@ -204,13 +217,14 @@ The skills are namespaced by the plugin in both agents:
 | Manage the ontology | `/okf:ontology` | `$okf:ontology` |
 | Infer an ontology | `/okf:infer-ontology` | `$okf:infer-ontology` |
 | Sync docs after changes | `/okf:update` | `$okf:update` |
-| Review & attest | `/okf:review-attest` | `$okf:review-attest` |
+| Review & verify documents | `/okf:review-verify` | `$okf:review-verify` |
+| Repair or upgrade a bundle | `/okf:repair` | `$okf:repair` |
 | Reorganize the tree | `/okf:reorganize` | `$okf:reorganize` |
 
 The skills drive the `okf` CLI, so install the binary too (`cargo install --path crates/okf-cli`,
 or `cargo xtask install`). Each skill bundles a generated `okf-cli-reference.md` it reads from its
-own directory, so it never has to probe the CLI to learn arguments. Run `cargo xtask docs --check`
-in CI to verify the generated references are current.
+own directory, so it never has to probe the CLI to learn arguments. Run `cargo xtask skills`
+and `cargo xtask docs --check` in CI to validate authored skill commands and generated references.
 
 ## Development
 

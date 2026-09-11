@@ -2,7 +2,7 @@
 type: 'DesignDecision'
 title: 'Check returns findings; the CLI decides the exit code'
 description: 'Core produces Findings with severities and never calls process::exit.'
-status: 'decided'
+decision_status: 'decided'
 affects:
   - /components/check
   - /components/okf-cli

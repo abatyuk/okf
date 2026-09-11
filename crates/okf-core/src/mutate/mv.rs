@@ -14,8 +14,8 @@
 //!    links are location-independent and untouched).
 //! 3. **Move.** The file is written at its new path and the old file removed.
 //!
-//! Every touched file is rewritten through the lossless [`write_concept`] path, so unknown
-//! frontmatter keys, key order and untouched body text survive byte-for-byte.
+//! Every touched file is rewritten through [`write_concept`], so unknown frontmatter values,
+//! key order, and untouched body text survive; YAML comments/presentation may normalize.
 use std::path::{Path, PathBuf};
 
 use pulldown_cmark::{Event, Parser, Tag};
@@ -45,16 +45,16 @@ pub struct MvResult {
 /// Move/rename the concept `old_id` to `new_id` in the bundle at `root`, rewriting every
 /// inbound link and rebasing the moved file's own relative links.
 pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
-    let old = ConceptId::from_relative(old_id);
-    let new = ConceptId::from_relative(new_id);
+    let old = ConceptId::parse(old_id)?;
+    let new = ConceptId::parse(new_id)?;
     if old == new {
         return Err(OkfError::Usage(
             "mv: old and new ids are the same".to_string(),
         ));
     }
 
-    let old_path = id_to_path(root, &old);
-    let new_path = id_to_path(root, &new);
+    let old_path = id_to_path(root, &old)?;
+    let new_path = id_to_path(root, &new)?;
     if !old_path.exists() {
         return Err(OkfError::Usage(format!("mv: no concept at {old}")));
     }
@@ -149,6 +149,37 @@ where
             }
         }
     }
+    // Standard OKF path-valued fields are understood without an ontology.
+    if let Some(Value::Sequence(sources)) = concept.frontmatter.map.get_mut("sources") {
+        for source in sources {
+            if let Some(resource) = source
+                .as_mapping_mut()
+                .and_then(|m| m.get_mut(Value::String("resource".to_string())))
+            {
+                if rewrite_in_value(resource, rewrite) {
+                    changed = true;
+                }
+            }
+        }
+    }
+    if let Some(value) = concept.frontmatter.map.get_mut("computation") {
+        if rewrite_in_value(value, rewrite) {
+            changed = true;
+        }
+    }
+    for family in ["executor", "attester"] {
+        if let Some(resource) = concept
+            .frontmatter
+            .map
+            .get_mut(family)
+            .and_then(Value::as_mapping_mut)
+            .and_then(|m| m.get_mut(Value::String("resource".to_string())))
+        {
+            if rewrite_in_value(resource, rewrite) {
+                changed = true;
+            }
+        }
+    }
     let (new_body, body_changed) = rewrite_in_body(&concept.body, rewrite);
     if body_changed {
         concept.body = new_body;
@@ -211,7 +242,7 @@ where
     if edits.is_empty() {
         return (body.to_string(), false);
     }
-    edits.sort_by(|a, b| b.0.cmp(&a.0));
+    edits.sort_by_key(|edit| std::cmp::Reverse(edit.0));
     let mut out = body.to_string();
     for (start, end, replacement) in edits {
         out.replace_range(start..end, &replacement);
@@ -229,7 +260,10 @@ fn rewrite_link_string(from: &ConceptId, raw: &str, target: &ConceptId) -> Strin
     let rebuilt_core = match classify(raw) {
         LinkKind::Relative => relative_path(parent_dir(&from.0), &target.0),
         LinkKind::BundleRelative => format!("/{target_bare}"),
-        LinkKind::Bare => target_bare.to_string(),
+        LinkKind::Bare => {
+            let relative = relative_path(parent_dir(&from.0), &target.0);
+            relative.strip_prefix("./").unwrap_or(&relative).to_string()
+        }
         LinkKind::External => return raw.to_string(),
     };
 

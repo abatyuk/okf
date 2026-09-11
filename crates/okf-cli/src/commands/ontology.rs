@@ -88,6 +88,11 @@ pub fn run_show(args: &OntShowArgs, json: bool) -> Result<i32> {
 
 /// `okf ontology add <name> [bundle] [--description] [--field ...] [--ref ...] [--attested]`.
 pub fn run_add(args: &OntEditArgs, json: bool) -> Result<i32> {
+    if args.attested && args.name != "Attested Computation" {
+        return Err(OkfError::Usage(
+            "--attested is reserved for the exact OKF type `Attested Computation`".to_string(),
+        ));
+    }
     let root = resolve_bundle(args.bundle.as_deref())?;
     let mut ontology = load_or_default(&root)?;
     if !args.remove_field.is_empty() || !args.remove_reference.is_empty() {
@@ -116,6 +121,11 @@ pub fn run_add(args: &OntEditArgs, json: bool) -> Result<i32> {
 
 /// `okf ontology update <name> [bundle] ...` — modify an existing concept type in place.
 pub fn run_update(args: &OntEditArgs, json: bool) -> Result<i32> {
+    if args.attested && args.name != "Attested Computation" {
+        return Err(OkfError::Usage(
+            "--attested is reserved for the exact OKF type `Attested Computation`".to_string(),
+        ));
+    }
     let root = resolve_bundle(args.bundle.as_deref())?;
     let mut ontology = require_ontology(&root)?;
     if !ontology.concepts.contains_key(&args.name) {

@@ -3,6 +3,7 @@
 //! Tasks:
 //!   docs            Regenerate the schema-derived docs (writes files).
 //!   docs --check    Verify they are up to date; exit 1 if regeneration would change anything.
+//!   skills          Validate authored skills against the current CLI schema and generated docs.
 //!   build [args…]   `cargo build [args…]`, then regenerate the docs.
 //!   install         `cargo install --path crates/okf-cli --force`, then regenerate the docs.
 //!
@@ -30,6 +31,10 @@ fn main() {
     let root = repo_root();
     match task {
         Some("docs") => run_docs(check),
+        Some("skills") => {
+            run_skill_checks();
+            run_docs(true);
+        }
         Some("build") => {
             let mut cargo_args = vec!["build"];
             cargo_args.extend(args[1..].iter().map(String::as_str));
@@ -41,7 +46,7 @@ fn main() {
             run_docs(false);
         }
         _ => {
-            eprintln!("usage: cargo xtask <docs [--check] | build [args…] | install>");
+            eprintln!("usage: cargo xtask <docs [--check] | skills | build [args…] | install>");
             std::process::exit(2);
         }
     }
@@ -104,7 +109,10 @@ fn run_docs(check: bool) {
         if stale.is_empty() {
             println!("docs: up to date ({} artifacts)", artifacts.len());
         } else {
-            eprintln!("docs: {} stale artifact(s); run `cargo xtask docs`:", stale.len());
+            eprintln!(
+                "docs: {} stale artifact(s); run `cargo xtask docs`:",
+                stale.len()
+            );
             for p in stale {
                 eprintln!("  {}", rel(&root, p));
             }
@@ -147,7 +155,9 @@ fn skill_dirs(root: &Path) -> Vec<PathBuf> {
 /// Run `okf schema --json` and parse the NDJSON stream.
 fn schema_records(root: &Path) -> Vec<Value> {
     let out = Command::new(env!("CARGO"))
-        .args(["run", "-q", "-p", "okf-cli", "--bin", "okf", "--", "schema", "--json"])
+        .args([
+            "run", "-q", "-p", "okf-cli", "--bin", "okf", "--", "schema", "--json",
+        ])
         .current_dir(root)
         .output()
         .expect("run okf schema");
@@ -217,7 +227,11 @@ fn args_table(cmd: &Value) -> String {
         "|----------|------|----------|-------------|".to_string(),
     ];
     for a in &args {
-        let req = if a["required"].as_bool().unwrap_or(false) { "yes" } else { "no" };
+        let req = if a["required"].as_bool().unwrap_or(false) {
+            "yes"
+        } else {
+            "no"
+        };
         rows.push(format!(
             "| {} | {} | {} | {} |",
             flag_display(a),
@@ -238,7 +252,11 @@ fn cli_reference(header: &Value, commands: &[&Value]) -> String {
         header["tool_version"].as_str().unwrap_or("?"),
         header["okf_spec"]
             .as_array()
-            .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", "))
+            .map(|a| a
+                .iter()
+                .filter_map(Value::as_str)
+                .collect::<Vec<_>>()
+                .join(", "))
             .unwrap_or_default()
     ));
     out.push_str(
@@ -263,8 +281,15 @@ fn cli_reference(header: &Value, commands: &[&Value]) -> String {
         in_group.sort_by_key(|c| c["name"].as_str().unwrap_or(""));
         out.push_str(&format!("## {g}\n\n"));
         for c in in_group {
-            let mutates = if c["mutates"].as_bool().unwrap_or(false) { " · _mutates_" } else { "" };
-            out.push_str(&format!("### `okf {}`{mutates}\n\n", c["name"].as_str().unwrap()));
+            let mutates = if c["mutates"].as_bool().unwrap_or(false) {
+                " · _mutates_"
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "### `okf {}`{mutates}\n\n",
+                c["name"].as_str().unwrap()
+            ));
             if let Some(s) = c["summary"].as_str() {
                 if !s.is_empty() {
                     out.push_str(&format!("{}.\n\n", s.trim_end_matches('.')));
@@ -293,4 +318,364 @@ fn replace_section(body: &str, heading: &str, new_block: &str) -> String {
         base.trim_end_matches('\n'),
         new_block.trim_end_matches('\n')
     )
+}
+
+/// Validate canonical skill metadata and every backticked `okf ...` command against the schema.
+/// This deliberately checks executable snippets rather than prose wording.
+fn run_skill_checks() {
+    let root = repo_root();
+    let records = schema_records(&root);
+    let commands: Vec<&Value> = records.iter().filter(|r| r["kind"] == "command").collect();
+    let mut errors = Vec::new();
+    let dirs = skill_dirs(&root);
+
+    for dir in &dirs {
+        let path = dir.join("SKILL.md");
+        let body = std::fs::read_to_string(&path).expect("read skill");
+        let rel_path = rel(&root, &path);
+        validate_frontmatter(dir, &body, &rel_path, &mut errors);
+
+        for snippet in inline_code(&body)
+            .into_iter()
+            .filter(|code| code.trim_start().starts_with("okf "))
+        {
+            validate_command(&snippet, &commands, &rel_path, &mut errors);
+        }
+
+        if body.contains("review-attest") {
+            errors.push(format!(
+                "{rel_path}: uses retired review-attest terminology"
+            ));
+        }
+        if !body.contains("references/") {
+            errors.push(format!(
+                "{rel_path}: must state how the optional references/ convention is handled"
+            ));
+        }
+    }
+
+    let required = ["repair", "review-verify"];
+    for name in required {
+        if !root
+            .join("plugins/okf/skills")
+            .join(name)
+            .join("SKILL.md")
+            .exists()
+        {
+            errors.push(format!("missing canonical {name} skill"));
+        }
+    }
+    if root
+        .join("plugins/okf/skills/review-attest/SKILL.md")
+        .exists()
+    {
+        errors.push("retired review-attest skill still exists".into());
+    }
+    validate_scenario_checklists(&root, &dirs, &mut errors);
+
+    if errors.is_empty() {
+        println!(
+            "skills: valid ({} skills; command snippets match okf schema)",
+            dirs.len()
+        );
+    } else {
+        eprintln!("skills: {} error(s)", errors.len());
+        for error in errors {
+            eprintln!("  {error}");
+        }
+        std::process::exit(1);
+    }
+}
+
+fn validate_scenario_checklists(root: &Path, dirs: &[PathBuf], errors: &mut Vec<String>) {
+    let scenarios: Value = serde_json::from_str(include_str!("../skill-scenarios.json"))
+        .expect("valid skill scenario checklist JSON");
+    let entries = scenarios.as_array().expect("skill scenarios are an array");
+    let mut seen = Vec::new();
+
+    for entry in entries {
+        let name = entry["skill"].as_str().unwrap_or("");
+        if name.is_empty() || seen.contains(&name) {
+            errors.push(format!(
+                "skill scenario has empty or duplicate name `{name}`"
+            ));
+            continue;
+        }
+        seen.push(name);
+        let path = root.join("plugins/okf/skills").join(name).join("SKILL.md");
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            errors.push(format!("skill scenario references missing skill `{name}`"));
+            continue;
+        };
+
+        let expected = entry["expected_commands"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        if expected.is_empty() {
+            errors.push(format!("{name}: scenario has no expected commands"));
+        }
+        for command in expected.iter().filter_map(Value::as_str) {
+            if !body.contains(command) {
+                errors.push(format!(
+                    "{name}: scenario expects command `{command}` to be taught"
+                ));
+            }
+        }
+
+        let prohibited = entry["prohibited_claims"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        if prohibited.is_empty() {
+            errors.push(format!("{name}: scenario has no prohibited claims"));
+        }
+        for claim in prohibited.iter().filter_map(Value::as_str) {
+            if body.to_lowercase().contains(&claim.to_lowercase()) {
+                errors.push(format!("{name}: contains prohibited claim `{claim}`"));
+            }
+        }
+
+        if entry["mutation_boundary"]
+            .as_str()
+            .is_none_or(str::is_empty)
+        {
+            errors.push(format!("{name}: scenario lacks a mutation boundary"));
+        }
+        if entry["report_contains"]
+            .as_array()
+            .is_none_or(Vec::is_empty)
+        {
+            errors.push(format!("{name}: scenario lacks report requirements"));
+        }
+    }
+
+    if entries.len() != dirs.len() {
+        errors.push(format!(
+            "skill scenarios cover {} entries but {} canonical skills exist",
+            entries.len(),
+            dirs.len()
+        ));
+    }
+    for dir in dirs {
+        let name = dir
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("");
+        if !seen.contains(&name) {
+            errors.push(format!("{name}: missing skill scenario checklist"));
+        }
+    }
+}
+
+fn validate_frontmatter(dir: &Path, body: &str, path: &str, errors: &mut Vec<String>) {
+    let mut lines = body.lines();
+    if lines.next() != Some("---") {
+        errors.push(format!("{path}: missing opening frontmatter delimiter"));
+        return;
+    }
+    let mut frontmatter = Vec::new();
+    let mut closed = false;
+    for line in lines.by_ref() {
+        if line == "---" {
+            closed = true;
+            break;
+        }
+        frontmatter.push(line);
+    }
+    if !closed {
+        errors.push(format!("{path}: missing closing frontmatter delimiter"));
+        return;
+    }
+    let name = frontmatter
+        .iter()
+        .find_map(|line| line.strip_prefix("name:").map(str::trim));
+    let description = frontmatter
+        .iter()
+        .find_map(|line| line.strip_prefix("description:").map(str::trim));
+    let expected = dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if name != Some(expected) {
+        errors.push(format!(
+            "{path}: frontmatter name {:?} does not match directory {expected}",
+            name
+        ));
+    }
+    if description.is_none_or(str::is_empty) {
+        errors.push(format!("{path}: missing non-empty description"));
+    }
+}
+
+fn inline_code(markdown: &str) -> Vec<String> {
+    let mut code = Vec::new();
+    let mut rest = markdown;
+    while let Some(start) = rest.find('`') {
+        rest = &rest[start + 1..];
+        if rest.starts_with("``") {
+            // Skills currently use no fenced command examples; skip fence markers defensively.
+            rest = &rest[2..];
+            continue;
+        }
+        let Some(end) = rest.find('`') else { break };
+        code.push(rest[..end].to_string());
+        rest = &rest[end + 1..];
+    }
+    code
+}
+
+fn validate_command(snippet: &str, commands: &[&Value], path: &str, errors: &mut Vec<String>) {
+    let tokens: Vec<&str> = snippet.split_whitespace().collect();
+    if tokens.first() != Some(&"okf") {
+        return;
+    }
+
+    let matched = commands
+        .iter()
+        .filter_map(|command| {
+            let parts: Vec<&str> = command["name"].as_str()?.split_whitespace().collect();
+            (tokens.get(1..1 + parts.len()) == Some(parts.as_slice())).then_some((*command, parts))
+        })
+        .max_by_key(|(_, parts)| parts.len());
+    let Some((command, command_parts)) = matched else {
+        errors.push(format!("{path}: unknown command snippet `{snippet}`"));
+        return;
+    };
+
+    let args = command["args"].as_array().cloned().unwrap_or_default();
+    let positionals: Vec<&Value> = args
+        .iter()
+        .filter(|arg| arg["kind"] == "positional")
+        .collect();
+    let required_positionals = positionals
+        .iter()
+        .filter(|arg| arg["required"].as_bool().unwrap_or(false))
+        .count();
+    let mut positional_tokens = Vec::new();
+    let mut index = 1 + command_parts.len();
+
+    while index < tokens.len() {
+        let token = tokens[index].trim_matches(|c: char| c == ',' || c == '.' || c == ';');
+        if token.starts_with("--") {
+            let flag = token
+                .trim_start_matches("--")
+                .split('=')
+                .next()
+                .unwrap_or("")
+                .replace('-', "_");
+            if flag == "json" {
+                index += 1;
+                continue;
+            }
+            let arg = args.iter().find(|arg| arg["name"] == flag);
+            let Some(arg) = arg else {
+                errors.push(format!("{path}: unknown flag `{token}` in `{snippet}`"));
+                index += 1;
+                continue;
+            };
+            if arg["type"] != "bool" && !token.contains('=') {
+                index += 1;
+            }
+        } else {
+            positional_tokens.push(token);
+        }
+        index += 1;
+    }
+
+    if !positional_tokens.is_empty() && positional_tokens.len() < required_positionals {
+        errors.push(format!(
+            "{path}: too few positional arguments in `{snippet}`"
+        ));
+    }
+    for (position, token) in positional_tokens.iter().enumerate() {
+        if position >= positionals.len() {
+            errors.push(format!(
+                "{path}: too many positional arguments in `{snippet}`"
+            ));
+            break;
+        }
+        let Some(placeholder) = placeholder_name(token) else {
+            continue;
+        };
+        let expected = positionals[position]["name"].as_str().unwrap_or("");
+        if placeholder != expected {
+            errors.push(format!(
+                "{path}: positional `{token}` is in slot {}, expected <{expected}> in `{snippet}`",
+                position + 1
+            ));
+        }
+    }
+}
+
+fn placeholder_name(token: &str) -> Option<&str> {
+    let inner = token
+        .strip_prefix('<')
+        .and_then(|value| value.strip_suffix('>'))
+        .or_else(|| {
+            token
+                .strip_prefix('[')
+                .and_then(|value| value.strip_suffix(']'))
+        })?;
+    Some(match inner {
+        "concept-id" => "concept",
+        "git-ref" => "git_ref",
+        "old-id" => "old",
+        "new-id" => "new",
+        "source-directory" => "directory",
+        other => other,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn backlinks() -> Value {
+        json!({
+            "kind": "command",
+            "name": "backlinks",
+            "args": [
+                {"name": "concept", "kind": "positional", "required": true},
+                {"name": "bundle", "kind": "positional", "required": false}
+            ]
+        })
+    }
+
+    #[test]
+    fn skill_command_check_accepts_schema_order() {
+        let command = backlinks();
+        let mut errors = Vec::new();
+        validate_command(
+            "okf backlinks <concept-id> <bundle>",
+            &[&command],
+            "skill",
+            &mut errors,
+        );
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn skill_command_check_rejects_bundle_first_order() {
+        let command = backlinks();
+        let mut errors = Vec::new();
+        validate_command(
+            "okf backlinks <bundle> <concept-id>",
+            &[&command],
+            "skill",
+            &mut errors,
+        );
+        assert!(errors.iter().any(|error| error.contains("slot 1")));
+    }
+
+    #[test]
+    fn skill_command_check_rejects_unknown_flags() {
+        let command = backlinks();
+        let mut errors = Vec::new();
+        validate_command(
+            "okf backlinks <concept-id> --not-real",
+            &[&command],
+            "skill",
+            &mut errors,
+        );
+        assert!(errors.iter().any(|error| error.contains("unknown flag")));
+    }
 }

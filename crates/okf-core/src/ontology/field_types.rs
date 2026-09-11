@@ -132,7 +132,9 @@ fn overlay_field(ontology: &Ontology, field: &Field, ty: &mut ResolvedType) -> R
     }
     if let Some(item_name) = &field.item {
         let mut chain = Vec::new();
-        ty.item = Some(Box::new(resolve_type_name(ontology, item_name, &mut chain)?));
+        ty.item = Some(Box::new(resolve_type_name(
+            ontology, item_name, &mut chain,
+        )?));
     }
     if let Some(fields) = &field.fields {
         let mut chain = Vec::new();

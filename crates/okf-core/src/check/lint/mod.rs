@@ -118,6 +118,7 @@ pub struct LintConfig {
     pub missing_description: Severity,
     pub orphan: Severity,
     pub ontology_violation: Severity,
+    pub spec_v02: Severity,
 }
 
 impl Default for LintConfig {
@@ -128,6 +129,7 @@ impl Default for LintConfig {
             missing_description: Severity::Info,
             orphan: Severity::Info,
             ontology_violation: Severity::Warn,
+            spec_v02: Severity::Warn,
         }
     }
 }
@@ -163,6 +165,7 @@ pub fn lint_bundle(
     findings.extend(rules::missing_description::run(&ctx));
     findings.extend(rules::orphan::run(&ctx));
     findings.extend(rules::ontology_violation::run(&ctx));
+    findings.extend(rules::spec_v02::run(&ctx));
     findings
 }
 

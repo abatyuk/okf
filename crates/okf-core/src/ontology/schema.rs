@@ -232,7 +232,7 @@ impl Target {
 
     /// True if `ty` is one of the allowed targets.
     pub fn allows(&self, ty: &str) -> bool {
-        self.types().iter().any(|t| *t == ty)
+        self.types().contains(&ty)
     }
 }
 
@@ -268,7 +268,7 @@ impl Cardinality {
 
     /// True if a count of `n` links satisfies this cardinality.
     pub fn permits(self, n: usize) -> bool {
-        n >= self.min() && self.max().map_or(true, |m| n <= m)
+        n >= self.min() && self.max().is_none_or(|m| n <= m)
     }
 
     pub fn as_str(self) -> &'static str {

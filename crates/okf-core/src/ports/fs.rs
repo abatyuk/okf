@@ -32,7 +32,11 @@ impl FakeFs {
     }
 
     /// Builder-style seed of a file.
-    pub fn with_file(mut self, path: impl Into<std::path::PathBuf>, bytes: impl Into<Vec<u8>>) -> Self {
+    pub fn with_file(
+        mut self,
+        path: impl Into<std::path::PathBuf>,
+        bytes: impl Into<Vec<u8>>,
+    ) -> Self {
         self.files.insert(path.into(), bytes.into());
         self
     }

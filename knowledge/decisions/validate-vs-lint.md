@@ -2,7 +2,7 @@
 type: 'DesignDecision'
 title: 'validate is conformance; lint is opinion'
 description: 'validate enforces only OKF''s three hard rules and stays permissive about everything else.'
-status: 'decided'
+decision_status: 'decided'
 affects:
   - /components/check
 ---

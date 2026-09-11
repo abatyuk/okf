@@ -96,11 +96,15 @@ fn concept_record_mirrors_frontmatter_plus_computed() {
     assert_eq!(obj.get("trust_tier").unwrap(), "human-reviewed");
     // Frontmatter mirrored verbatim.
     assert_eq!(obj.get("type").unwrap(), "BigQuery Table");
-    assert_eq!(obj.get("tags").unwrap(), &serde_json::json!(["sales", "core"]));
-    // id comes first, trust_tier last, frontmatter order preserved in between.
+    assert_eq!(
+        obj.get("tags").unwrap(),
+        &serde_json::json!(["sales", "core"])
+    );
+    // id comes first; frontmatter order is preserved before computed semantic views.
     let keys: Vec<&str> = obj.keys().map(String::as_str).collect();
     assert_eq!(keys.first(), Some(&"id"));
-    assert_eq!(keys.last(), Some(&"trust_tier"));
+    assert!(keys.contains(&"effective_status"));
+    assert!(keys.contains(&"verification_current"));
     let type_pos = keys.iter().position(|k| *k == "type").unwrap();
     let title_pos = keys.iter().position(|k| *k == "title").unwrap();
     assert!(type_pos < title_pos, "frontmatter order preserved");

@@ -1,7 +1,7 @@
 //! Order-preserving, unknown-key-preserving frontmatter — the round-trip linchpin.
 //!
 //! Backed by `indexmap::IndexMap<String, serde_yaml::Value>` so key order and unknown
-//! keys survive read → write byte-stable, and so the NDJSON `concept` record can mirror
+//! keys survive read → write semantically and in top-level order, and so NDJSON can mirror
 //! the frontmatter verbatim.
 use indexmap::IndexMap;
 use serde_yaml::Value;
@@ -10,13 +10,15 @@ use serde_yaml::Value;
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Frontmatter {
     /// Insertion-ordered key/value pairs, preserving the on-disk order and any
-    /// unknown keys verbatim.
+    /// unknown keys and values. YAML comments/scalar presentation are not represented.
     pub map: IndexMap<String, Value>,
 }
 
 impl Frontmatter {
     pub fn new() -> Self {
-        Self { map: IndexMap::new() }
+        Self {
+            map: IndexMap::new(),
+        }
     }
 
     pub fn from_map(map: IndexMap<String, Value>) -> Self {

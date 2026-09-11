@@ -1,72 +1,63 @@
 ---
 name: init
-description: Use this when the user wants to start a new OKF bundle from scratch — "initialize an OKF bundle", "scaffold a knowledge base", "set up a new okf bundle", "create the ontology and first concepts". Bootstraps an empty bundle, establishes an ontology.yaml, and scaffolds the first concept documents from the ontology's concept types. Not for importing existing docs (use okf:migrate/okf:ingest) or restructuring an existing bundle (use okf:reorganize).
+description: Start a new OKF v0.2 bundle, optionally define a tool-local ontology, and scaffold initial concepts or exact Attested Computations. Use for new bundles; use migrate or ingest for existing material and repair for an existing KB.
 ---
 
 # Initialize an OKF bundle
 
-The Rust CLI does the deterministic scaffolding (`okf init`, `okf add`, `okf ontology`).
-Your job is the judgment: what domain this bundle covers, which concept types it needs,
-and the prose in each first concept.
+Use the CLI for deterministic writes and checks. Decide the domain, portable concept content,
+and any optional local modeling with the user.
 
-## Tool discipline
-**CLI argument reference (read first).** This skill bundles the full argument list for every `okf` command as `okf-cli-reference.md` in **this skill's own directory** — read it there (the skill's absolute directory is provided to you when the skill loads; equivalently `${CLAUDE_SKILL_DIR}/okf-cli-reference.md`). Consult it to learn a command's flags; do **not** run `okf <cmd> --help` or `okf schema` just to discover arguments. Every command also takes global `--json` and an optional trailing `bundle` positional.
+## CLI and bundle access
 
-Discover and inspect everything in the bundle **only through the `okf` CLI** — `okf browse`, `okf search`,
-`okf list`, `okf show`, `okf graph`, `okf backlinks`, `okf resolve`, `okf stats` (add `--json`
-when parsing). Do **not** use Glob, Grep, `find`, or generic file-content search over the
-bundle: the CLI provides structural indexes and targeted queries, so grepping it is
-wasteful and defeats the design. Read a bundle markdown file directly **only when you already
-know its exact path** (from `okf resolve` or an `okf show --json` record), and prefer
-`okf show` over a raw read. When a raw read is unavoidable, read the **narrowest slice** needed
-— a known line range, a section/heading, or a named symbol — never the whole file speculatively.
-For a large concept, run `okf show <concept-id> <bundle> --outline` first, then fetch only the
-relevant inclusive range with `okf show <concept-id> <bundle> --lines <START:END>`.
+Read `okf-cli-reference.md` in this skill directory before choosing flags. It is generated from
+`okf schema`; do not rediscover arguments with help calls. In multi-step work, set
+`OKF_BUNDLE` once. One fully qualified example is `okf add notes/hello <bundle> --type Note`.
 
-## Steps
+Inspect bundle content through `okf browse`, `okf search`, `okf list`, and targeted `okf show`.
+For a large concept, use `okf show <concept-id> <bundle> --outline` followed by `--lines`.
 
-1. **Create the bundle.** Run `okf init <bundle>` to create an empty OKF bundle in the
-   target directory (default `.`). This lays down the base structure; it does not invent
-   concepts.
+## Portable OKF versus local policy
 
-2. **Establish the ontology.** Decide the concept types the bundle needs with the user.
-   - If the user has no ontology in mind, propose a small starter set of concept types
-     (each key is the OKF `type` string verbatim — quote types with spaces, e.g.
-     `"BigQuery Table"`). Confirm names and required fields before writing.
-   - Commit each type deterministically via `okf ontology add <name> --field <k>=<type> ...
-     --ref <key>=<target>:<cardinality> ...`. Cardinality vocabulary is `0..1`, `1..1`,
-     `0..n`, `1..n`. Mark attested types (`attested: true`) so `okf add --attested`
-     scaffolds them as OKF Attested Computations.
-   - Inspect what you defined with `okf ontology list` and `okf ontology show <name>`.
-   - If the user already has an `ontology.yaml`, skip authoring and just verify it loads.
+- Required for bundle conformance: parseable frontmatter, non-empty `type`, and valid reserved
+  `index.md`/`log.md` structures. Unknown custom type strings are valid.
+- Recommended: `title`, `description`, applicable `resource`, `tags`, useful Markdown structure,
+  and absolute bundle-relative concept links.
+- Optional with defined semantics: `sources`, `generated`, `verified`, lifecycle fields, and the
+  Attested Computation family.
+- `ontology.yaml`, source `kind`/`fingerprint`, and sync metadata are tool extensions. Ontology
+  lint is advisory and never changes OKF conformance.
 
-3. **Scaffold the first concepts.** For each concept the user wants to seed, run
-   `okf add <path> --type <Type> --title "…" --description "…"`. `add` pulls required
-   fields and reference keys from the ontology, so the frontmatter starts conformant.
-   Use `--attested` for attested computation types.
-   - Example: `okf add policies/travel_expenses --type Policy --title "Travel and expense
-     policy" --description "Rules and reimbursement rates for business travel."`
-   - Write the initial prose body for each concept yourself. Keep it short and truthful;
-     do not fabricate specifics the user hasn't provided.
+## Workflow
 
-4. **Wire references.** Where the ontology defines reference rules (e.g. a `Policy`
-   references `Computation`), set the linking frontmatter keys with
-   `okf edit <concept-id> --set <key>=<value>` so the graph is connected from the start.
+1. Run `okf init <bundle>`. Confirm that its root index is structurally valid with
+   `okf validate <bundle>`; an empty bundle still needs a non-empty `#` heading when indexed.
+2. If local type rules add value, define them with `okf ontology add <name> <bundle>` and inspect
+   them with `okf ontology show <name> <bundle>`. Do not present this sidecar as an OKF registry
+   or requirement. Keep exact type strings; unknown types remain portable.
+3. Create ordinary concepts with `okf add <path> <bundle> --type <Type>`. Add grounded title,
+   description, prose, and sources. If generation provenance is desired, pass the actual actor
+   with `--generated-by`; never label agent-authored material `human:<id>`.
+4. For a standard computation, use exact `type: Attested Computation` via `okf add <path>
+   <bundle> --attested --runtime <runtime>` and declare parameters. Choose exactly one sanctioned
+   computation form: `--computation <resource>` or `--inline-computation <text-or-@file>`.
+   Executor, receipt, and attester resources describe a contract; creating or reading it does
+   not authorize execution. `okf computation check <concept-id> <bundle>` only inspects it.
+5. Add portable Markdown links for relationships. Ontology references may supplement them.
+6. Run `okf validate <bundle>`, then advisory `okf lint <bundle> --fail-on never`. Generate
+   indexes with `okf docs <bundle> --format index` and confirm them with `okf browse <bundle>`.
 
-5. **Check conformance and opinions.**
-   - `okf validate <bundle>` — must pass (the spec's three hard rules). Fix any failure.
-   - `okf lint <bundle>` — advisory. Resolve or consciously accept broken links / missing
-     descriptions / ontology violations. Lint findings are opinions, not blockers.
+## Optional `references/`
 
-6. **Generate progressive-disclosure indexes.** Run `okf docs <bundle> --format index` to
-   write `index.md` files, then verify the root view with `okf browse <bundle>`.
+Create `references/` only when the user wants authorized local supporting material in the
+bundle. It is an optional naming convention, not a conformance profile. Markdown files there
+are ordinary concepts; SQL, Python, schemas, run instructions, and binaries are opaque artifacts.
+Record the declaring concept and original provenance. Prefer a URL when material should not be
+mirrored. Use `okf artifact list <bundle>` and `okf artifact resolve <resource> <bundle> --from
+<concept-id>`; retrieve only bounded text with `okf artifact show <resource> <bundle> --lines
+<START:END> --max-bytes <N>`.
+Local resolution must stay inside the bundle after symlinks; remote fetch requires explicit
+authorization and policy. Artifact inspection never grants execution authority.
 
-7. **Report.** Summarize the bundle path, the ontology types created, and the concepts
-   scaffolded. Point the user at `okf:migrate`/`okf:ingest` to bring in existing material.
-
-## Guardrails
-- Keep the human in the loop on type names and required fields — these are subjective and
-  hard to change later without churn.
-- Never hand-edit `ontology.yaml`; always go through `okf ontology` so it stays valid and
-  lossless.
-- Prefer `--json` (NDJSON) output when you need to parse results programmatically.
+Report the bundle, types, concepts, computation contracts, validation result, and separately
+accepted lint guidance.

@@ -1,7 +1,9 @@
 //! Read-only lookups.
+pub mod artifact;
 pub mod browse;
+pub mod computation;
+pub mod diff;
+pub mod resolve;
 pub mod search;
 pub mod show;
-pub mod resolve;
 pub mod stats;
-pub mod diff;

@@ -1,7 +1,7 @@
 ---
 type: Command
 title: okf stale
-description: 'Drift detection: compares recorded source fingerprints against recomputed ones (plus any stale_after date) to find concepts whose sources have moved.'
+description: 'Detects extension fingerprint drift and lifecycle expiry using offset-aware, inclusive stale_after comparison.'
 group: check
 mutates: false
 implemented_by:
@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # okf stale
 
-Drift detection: compares recorded source fingerprints against recomputed ones (plus any stale_after date) to find concepts whose sources have moved.
+Compares recorded source fingerprint extensions against recomputed values and applies exact `now >= stale_after` lifecycle semantics with explicit-offset instant parsing.
 
 ## Arguments
 

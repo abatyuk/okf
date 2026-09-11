@@ -69,12 +69,15 @@ okf-core/src/
   check/
     validate.rs       # the 3 conformance rules ONLY
     stale.rs          # drift = recorded vs recomputed fingerprint (+ stale_after)
+    doctor.rs         # tolerant upgrade preflight + allow-listed safe repair
     lint/
       mod.rs          # rule engine, Severity, Finding, --fail-on threshold
       rules/          # broken_link, missing_description, ontology_violation, orphan, …
 
   query/
     browse.rs         # index.md traversal; synthesize a directory view when absent
+    artifact.rs       # references/ + general path resolution and bounded retrieval
+    computation.rs    # Attested Computation contract inspection (never execution)
     search.rs         # search + list (list = search, no filter)
     show.rs
     resolve.rs        # link/id → path

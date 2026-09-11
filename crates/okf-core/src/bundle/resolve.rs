@@ -58,7 +58,12 @@ mod tests {
         let dir = tempdir();
         fs::write(dir.path().join("okf.toml"), "bundle = \"kb\"").unwrap();
         // arg points at the tempdir itself; config would point at a missing `kb`.
-        let got = resolve_with(Some(dir.path().to_str().unwrap()), Some("/nope"), dir.path()).unwrap();
+        let got = resolve_with(
+            Some(dir.path().to_str().unwrap()),
+            Some("/nope"),
+            dir.path(),
+        )
+        .unwrap();
         assert_eq!(got, dir.path());
     }
 

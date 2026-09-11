@@ -29,8 +29,8 @@ pub struct RmResult {
 /// Remove the concept `id` from the bundle at `root`. Refuses (error) if backlinks exist and
 /// `force` is false.
 pub fn rm(root: &Path, id: &str, force: bool) -> Result<RmResult> {
-    let cid = ConceptId::from_relative(id);
-    let path = id_to_path(root, &cid);
+    let cid = ConceptId::parse(id)?;
+    let path = id_to_path(root, &cid)?;
     if !path.exists() {
         return Err(OkfError::Usage(format!(
             "cannot remove: no concept at {}",

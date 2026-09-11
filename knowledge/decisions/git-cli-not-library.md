@@ -2,7 +2,7 @@
 type: 'DesignDecision'
 title: 'Git via the CLI, not a library'
 description: 'Git operations shell out to the git CLI through the git port, with no gix or git2 or libgit2 build step.'
-status: 'resolved'
+decision_status: 'resolved'
 affects:
   - /components/fingerprint
   - /components/ports
