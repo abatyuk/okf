@@ -8,4 +8,7 @@ affects:
 ---
 # validate is conformance; lint is opinion
 
-validate enforces only OKF's three hard rules and stays permissive about everything else. lint is where opinions live, with error/warn/info severities, so conformance and taste never get conflated.
+[okf validate](../commands/validate.md) enforces only OKF's three hard rules and stays
+permissive about everything else. [okf lint](../commands/lint.md) is where opinions live, with
+error/warn/info [Severity](../types/Severity.md) levels, so conformance and taste never get
+conflated in the [check module](../components/check.md).

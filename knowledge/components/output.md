@@ -14,6 +14,6 @@ last_modified: 2026-09-07T18:47:09Z
 ---
 # output module
 
-NDJSON record types and their serializer. Concept records preserve frontmatter values and add collision-safe identity, trust, lifecycle, generation, and verification views; findings and change records back other machine outputs.
+NDJSON record types and their serializer. [Concept records](../types/ConceptRecord.md) preserve frontmatter values and add collision-safe identity, trust, lifecycle, generation, and verification views; [Finding](../types/Finding.md), [Change](../types/Change.md), and [Affected](../types/Affected.md) records back other machine outputs.
 
 Location: `crates/okf-core/src/output`.

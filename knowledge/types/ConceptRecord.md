@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Concept record (NDJSON)
 
-The machine representation of a concept: frontmatter JSON plus collision-safe computed identity, trust, lifecycle, generation, and verification views. A colliding frontmatter extension is retained under `frontmatter_conflicts`.
+The machine representation of a [Concept](Concept.md): [Frontmatter](Frontmatter.md) JSON plus collision-safe computed identity, [trust](TrustTier.md), lifecycle, generation, and [verification](Verified.md) views. A colliding frontmatter extension is retained under `frontmatter_conflicts`.
 
 ## Schema
 

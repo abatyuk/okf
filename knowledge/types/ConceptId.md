@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # ConceptId
 
-A concept's identity, equal to its bundle-relative path without the .md suffix (for example /metrics/revenue). Because the id is the path, moves must rewrite inbound links.
+A [Concept](Concept.md)'s identity, equal to its bundle-relative path without the `.md` suffix (for example `/metrics/revenue`). Because the id is the path, [okf mv](../commands/mv.md) must rewrite inbound [Link](Link.md) values.
 
 ## Schema
 

@@ -4,7 +4,9 @@ title: graph module
 description: Forward and reverse adjacency built from concept links.
 layer: core
 depends_on:
+- /components/bundle
 - /components/model
+- /components/ontology
 sources:
 - resource: ../crates/okf-core/src/graph/mod.rs
   kind: git-path
@@ -14,6 +16,6 @@ last_modified: 2026-09-07T18:47:09Z
 ---
 # graph module
 
-Forward and reverse adjacency built from body links, ontology references, and standard internal Markdown `sources[].resource` lineage. Broken targets remain edges. Powers backlinks, affected analysis, move/remove safety, and graph renderers.
+Forward and reverse adjacency built from the loaded [bundle](bundle.md), [model](model.md) links, [ontology](ontology.md) references, and standard internal Markdown `sources[].resource` lineage. Broken targets remain edges. Powers backlinks, affected analysis, move/remove safety, and graph renderers.
 
 Location: `crates/okf-core/src/graph`.

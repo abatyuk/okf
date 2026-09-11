@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Link
 
-A parsed reference to another concept, classified as bundle-relative, relative, bare, or external. Broken links are recorded, never rejected.
+A parsed reference from one [Concept](Concept.md) to another, resolved to a [ConceptId](ConceptId.md) and classified as bundle-relative, relative, bare, or external. Broken links are recorded, never rejected.
 
 ## Schema
 

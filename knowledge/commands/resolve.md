@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:06Z
 ---
 # okf resolve
 
-Resolves a concept link to a concrete bundle-relative Markdown path using standard document-relative semantics. Use `okf artifact resolve` for arbitrary path-valued resources.
+Resolves a concept [Link](../types/Link.md) to a concrete bundle-relative Markdown path using standard document-relative semantics. Use [okf artifact resolve](artifact-resolve.md) for arbitrary path-valued resources.
 
 ## Arguments
 

@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Concept
 
-A single knowledge unit: its ConceptId, parsed Frontmatter, and markdown body. The unit the whole tool loads, queries, and mutates.
+A single knowledge unit: its [ConceptId](ConceptId.md), parsed [Frontmatter](Frontmatter.md), and markdown body. The unit the whole tool loads, queries, and mutates.
 
 ## Schema
 

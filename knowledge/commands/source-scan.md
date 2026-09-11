@@ -9,7 +9,7 @@ implemented_by:
 ---
 # okf source-scan
 
-Maps a repository or directory for ingest workflows. Unlike `okf scan`, it includes non-Markdown source artifacts and performs no concept parsing.
+Maps a repository or directory for ingest workflows. Unlike [okf scan](scan.md), it includes non-Markdown source artifacts and performs no concept parsing.
 
 ## Arguments
 

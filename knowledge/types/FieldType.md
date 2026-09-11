@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # FieldType
 
-The type of a field: string, text, int, bool, date, datetime, uri, enum, list, object, or a name defined under field_types. Composes via extends and nested object fields.
+The type of a [Field](Field.md): string, text, int, bool, date, datetime, URI, enum, list, object, or a name defined under `field_types`. Composes via `extends` and nested object fields.
 
 ## Schema
 

@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Field
 
-A typed field on a concept type: a name, a FieldType, and a required flag.
+A typed field on a concept type: a name, a [FieldType](FieldType.md), and a required flag.
 
 ## Schema
 

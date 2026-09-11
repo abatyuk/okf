@@ -5,6 +5,7 @@ description: 'Source fingerprinting, dispatched on SourceKind: git-commit and gi
 layer: core
 depends_on:
 - /components/model
+- /components/parse
 - /components/ports
 sources:
 - resource: ../crates/okf-core/src/fingerprint/mod.rs
@@ -15,6 +16,6 @@ last_modified: 2026-09-07T18:47:09Z
 ---
 # fingerprint module
 
-Source fingerprinting, dispatched on SourceKind: git-commit and git-path via the git CLI, line-range and markdown-heading over canonicalized text, and optional url fingerprints behind a feature flag. Canonicalization normalizes line endings and whitespace so fingerprints stay stable.
+Source fingerprinting, dispatched on [SourceKind](../types/SourceKind.md): git-commit and git-path through effect [ports](ports.md), line-range and markdown-heading through Markdown [parsing](parse.md), and optional URL fingerprints behind a feature flag. Canonicalization normalizes line endings and whitespace so [Fingerprint](../types/Fingerprint.md) values stay stable.
 
 Location: `crates/okf-core/src/fingerprint`.

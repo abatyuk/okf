@@ -14,7 +14,10 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Change record
 
-The NDJSON record for a diff result: a concept that was added, removed, or changed versus a git ref.
+The NDJSON record emitted by [init](../commands/init.md), [add](../commands/add.md),
+[edit](../commands/edit.md), [mv](../commands/mv.md), [rm](../commands/rm.md),
+[verify](../commands/verify.md), and [refresh](../commands/refresh.md). [okf diff](../commands/diff.md)
+uses a related record to report concepts added, removed, or changed versus a Git ref.
 
 ## Schema
 

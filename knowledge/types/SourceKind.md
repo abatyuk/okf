@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # SourceKind
 
-The typed kind of a source: git-commit, git-path, markdown-heading, line-range, file, or url. Each kind knows how to compute and compare a fingerprint.
+The typed kind of a [Source](Source.md): git-commit, git-path, markdown-heading, line-range, file, or URL. Each kind knows how to compute and compare a [Fingerprint](Fingerprint.md).
 
 ## Schema
 

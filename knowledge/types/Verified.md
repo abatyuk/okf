@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Verified
 
-A single verification entry in a concept's verified list: an actor plus a timestamp. The set of these entries determines the derived TrustTier.
+A single verification entry in a concept's verified list: an [Actor](Actor.md) plus a timestamp. The set of these entries determines the derived [TrustTier](TrustTier.md), and [okf verify](../commands/verify.md) appends them.
 
 ## Schema
 

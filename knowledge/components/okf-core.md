@@ -12,6 +12,6 @@ last_modified: 2026-09-07T18:47:09Z
 ---
 # okf-core crate
 
-The deterministic core library. All parsing, validation, linting, querying, graphing, fingerprinting, trust derivation, and rendering logic lives here. It takes no argv and writes no stdout; it exposes typed results that the CLI renders. This is the brain half of the hands-vs-brain split.
+The deterministic core library. Its public module map comprises [bundle](bundle.md), [check](check.md), [fingerprint](fingerprint.md), [graph](graph.md), [model](model.md), [mutate](mutate.md), [ontology](ontology.md), [output](output.md), [parse](parse.md), [ports](ports.md), [query](query.md), and [render](render.md). It takes no argv and writes no stdout; it exposes typed results that the CLI renders. This is the brain half of the hands-vs-brain split.
 
 Location: `crates/okf-core`.

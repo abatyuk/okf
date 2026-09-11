@@ -14,7 +14,8 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Config
 
-The okf config model: project-local settings (such as the bundle location) consulted during bundle resolution between the CLI arg and the environment.
+The [bundle module](../components/bundle.md)'s OKF config model: project-local settings such as
+the bundle location, consulted during resolution between the CLI argument and environment.
 
 ## Schema
 

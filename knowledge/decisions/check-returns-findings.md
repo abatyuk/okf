@@ -9,4 +9,7 @@ affects:
 ---
 # Check returns findings; the CLI decides the exit code
 
-Core produces Findings with severities and never calls process::exit. The 0/1/2/3/4 mapping and the --fail-on threshold live in the CLI, keeping core reusable by other consumers.
+The [check module](../components/check.md) produces [Finding](../types/Finding.md) values with
+[Severity](../types/Severity.md) levels and never calls `process::exit`. The 0/1/2/3/4 mapping
+and the `--fail-on` threshold live in [okf-cli](../components/okf-cli.md), keeping core reusable
+by other consumers.

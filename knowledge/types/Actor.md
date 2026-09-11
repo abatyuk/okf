@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Actor
 
-Who performed a generation or verification event. Valid forms are `human:<id>`, `process:<id>`, or `<producer>/<version>`. A valid human verification lifts trust to human-reviewed; other valid verification actors give machine-confirmed.
+Who performed a generation or [verification event](Verified.md). Valid forms are `human:<id>`, `process:<id>`, or `<producer>/<version>`. A valid human verification lifts [TrustTier](TrustTier.md) to human-reviewed; other valid verification actors give machine-confirmed.
 
 ## Schema
 

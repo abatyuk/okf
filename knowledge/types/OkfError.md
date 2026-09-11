@@ -14,7 +14,9 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # OkfError
 
-The crate's error type. Each variant maps to an exit class (2 usage, 3 environment/IO, 4 internal); core never calls process::exit, it returns these for the CLI to map.
+The [okf-core](../components/okf-core.md) error type. Each variant maps to an exit class (2 usage,
+3 environment/I/O, 4 internal); core never calls `process::exit`, but returns these for
+[okf-cli](../components/okf-cli.md) to map.
 
 ## Schema
 

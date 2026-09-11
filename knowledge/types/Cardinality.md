@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Cardinality
 
-How many targets a reference (or list field) may have: 0..1, 1..1, 0..n, or 1..n.
+How many targets a [ReferenceRule](ReferenceRule.md) or list [Field](Field.md) may have: `0..1`, `1..1`, `0..n`, or `1..n`.
 
 ## Schema
 

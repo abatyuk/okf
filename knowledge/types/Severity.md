@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Severity
 
-A lint finding's level: error, warn, or info.
+A lint [Finding](Finding.md)'s level: error, warn, or info.
 
 ## Schema
 

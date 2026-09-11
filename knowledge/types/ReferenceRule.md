@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # ReferenceRule
 
-A typed edge rule: a frontmatter key on the source concept, the allowed target type(s), and a cardinality. lint enforces it advisorily.
+A typed edge rule: a frontmatter key on the source concept, the allowed target type(s), and a [Cardinality](Cardinality.md). [okf lint](../commands/lint.md) enforces it advisorily.
 
 ## Schema
 

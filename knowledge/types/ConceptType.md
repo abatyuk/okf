@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # ConceptType
 
-An ontology entry: a named type with its typed fields and reference rules. The key is the OKF type string verbatim, so types with spaces are quoted.
+An ontology entry: a named type with typed [Field](Field.md) values and [ReferenceRule](ReferenceRule.md) edges. The key is the OKF type string verbatim, so types with spaces are quoted.
 
 ## Schema
 

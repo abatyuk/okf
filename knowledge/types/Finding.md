@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Finding
 
-A single lint result: a severity, a rule name, the concept it applies to, and a message. The --fail-on threshold decides which findings affect the exit code.
+A single lint result: a [Severity](Severity.md), a rule name, the concept it applies to, and a message. The `--fail-on` threshold decides which findings affect the exit code.
 
 ## Schema
 

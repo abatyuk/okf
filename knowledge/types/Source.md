@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Source
 
-A provenance entry in sources[]: the OKF fields plus a typed kind and a recorded fingerprint, so stale has something to compare against.
+A provenance entry in `sources[]`: the OKF fields plus a [SourceKind](SourceKind.md) and a recorded [Fingerprint](Fingerprint.md), so stale has something to compare against.
 
 ## Schema
 

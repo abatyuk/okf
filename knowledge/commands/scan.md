@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:06Z
 ---
 # okf scan
 
-Walks the physical bundle tree and reports every Markdown file, including reserved and Git-ignored files, without parsing concepts. Use `okf source-scan` for a general repository inventory.
+Walks the physical bundle tree and reports every Markdown file, including reserved and Git-ignored files, without parsing concepts. Use [okf source-scan](source-scan.md) for a general repository inventory.
 
 ## Arguments
 

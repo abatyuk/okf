@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Fingerprint
 
-A kind-specific record of a source's state at last sync (a blob id, a content hash, an etag). Drift is a mismatch between the recorded and recomputed fingerprint.
+A kind-specific record of a [Source](Source.md)'s state at last sync (a blob id, a content hash, an etag). Drift is a mismatch between the recorded and recomputed fingerprint.
 
 ## Schema
 

@@ -14,7 +14,7 @@ last_modified: 2026-09-07T18:22:07Z
 ---
 # Affected record
 
-The NDJSON record for an impact-query result: a concept reached by the affected reverse walk and why it was reached.
+The NDJSON record emitted by [okf affected](../commands/affected.md): a concept reached by the affected reverse walk and why it was reached.
 
 ## Schema
 
