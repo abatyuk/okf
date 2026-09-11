@@ -41,8 +41,10 @@ Read this skill's generated `okf-cli-reference.md`. Prefer `OKF_BUNDLE`; the pre
 8. Validate after each batch: rerun doctor, then `okf validate <bundle>`. Run `okf lint <bundle>
    --fail-on never` separately so recommendations are not mistaken for conformance blockers.
 9. Regenerate indexes with `okf docs <bundle> --format index` only when approved after showing
-   the impact on curated prose. Recheck graph/backlinks, lifecycle, trust, source lineage, and
-   exact Attested Computation classification against the original doctor report.
+   the impact on curated prose. Recheck direct edges with `okf links <concept-id> <bundle>
+   --json` and `okf backlinks <concept-id> <bundle>`; use a bounded bidirectional graph only when
+   needed. Also recheck lifecycle, trust, source lineage, and exact Attested Computation
+   classification against the original doctor report.
 10. Run doctor a final time. A second safe-repair preview should propose no writes. Report the
     baseline/recovery trail, stable findings resolved, choices made, extensions preserved,
     remaining manual/advisory items, validation, and diff.

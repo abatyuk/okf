@@ -4,11 +4,12 @@ title: okf:migrate skill
 description: Faithfully migrates authored or legacy documents into OKF v0.2 with standard sources, claim footnotes, and preserved extensions.
 trigger: convert existing docs into concepts
 sources:
-- resource: https://github.com/abatyuk/okf/blob/5cf5e6773e137d30f61d21e6a680aec0f8478448/plugins/okf/skills/migrate/SKILL.md
+- resource: https://github.com/abatyuk/okf/blob/main/plugins/okf/skills/migrate/SKILL.md
 uses:
 - /commands/source-scan
 - /commands/add
 - /commands/edit
+- /commands/links
 - /commands/refresh
 - /commands/validate
 - /commands/lint
@@ -22,7 +23,8 @@ Migrates documentation without inventing provenance, translates legacy fields on
 semantics are known, and keeps verification separate from migration.
 
 The workflow connects [source-scan](../commands/source-scan.md), [add](../commands/add.md),
-[edit](../commands/edit.md), [refresh](../commands/refresh.md),
+[edit](../commands/edit.md), [links](../commands/links.md),
+[refresh](../commands/refresh.md),
 [validate](../commands/validate.md), [lint](../commands/lint.md), [docs](../commands/docs.md),
 [artifact resolve](../commands/artifact-resolve.md), and
 [artifact show](../commands/artifact-show.md). Use [ingest](ingest.md) for repository research,

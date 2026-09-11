@@ -18,8 +18,9 @@ is `okf ontology add <name> <bundle>`.
    generated/verified, lifecycle, and computation—from custom candidates. Do not reinvent
    standard fields as ontology custom types.
 3. Infer custom reference rules only for custom frontmatter relationships. Do not duplicate body
-   links or standard `sources[].resource` graph edges. Use `okf resolve <link> <bundle> --from
-   <concept-id>` and `okf backlinks <concept-id> <bundle>` to inspect targets and cardinality.
+   links or standard `sources[].resource` graph edges. Use `okf links <concept-id> <bundle>
+   --json`, `okf backlinks <concept-id> <bundle>`, and targeted `okf resolve <link> <bundle>
+   --from <concept-id>` calls to inspect targets and cardinality without expanding the full graph.
 4. Recognize a standard computation only when the exact type is `Attested Computation`; inspect
    its built-in contract separately with `okf computation check <concept-id> <bundle>`. Do not
    infer an `attested` capability for another type.

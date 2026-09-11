@@ -1,4 +1,4 @@
-//! search, list, show, backlinks, graph, resolve.
+//! search, list, show, backlinks, links, graph, resolve.
 use crate::cli::{BrowseArgs, BundleArgs, GraphArgs, IdArgs, ResolveArgs, SearchArgs, ShowArgs};
 use crate::output;
 use okf_core::bundle::loader::load_bundle;
@@ -6,8 +6,9 @@ use okf_core::bundle::resolve::resolve_bundle;
 use okf_core::error::{OkfError, Result};
 use okf_core::graph::backlinks::backlinks_of;
 use okf_core::graph::build::build_graph;
-use okf_core::graph::render::{render, RenderFormat};
+use okf_core::graph::render::{render_neighborhood, GraphDirection, RenderFormat};
 use okf_core::model::concept::Concept;
+use okf_core::model::link::outbound_links;
 use okf_core::ontology::load::try_load;
 use okf_core::output::record::yaml_to_json;
 use okf_core::query::browse::browse;
@@ -125,7 +126,46 @@ pub fn run_backlinks(args: &IdArgs, json: bool) -> Result<i32> {
     Ok(0)
 }
 
-/// `okf graph [bundle] [subtree] --format`. Emits a graph artifact (not NDJSON).
+/// `okf links <concept> [bundle]` — direct normalized outbound concept links.
+pub fn run_links(args: &IdArgs, json: bool) -> Result<i32> {
+    let root = resolve_bundle(args.bundle.as_deref())?;
+    let bundle = load_bundle(&root)?;
+    let ontology = try_load(&root)?;
+    let concept = bundle
+        .get(&args.concept)
+        .ok_or_else(|| OkfError::Usage(format!("concept not found: {}", args.concept)))?;
+    let links = outbound_links(concept, ontology.as_ref());
+
+    if json {
+        for target in &links {
+            output::print_line(&json!({
+                "kind": "link",
+                "source": concept.id.0,
+                "target": target.0,
+                "exists": bundle.get(&target.0).is_some(),
+            }))?;
+        }
+    } else if links.is_empty() {
+        println!("(no links)");
+    } else {
+        println!("TARGET\tSTATUS");
+        for target in &links {
+            println!(
+                "{}\t{}",
+                target.0,
+                if bundle.get(&target.0).is_some() {
+                    "exists"
+                } else {
+                    "missing"
+                }
+            );
+        }
+    }
+    Ok(0)
+}
+
+/// `okf graph [bundle] [concept] [--direction ...] [--depth N] --format`.
+/// Emits a graph artifact (not NDJSON).
 pub fn run_graph(args: &GraphArgs, _json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
@@ -136,8 +176,19 @@ pub fn run_graph(args: &GraphArgs, _json: bool) -> Result<i32> {
             args.format
         ))
     })?;
+    let direction = args
+        .direction
+        .as_deref()
+        .and_then(GraphDirection::parse)
+        .unwrap_or(GraphDirection::Outgoing);
     let graph = build_graph(&bundle, ontology.as_ref());
-    let out = render(&graph, format, args.subtree.as_deref());
+    let out = render_neighborhood(
+        &graph,
+        format,
+        args.concept.as_deref(),
+        direction,
+        args.depth,
+    );
     print!("{out}");
     Ok(0)
 }

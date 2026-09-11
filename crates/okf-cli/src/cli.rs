@@ -32,7 +32,9 @@ pub enum Command {
     Browse(BrowseArgs),
     /// Concepts that link to a given concept.
     Backlinks(IdArgs),
-    /// Render the link graph (or a subtree) as mermaid/dot/graphml.
+    /// List the direct concept links defined by one concept.
+    Links(IdArgs),
+    /// Render the link graph (or a bounded rooted neighborhood) as mermaid/dot/graphml.
     Graph(GraphArgs),
     /// Resolve a link/concept-id to a concrete bundle-relative file path.
     Resolve(ResolveArgs),
@@ -185,11 +187,21 @@ pub struct BrowseArgs {
 pub struct GraphArgs {
     /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
     pub bundle: Option<String>,
-    /// Optional subtree root: only the subgraph forward-reachable from this concept.
-    pub subtree: Option<String>,
+    /// Optional concept at the neighborhood root; without one, render the entire graph.
+    pub concept: Option<String>,
     /// Output format: mermaid (default), dot, or graphml.
     #[arg(long, default_value = "mermaid")]
     pub format: String,
+    /// Edges to follow from the root: outgoing (default), incoming, or both.
+    #[arg(
+        long,
+        value_parser = ["outgoing", "incoming", "both"],
+        requires = "concept"
+    )]
+    pub direction: Option<String>,
+    /// Maximum neighbor distance from the root (0 = root only; default: unbounded).
+    #[arg(long, requires = "concept")]
+    pub depth: Option<usize>,
 }
 
 #[derive(Debug, Args)]

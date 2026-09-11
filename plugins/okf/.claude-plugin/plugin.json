@@ -1,7 +1,7 @@
 {
   "name": "okf",
   "description": "Agent skills for working with OKF v0.2 bundles: create, migrate, ingest, retrieve, verify, repair, update, and reorganize through the separately installed `okf` CLI.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "Andrey Batyuk"
   },

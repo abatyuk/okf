@@ -10,11 +10,11 @@ sources:
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 9bb8842ffb1ac73e430eaca6d594559a97758c4e
+    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
 - resource: crates/okf-cli/src/commands/query.rs
   kind: git-path
   fingerprint:
-    blob_sha: b3794dd0aabb0fa5d0eee0d94ba4ed2dbc637248
+    blob_sha: 98fcf5b787e69c801489823ffea093f747e64d22
 last_modified: 2026-09-09T13:13:42Z
 ---
 # okf browse

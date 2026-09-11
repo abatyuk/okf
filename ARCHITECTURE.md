@@ -57,7 +57,7 @@ okf-core/src/
     build.rs          # forward + reverse adjacency from concepts
     backlinks.rs
     affected.rs       # reverse walk; direct default, --transitive [--depth N]
-    render.rs         # mermaid / graphml / dot emitters
+    render.rs         # whole/bounded directional mermaid / graphml / dot emitters
 
   fingerprint/
     mod.rs            # trait Fingerprinter; dispatch on SourceKind

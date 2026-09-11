@@ -6,7 +6,7 @@ equally by **humans** (readable text output) and **agents** (line-delimited JSON
 deterministic "hands" beneath a set of agent skills that do the judgment work.
 
 - **Deterministic core** (`okf-core`) — parse, validate, lint, query, graph, fingerprint, render.
-- **Thin CLI** (`okf-cli`) — 35 commands, grouped by verb, with a machine-discoverable schema.
+- **Thin CLI** (`okf-cli`) — 36 commands, grouped by verb, with a machine-discoverable schema.
 - **Agent skills** (`plugins/okf/skills/`) — packaged as the **`okf` plugin** for Claude Code and Codex:
   migrate, ingest, update, retrieve, manage ontology, etc. (see [Agent plugins](#agent-plugins)).
 
@@ -57,7 +57,8 @@ okf validate mybundle                 # conformance only (exit 1 if nonconforman
 okf lint mybundle                     # advisory findings (broken links, missing desc, …)
 okf doctor mybundle                   # compatibility preflight for existing bundles
 okf artifact list mybundle            # inspect optional references/ artifacts
-okf graph mybundle --format mermaid   # render the link graph
+okf links notes/hello mybundle --json # list direct normalized outbound links
+okf graph mybundle notes/hello --direction both --depth 2 # bounded neighborhood
 okf docs mybundle --format index      # write progressive-disclosure index.md files
 ```
 
@@ -113,7 +114,7 @@ without hard-coding them.
 | Group | Commands |
 |-------|----------|
 | **meta** | `schema`, `version` |
-| **query** | `list`, `search`, `show`, `backlinks`, `graph`, `resolve`, `artifact list/resolve/show`, `ontology list`, `ontology show` |
+| **query** | `list`, `search`, `show`, `links`, `backlinks`, `graph`, `resolve`, `artifact list/resolve/show`, `ontology list`, `ontology show` |
 | **check** | `scan`, `source-scan`, `validate`, `lint`, `doctor`, `stale`, `affected`, `diff`, `stats`, `computation check` |
 | **mutate** | `init`, `add`, `edit`, `mv`, `rm`, `verify`, `refresh`, `ontology add/update/remove` |
 | **render** | `docs` (`--format html\|md\|pdf\|graphml\|obsidian\|index`) |
@@ -146,6 +147,9 @@ Highlights:
   concept to `unverified` until it is reviewed again.
 - **`show --outline` / `show --lines START:END`** expose a document's heading map and retrieve
   only the relevant numbered slice, avoiding full reads of large concepts.
+- **`links` / `backlinks` / `graph`** provide progressively wider relationship views: direct
+  outgoing links, direct incoming concepts, or a rendered neighborhood constrained by
+  `--direction incoming|outgoing|both` and `--depth N`.
 
 ## Exit codes
 

@@ -66,7 +66,7 @@ consistent across all commands. Commands are grouped by verb category.
 > `bundle` key of the nearest `okf.toml` (found by walking up from cwd; its path is relative
 > to the config file) → cwd. Where a command has a required argument,
 > it comes first and the bundle trails, e.g. `okf show <concept-id> [bundle]`,
-> `okf diff <ref> [bundle]`; `okf graph [bundle] [subtree] --format …`. The `<bundle> <arg>`
+> `okf diff <ref> [bundle]`; `okf graph [bundle] [concept] --format …`. The `<bundle> <arg>`
 > orderings shown in some examples below are illustrative — the trailing-bundle form is
 > authoritative. Also note two v1 behaviors: `lint --fix` is a no-op (no rule is auto-fixable
 > yet), and `--fail-on` on discovery commands (`stale`/`affected`/`diff`/`stats`/`scan`) fails
@@ -85,9 +85,11 @@ consistent across all commands. Commands are grouped by verb category.
 - `okf list <bundle>` — **alias of `okf search` with no filter**; lists all concepts (ID,
   type, title, status, trust tier).
 - `okf show <concept-id> [bundle]` — show one concept's full content.
+- `okf links <concept-id> [bundle]` — normalized direct outbound concept links, including
+  whether each target exists.
 - `okf backlinks <concept-id> [bundle]` — concepts that link to a given concept.
-- `okf graph <bundle> [subtree] [--format mermaid|...]` — e.g. `okf graph . --format mermaid`,
-  `okf graph api`, `okf graph layers`, `okf graph domains`.
+- `okf graph <bundle> [concept] [--direction outgoing|incoming|both] [--depth N]
+  [--format mermaid|...]` — render the whole graph or a bounded rooted neighborhood.
 - `okf resolve <link> [bundle]` — resolve a link/concept-ID to a concrete file path (agent utility).
 - `okf artifact list/resolve/show` — inventory, resolve, and retrieve bounded path-valued
   artifacts, including the optional `references/` convention. Opaque artifacts are never
@@ -170,7 +172,7 @@ deterministic foundation of the "update docs" skill.
   reference rules). The agent shapes *what* a concept type should look like; it commits the
   change via the deterministic `okf ontology` commands so `ontology.yaml` stays valid and lossless.
 - **Answer questions over a bundle (retrieval)** — the agent-facing payoff of OKF: use
-  `search` → `show` → `graph`/`backlinks` for progressive disclosure to answer a question
+  `search` → `show` → `links`/`backlinks` → a bounded `graph` for progressive disclosure
   without loading the whole bundle. Arguably the primary consumer skill.
 - **Infer an ontology** — analyze an existing bundle and *propose* an `ontology.yaml`
   (observed types, common fields, reference patterns). The reverse of authoring it by hand;
@@ -353,7 +355,7 @@ subsequent line describes one command. Every line is a standalone JSON object so
 stream and filter without a JSON-array parser.
 
 ```jsonl
-{"kind":"schema","tool":"okf","tool_version":"0.2.0","okf_spec":["0.2"],"ndjson_schema":"1"}
+{"kind":"schema","tool":"okf","tool_version":"0.2.1","okf_spec":["0.2"],"ndjson_schema":"1"}
 {"kind":"command","name":"list","group":"query","mutates":false,"summary":"List concepts with id, type, title, status, trust tier.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."}],"output":{"kind":"query","stream":"concept"}}
 {"kind":"command","name":"affected","group":"check","mutates":false,"summary":"Concepts needing review given changed links.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."},{"name":"changed","kind":"flag","type":"list<string>","required":true,"repeatable":true,"stdin":true},{"name":"transitive","kind":"flag","type":"bool","default":false},{"name":"depth","kind":"flag","type":"int","required":false}],"output":{"kind":"query","stream":"affected"}}
 {"kind":"command","name":"add","group":"mutate","mutates":true,"summary":"Add a concept scaffolded from the ontology.","args":[{"name":"path","kind":"positional","type":"path","required":true},{"name":"type","kind":"flag","type":"string","required":false},{"name":"title","kind":"flag","type":"string"},{"name":"attested","kind":"flag","type":"bool","default":false}],"output":{"kind":"mutation","stream":"change"}}

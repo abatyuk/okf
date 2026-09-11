@@ -256,6 +256,71 @@ fn graph_mermaid_renders() {
 }
 
 #[test]
+fn links_lists_direct_normalized_targets_and_missing_state() {
+    let out = okf()
+        .args([
+            "links",
+            "policies/travel",
+            fixture("linked-bundle").to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let records = ndjson(&out.stdout);
+    assert_eq!(records.len(), 3);
+    assert!(records.iter().all(|r| r["kind"] == "link"));
+    assert!(records.iter().all(|r| r["source"] == "/policies/travel"));
+    assert_eq!(records[0]["target"], "/computations/mileage");
+    assert_eq!(records[1]["target"], "/tables/customers");
+    assert_eq!(records[2]["target"], "/tables/ghost");
+    assert_eq!(records[2]["exists"], false);
+}
+
+#[test]
+fn graph_can_bound_outgoing_neighborhood_depth() {
+    let out = okf()
+        .args([
+            "graph",
+            fixture("linked-bundle").to_str().unwrap(),
+            "policies/travel",
+            "--direction",
+            "outgoing",
+            "--depth",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("/policies/travel"), "{text}");
+    assert!(text.contains("/tables/customers"), "{text}");
+    assert!(text.contains("/tables/ghost"), "{text}");
+    assert!(!text.contains("/metrics/revenue"), "{text}");
+}
+
+#[test]
+fn graph_can_walk_incoming_neighborhood() {
+    let out = okf()
+        .args([
+            "graph",
+            fixture("linked-bundle").to_str().unwrap(),
+            "metrics/revenue",
+            "--direction",
+            "incoming",
+            "--depth",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("/metrics/revenue"), "{text}");
+    assert!(text.contains("/tables/customers"), "{text}");
+    assert!(!text.contains("/policies/travel"), "{text}");
+}
+
+#[test]
 fn schema_is_valid_ndjson_with_all_commands() {
     let out = okf().arg("schema").output().unwrap();
     assert!(out.status.success());
@@ -276,6 +341,7 @@ fn schema_is_valid_ndjson_with_all_commands() {
         "show",
         "browse",
         "backlinks",
+        "links",
         "graph",
         "resolve",
         "artifact list",

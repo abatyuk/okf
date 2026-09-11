@@ -1,6 +1,6 @@
 # okf CLI — argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.0, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.1, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 **For skills:** consult this file to learn a command's arguments. **Do not** run `okf <cmd> --help` or `okf schema` first just to discover flags — they are all listed here. Every command also accepts the global `--json` flag (NDJSON output) and takes an optional trailing `bundle` positional that falls back to `$OKF_BUNDLE`, then the cwd.
 
@@ -87,15 +87,28 @@ Output stream: `index`.
 
 ### `okf graph`
 
-Render the link graph (or a subtree) as mermaid/dot/graphml.
+Render the link graph (or a bounded rooted neighborhood) as mermaid/dot/graphml.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `<subtree>` | positional | no | Optional subtree root: only the subgraph forward-reachable from this concept |
+| `<concept>` | positional | no | Optional concept at the neighborhood root; without one, render the entire graph |
 | `--format <value>` | string | no | Output format: mermaid (default), dot, or graphml (default: `mermaid`) |
+| `--direction <value>` | string | no | Edges to follow from the root: outgoing (default), incoming, or both |
+| `--depth <value>` | string | no | Maximum neighbor distance from the root (0 = root only; default: unbounded) |
 
 Output stream: `graph`.
+
+### `okf links`
+
+List the direct concept links defined by one concept.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
+| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+
+Output stream: `link`.
 
 ### `okf list`
 

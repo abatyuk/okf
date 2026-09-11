@@ -27,6 +27,7 @@ pub fn run(cli: Cli) -> Result<i32> {
         Command::Show(a) => query::run_show(a, json),
         Command::Browse(a) => query::run_browse(a, json),
         Command::Backlinks(a) => query::run_backlinks(a, json),
+        Command::Links(a) => query::run_links(a, json),
         Command::Graph(a) => query::run_graph(a, json),
         Command::Resolve(a) => query::run_resolve(a, json),
         Command::Artifact(cmd) => match cmd {

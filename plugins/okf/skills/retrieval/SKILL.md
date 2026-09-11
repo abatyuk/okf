@@ -7,7 +7,7 @@ description: Answer questions from an OKF bundle through progressive disclosure,
 
 Read this skill's generated `okf-cli-reference.md` before choosing flags. Query the bundle via
 the CLI rather than bulk-reading it. Use `OKF_BUNDLE` for multi-step work; explicit examples are
-`okf show <concept-id> <bundle>` and `okf backlinks <concept-id> <bundle>`.
+`okf show <concept-id> <bundle>` and `okf links <concept-id> <bundle> --json`.
 
 ## Progressive disclosure
 
@@ -17,8 +17,11 @@ the CLI rather than bulk-reading it. Use `OKF_BUNDLE` for multi-step work; expli
 2. For candidates, use `okf show <concept-id> <bundle> --outline`, then `--lines <START:END>`.
    Read a full concept only when small.
 3. Follow portable body links and standard internal `sources[].resource` lineage even without
-   ontology. Use `okf graph <bundle> [subtree] --format mermaid`, `okf backlinks <concept-id>
-   <bundle>`, and `okf resolve <link> <bundle> --from <concept-id>`.
+   ontology. Start with `okf links <concept-id> <bundle> --json` for direct outbound targets and
+   `okf backlinks <concept-id> <bundle>` for direct inbound concepts. Render only the useful
+   neighborhood with `okf graph <bundle> <concept-id> --direction <outgoing|incoming|both>
+   --depth <N> --format mermaid`; omit the root only when the entire graph is genuinely needed.
+   Use `okf resolve <link> <bundle> --from <concept-id>` for a particular raw link.
 4. Join claim footnotes to `sources[].id`. Cite the declaring concept and relevant source or
    resolved artifact separately. Do not fill bundle gaps with assumptions.
 

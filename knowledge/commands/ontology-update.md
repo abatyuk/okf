@@ -7,10 +7,10 @@ mutates: true
 implemented_by:
 - /components/ontology
 sources:
-- resource: ../crates/okf-cli/src/cli.rs
+- resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: a1bdcb78fa383c159cc63689e31430beb78d30b4
+    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
 last_modified: 2026-09-07T18:22:06Z
 ---
 # okf ontology update

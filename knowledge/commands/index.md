@@ -12,9 +12,10 @@
 * [okf docs](docs.md) - Generates documentation from a bundle: progressive-disclosure index.md files, or html, md, pdf, graphml, or obsidian output via --format.
 * [okf doctor](doctor.md) - Diagnoses conformance and compatibility changes before upgrading an existing bundle, with conservative safe repairs.
 * [okf edit](edit.md) - Losslessly edits a concept's frontmatter or body and invalidates its prior verification.
-* [okf graph](graph.md) - Renders the link graph, or a subtree rooted at a concept, as mermaid, dot, or graphml.
+* [okf graph](graph.md) - Renders the entire link graph or a direction- and depth-bounded neighborhood as mermaid, dot, or graphml.
 * [okf init](init.md) - Creates a new empty OKF bundle: base structure plus a starter ontology.yaml.
 * [okf lint](lint.md) - Advisory checks where the opinions live: broken links, missing descriptions, orphans, and ontology violations, at error/warn/info severities with a --fail-on threshold.
+* [okf links](links.md) - Lists the normalized direct concept links defined by one concept and reports whether each target exists.
 * [okf list](list.md) - Lists all concepts (search with no filter).
 * [okf mv](mv.md) - Moves or renames a concept and rewrites every inbound link.
 * [okf ontology add](ontology-add.md) - Defines a new concept type with its typed fields and reference rules, written to ontology.yaml through the lossless ontology editor.

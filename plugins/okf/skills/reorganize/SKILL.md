@@ -11,7 +11,7 @@ so a concept diff may show add/remove or modified referrers rather than a pure n
 
 Read `okf-cli-reference.md` in this skill directory. Prefer `OKF_BUNDLE`. Correct explicit forms
 include `okf mv <old-id> <new-id> <bundle>`, `okf backlinks <concept-id> <bundle>`, and
-`okf diff <git-ref> <bundle>`.
+`okf links <concept-id> <bundle> --json`.
 
 ## Workflow
 
@@ -27,9 +27,11 @@ include `okf mv <old-id> <new-id> <bundle>`, `okf backlinks <concept-id> <bundle
 4. Apply small batches with `okf mv <old-id> <new-id> <bundle>`. Do not use a raw file rename.
    Inspect affected referring documents and the implementation's meaningful-change behavior;
    path-only rebasing should not be described as a content rewrite or runtime execution.
-5. After each batch, compare backlinks and graph edges, run `okf validate <bundle>`, and run
-   advisory `okf lint <bundle> --fail-on never` against the baseline. Resolve artifact paths with
-   declaring document context and distinguish missing, blocked, and scope results.
+5. After each batch, compare direct outbound links and backlinks. Use `okf graph <bundle>
+   <concept-id> --direction both --depth <N> --format mermaid` only when a wider neighborhood is
+   useful. Run `okf validate <bundle>` and advisory `okf lint <bundle> --fail-on never` against
+   the baseline. Resolve artifact paths with declaring document context and distinguish missing,
+   blocked, and scope results.
 6. Regenerate reserved indexes with `okf docs <bundle> --format index` only after reviewing any
    curated index prose that could be overwritten. Validate reserved files again.
 7. Review `okf diff <git-ref> <bundle>` for expected moves and link rebasing. Route genuine prose

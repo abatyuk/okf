@@ -37,7 +37,8 @@ do not turn them into conformance requirements.
    `# Citations` into sources without inventing titles or authors. Preserve lifecycle evidence;
    absent `status` means stable.
 6. Reconnect portable body links and standard internal source lineage. Use ontology references
-   only as additional local modeling.
+   only as additional local modeling. Check migrated edges with `okf links <concept-id> <bundle>
+   --json`; inspect wider impact with a depth-bounded graph rather than loading the full graph.
 7. Run `okf validate <bundle>`, advisory `okf lint <bundle> --fail-on never`, and index generation.
    Unresolved optional evidence belongs in the report, not as a fabricated value.
 

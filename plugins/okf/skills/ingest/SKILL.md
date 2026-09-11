@@ -36,7 +36,9 @@ Producer rubric:
    evidence. `kind`/`fingerprint` may be added for local drift tracking. Having sources is a
    recommended ingest policy when known, not an OKF conformance rule.
 5. Use direct Markdown links for portable relationships. Ontology reference fields may add a
-   local typed view but must not replace standard links or source lineage.
+   local typed view but must not replace standard links or source lineage. Spot-check authored
+   edges with `okf links <concept-id> <bundle> --json` so normalized targets and missing concepts
+   are visible without traversing the whole graph.
 6. Create an exact Attested Computation only for a sanctioned declared computation: use
    `--attested --runtime`, declared `--parameter` values, one inline/file computation, and any
    reviewed executor/receipt/attester contract. Never convert arbitrary executable code merely

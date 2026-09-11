@@ -28,7 +28,8 @@ or actual concept-content change. A concept may have more than one.
 
 1. Inspect the concept with targeted `okf show` reads and the changed evidence. For a path-valued
    source, use `okf artifact resolve <resource> <bundle> --from <concept-id>` and bounded
-   `okf artifact show`; use `okf show` when it resolves to a concept.
+   `okf artifact show`; use `okf show` when it resolves to a concept. Use `okf links <concept-id>
+   <bundle> --json` when the concept's direct outbound relationships may have changed.
 2. If meaning changed, update body/frontmatter with `okf edit <concept-id> <bundle>`. The CLI
    updates existing `generated.at` and invalidates verification for meaningful edits; report the
    need for `review-verify`.

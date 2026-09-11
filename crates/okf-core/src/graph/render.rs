@@ -1,12 +1,12 @@
 //! Graph emitters: Mermaid, GraphML, DOT.
 //!
 //! All three walk the same deterministically-collected node/edge sets (sorted via
-//! `BTreeSet`), so output is byte-stable across runs. A `root` limits output to the subgraph
-//! forward-reachable from that concept; otherwise the whole graph is emitted. Broken-link
-//! targets appear as nodes so breakage is visible in the rendered artifact.
+//! `BTreeSet`), so output is byte-stable across runs. A `root` can limit output to a bounded
+//! incoming, outgoing, or bidirectional neighborhood; otherwise the whole graph is emitted.
+//! Broken-link targets appear as nodes so breakage is visible in the rendered artifact.
 use crate::graph::build::LinkGraph;
 use crate::model::concept::ConceptId;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
 /// Output format for [`render`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,9 +28,44 @@ impl RenderFormat {
     }
 }
 
+/// Which adjacent edges to follow when rendering a rooted graph neighborhood.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphDirection {
+    /// Follow links defined by the current concept.
+    Outgoing,
+    /// Follow concepts that link to the current concept.
+    Incoming,
+    /// Follow both incoming and outgoing links.
+    Both,
+}
+
+impl GraphDirection {
+    /// Parse a direction name (`outgoing` / `incoming` / `both`), case-insensitive.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "outgoing" => Some(GraphDirection::Outgoing),
+            "incoming" => Some(GraphDirection::Incoming),
+            "both" => Some(GraphDirection::Both),
+            _ => None,
+        }
+    }
+}
+
 /// Render the graph (or the subgraph forward-reachable from `root`) in `format`.
 pub fn render(graph: &LinkGraph, format: RenderFormat, root: Option<&str>) -> String {
-    let (nodes, edges) = collect(graph, root);
+    render_neighborhood(graph, format, root, GraphDirection::Outgoing, None)
+}
+
+/// Render the graph, or a rooted neighborhood constrained by direction and maximum distance.
+/// A depth of zero emits only the root; `None` follows matching edges transitively.
+pub fn render_neighborhood(
+    graph: &LinkGraph,
+    format: RenderFormat,
+    root: Option<&str>,
+    direction: GraphDirection,
+    depth: Option<usize>,
+) -> String {
+    let (nodes, edges) = collect(graph, root, direction, depth);
     match format {
         RenderFormat::Mermaid => mermaid(&nodes, &edges),
         RenderFormat::Graphml => graphml(&nodes, &edges),
@@ -38,9 +73,14 @@ pub fn render(graph: &LinkGraph, format: RenderFormat, root: Option<&str>) -> St
     }
 }
 
-/// Deterministic (sorted) node and edge sets. With `root`, restrict to nodes/edges reachable
-/// forward from it; otherwise take the whole graph.
-fn collect(graph: &LinkGraph, root: Option<&str>) -> (Vec<String>, Vec<(String, String)>) {
+/// Deterministic (sorted) node and edge sets. With `root`, restrict to the requested
+/// neighborhood; otherwise take the whole graph.
+fn collect(
+    graph: &LinkGraph,
+    root: Option<&str>,
+    direction: GraphDirection,
+    depth: Option<usize>,
+) -> (Vec<String>, Vec<(String, String)>) {
     let mut nodes: BTreeSet<String> = BTreeSet::new();
     let mut edges: BTreeSet<(String, String)> = BTreeSet::new();
 
@@ -48,16 +88,30 @@ fn collect(graph: &LinkGraph, root: Option<&str>) -> (Vec<String>, Vec<(String, 
         Some(r) => {
             let start = ConceptId::from_relative(r).0;
             let mut visited: HashSet<String> = HashSet::new();
-            let mut stack = vec![start];
-            while let Some(node) = stack.pop() {
-                if !visited.insert(node.clone()) {
+            let mut queue = VecDeque::from([(start.clone(), 0usize)]);
+            visited.insert(start);
+            while let Some((node, distance)) = queue.pop_front() {
+                nodes.insert(node.clone());
+                if depth.is_some_and(|limit| distance >= limit) {
                     continue;
                 }
-                nodes.insert(node.clone());
-                for target in graph.outbound(&node) {
-                    edges.insert((node.clone(), target.0.clone()));
-                    nodes.insert(target.0.clone());
-                    stack.push(target.0.clone());
+                if matches!(direction, GraphDirection::Outgoing | GraphDirection::Both) {
+                    for target in graph.outbound(&node) {
+                        edges.insert((node.clone(), target.0.clone()));
+                        nodes.insert(target.0.clone());
+                        if visited.insert(target.0.clone()) {
+                            queue.push_back((target.0.clone(), distance + 1));
+                        }
+                    }
+                }
+                if matches!(direction, GraphDirection::Incoming | GraphDirection::Both) {
+                    for source in graph.inbound(&node) {
+                        edges.insert((source.0.clone(), node.clone()));
+                        nodes.insert(source.0.clone());
+                        if visited.insert(source.0.clone()) {
+                            queue.push_back((source.0.clone(), distance + 1));
+                        }
+                    }
                 }
             }
         }
@@ -225,6 +279,48 @@ mod tests {
         assert_eq!(
             out,
             "graph LR\n    n0[\"/b\"]\n    n1[\"/c\"]\n    n0 --> n1\n"
+        );
+    }
+
+    #[test]
+    fn incoming_neighborhood_walks_reverse_edges() {
+        let out = render_neighborhood(
+            &graph(),
+            RenderFormat::Mermaid,
+            Some("c"),
+            GraphDirection::Incoming,
+            Some(1),
+        );
+        assert_eq!(
+            out,
+            "graph LR\n    n0[\"/b\"]\n    n1[\"/c\"]\n    n0 --> n1\n"
+        );
+    }
+
+    #[test]
+    fn outgoing_depth_zero_emits_only_root() {
+        let out = render_neighborhood(
+            &graph(),
+            RenderFormat::Mermaid,
+            Some("b"),
+            GraphDirection::Outgoing,
+            Some(0),
+        );
+        assert_eq!(out, "graph LR\n    n0[\"/b\"]\n");
+    }
+
+    #[test]
+    fn both_directions_include_each_side_of_root() {
+        let out = render_neighborhood(
+            &graph(),
+            RenderFormat::Mermaid,
+            Some("b"),
+            GraphDirection::Both,
+            Some(1),
+        );
+        assert_eq!(
+            out,
+            "graph LR\n    n0[\"/a\"]\n    n1[\"/b\"]\n    n2[\"/c\"]\n    n0 --> n1\n    n1 --> n2\n"
         );
     }
 }

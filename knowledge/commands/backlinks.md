@@ -7,15 +7,16 @@ mutates: false
 implemented_by:
 - /components/graph
 sources:
-- resource: ../crates/okf-cli/src/cli.rs
+- resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: a1bdcb78fa383c159cc63689e31430beb78d30b4
+    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
 last_modified: 2026-09-07T18:22:06Z
 ---
 # okf backlinks
 
-Lists the concepts that link to a given concept, using the reverse adjacency from the graph.
+Lists the concepts that link to a given concept, using the reverse adjacency from the graph. Use
+[links](links.md) for the direct outbound targets defined by a concept.
 
 ## Arguments
 
