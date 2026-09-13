@@ -2,7 +2,7 @@
 use crate::bundle::loader::Bundle;
 use crate::model::concept::ConceptId;
 use crate::model::link::resolve_link;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The result of resolving a link/id against a bundle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +27,19 @@ impl Resolved {
 /// bundle-relative path. Relative links resolve against `from` (the containing concept id);
 /// pass `None` to resolve from the bundle root.
 pub fn resolve(bundle: &Bundle, from: Option<&str>, link: &str) -> Resolved {
+    let (id, path) = resolve_parts(from, link);
+    let exists = bundle.get(id.0.as_str()).is_some() || bundle.root.join(&path).is_file();
+    Resolved { id, path, exists }
+}
+
+/// Resolve directly against a bundle root without loading its concepts.
+pub fn resolve_at(root: &Path, from: Option<&str>, link: &str) -> Resolved {
+    let (id, path) = resolve_parts(from, link);
+    let exists = root.join(&path).is_file();
+    Resolved { id, path, exists }
+}
+
+fn resolve_parts(from: Option<&str>, link: &str) -> (ConceptId, PathBuf) {
     let from_id = from
         .map(ConceptId::from_relative)
         .unwrap_or_else(|| ConceptId("/".to_string()));
@@ -35,8 +48,7 @@ pub fn resolve(bundle: &Bundle, from: Option<&str>, link: &str) -> Resolved {
     let path = PathBuf::from(format!("{rel}.md"));
     // Structural resources such as index.md/log.md are deliberately not loaded as concepts,
     // but `resolve` should still report their physical existence truthfully.
-    let exists = bundle.get(id.0.as_str()).is_some() || bundle.root.join(&path).is_file();
-    Resolved { id, path, exists }
+    (id, path)
 }
 
 #[cfg(test)]

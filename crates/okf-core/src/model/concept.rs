@@ -100,6 +100,15 @@ impl Concept {
         self.frontmatter.get_tags()
     }
 
+    /// Test tag membership without allocating the owned vector returned by [`Self::tags`].
+    pub fn has_tag(&self, wanted: &str) -> bool {
+        match self.frontmatter.get("tags") {
+            Some(Value::Sequence(tags)) => tags.iter().any(|tag| tag.as_str() == Some(wanted)),
+            Some(Value::String(tag)) => tag == wanted,
+            _ => false,
+        }
+    }
+
     pub fn trust_tier(&self) -> TrustTier {
         derive_trust_tier(&self.frontmatter)
     }

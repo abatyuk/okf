@@ -1,6 +1,6 @@
 {
   "name": "okf",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Agent skills for working with Open Knowledge Format (OKF) bundles using the okf CLI.",
   "author": {
     "name": "Andrey Batyuk"

@@ -14,12 +14,13 @@
 //! [`FakeFs`]: crate::ports::fs::FakeFs
 //! [`FakeGit`]: crate::ports::git::FakeGit
 //! [`FixedClock`]: crate::ports::clock::FixedClock
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use crate::bundle::loader::Bundle;
 use crate::fingerprint::{Engine, Fingerprinter};
 use crate::model::concept::Concept;
-use crate::model::source::{parse_sources, Fingerprint, Source};
+use crate::model::source::{parse_sources, Fingerprint, Source, SourceKind};
 use crate::model::standard::parse_timestamp;
 use crate::ports::clock::{Clock, SystemClock};
 use crate::ports::fs::{FileSystem, RealFs};
@@ -107,6 +108,8 @@ pub struct StaleChecker<'a> {
     clock: &'a dyn Clock,
 }
 
+type FingerprintCache = HashMap<(String, String), std::result::Result<Fingerprint, String>>;
+
 impl<'a> StaleChecker<'a> {
     /// Build a checker from explicit ports (hermetic tests pass the fakes).
     pub fn new(
@@ -127,10 +130,13 @@ impl<'a> StaleChecker<'a> {
 
     /// Check a whole bundle, returning drift for every out-of-sync concept (bundle order).
     pub fn check_bundle(&self, bundle: &Bundle) -> StaleReport {
+        let engine = Engine::new(self.root, self.fs, self.git, self.net);
+        let mut cache = FingerprintCache::new();
+        prime_git_cache(bundle, &engine, &mut cache);
         let concepts = bundle
             .concepts
             .iter()
-            .map(|c| self.check_concept(c))
+            .map(|c| self.check_concept_with(c, &engine, &mut cache))
             .filter(ConceptDrift::is_stale)
             .collect();
         StaleReport { concepts }
@@ -139,11 +145,21 @@ impl<'a> StaleChecker<'a> {
     /// Check one concept: recompute each source fingerprint and evaluate `stale_after`.
     pub fn check_concept(&self, concept: &Concept) -> ConceptDrift {
         let engine = Engine::new(self.root, self.fs, self.git, self.net);
+        let mut cache = FingerprintCache::new();
+        self.check_concept_with(concept, &engine, &mut cache)
+    }
+
+    fn check_concept_with(
+        &self,
+        concept: &Concept,
+        engine: &Engine,
+        cache: &mut FingerprintCache,
+    ) -> ConceptDrift {
         let mut sources = Vec::new();
 
         if let Some(value) = concept.frontmatter.get("sources") {
             for source in parse_sources(value) {
-                if let Some(drift) = self.check_source(&engine, &source) {
+                if let Some(drift) = self.check_source(engine, &source, cache) {
                     sources.push(drift);
                 }
             }
@@ -158,7 +174,12 @@ impl<'a> StaleChecker<'a> {
 
     /// Recompute and compare one source. Returns `None` when the source is in sync or has no
     /// recorded fingerprint to compare against.
-    fn check_source(&self, engine: &Engine, source: &Source) -> Option<SourceDrift> {
+    fn check_source(
+        &self,
+        engine: &Engine,
+        source: &Source,
+        cache: &mut FingerprintCache,
+    ) -> Option<SourceDrift> {
         // A source with nothing recorded has no baseline to drift from — skip it.
         if source.fingerprint.is_empty() {
             return None;
@@ -173,9 +194,14 @@ impl<'a> StaleChecker<'a> {
             message: String::new(),
         };
 
-        match engine.fingerprint(source) {
+        let key = cache_key(source);
+        let current = cache
+            .entry(key)
+            .or_insert_with(|| engine.fingerprint(source).map_err(|e| e.to_string()));
+
+        match current {
             Ok(current) => {
-                if fingerprints_match(&source.fingerprint, &current) {
+                if fingerprints_match(&source.fingerprint, current) {
                     None
                 } else {
                     Some(SourceDrift {
@@ -183,16 +209,16 @@ impl<'a> StaleChecker<'a> {
                         message: format!(
                             "recorded {} but recomputed {}",
                             render_fp(&source.fingerprint),
-                            render_fp(&current)
+                            render_fp(current)
                         ),
-                        current: Some(current),
+                        current: Some(current.clone()),
                         ..base
                     })
                 }
             }
-            Err(e) => Some(SourceDrift {
+            Err(message) => Some(SourceDrift {
                 drift: DriftKind::Missing,
-                message: format!("cannot fingerprint artifact: {e}"),
+                message: format!("cannot fingerprint artifact: {message}"),
                 ..base
             }),
         }
@@ -211,6 +237,52 @@ impl<'a> StaleChecker<'a> {
         } else {
             None
         }
+    }
+}
+
+fn cache_key(source: &Source) -> (String, String) {
+    (
+        source.kind.as_kind_str().to_string(),
+        source.resource.clone(),
+    )
+}
+
+fn prime_git_cache(bundle: &Bundle, engine: &Engine, cache: &mut FingerprintCache) {
+    let mut paths = BTreeMap::new();
+    let mut commits = BTreeMap::new();
+    for concept in &bundle.concepts {
+        let Some(value) = concept.frontmatter.get("sources") else {
+            continue;
+        };
+        for source in parse_sources(value) {
+            if source.fingerprint.is_empty() {
+                continue;
+            }
+            match source.kind {
+                SourceKind::GitPath => {
+                    paths.entry(cache_key(&source)).or_insert(source);
+                }
+                SourceKind::GitCommit => {
+                    commits.entry(cache_key(&source)).or_insert(source);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let path_sources: Vec<Source> = paths.into_values().collect();
+    let path_results = engine.fingerprint_git_paths(&path_sources);
+    let commit_sources: Vec<Source> = commits.into_values().collect();
+    let commit_results = engine.fingerprint_git_commits(&commit_sources);
+    for (source, result) in path_sources
+        .into_iter()
+        .zip(path_results)
+        .chain(commit_sources.into_iter().zip(commit_results))
+    {
+        cache.insert(
+            cache_key(&source),
+            result.map_err(|error| error.to_string()),
+        );
     }
 }
 
@@ -248,13 +320,15 @@ pub fn check_stale(bundle: &Bundle) -> StaleReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::Result as OkfResult;
     use crate::model::concept::ConceptId;
     use crate::model::frontmatter::Frontmatter;
     use crate::ports::clock::FixedClock;
     use crate::ports::fs::FakeFs;
-    use crate::ports::git::FakeGit;
+    use crate::ports::git::{FakeGit, Git};
     use indexmap::IndexMap;
     use serde_yaml::Value;
+    use std::cell::Cell;
     use std::path::PathBuf;
 
     fn concept(id: &str, yaml: &str) -> Concept {
@@ -309,6 +383,73 @@ mod tests {
             cd.sources[0].current.as_ref().unwrap().get("blob_sha"),
             Some("bbb")
         );
+    }
+
+    struct CountingGit {
+        worktree_roots: Cell<usize>,
+        hashes: Cell<usize>,
+        batches: Cell<usize>,
+    }
+
+    impl CountingGit {
+        fn new() -> Self {
+            Self {
+                worktree_roots: Cell::new(0),
+                hashes: Cell::new(0),
+                batches: Cell::new(0),
+            }
+        }
+    }
+
+    impl Git for CountingGit {
+        fn worktree_root(&self, anchor: &Path) -> OkfResult<PathBuf> {
+            self.worktree_roots.set(self.worktree_roots.get() + 1);
+            Ok(anchor.to_path_buf())
+        }
+
+        fn hash_object(&self, _path: &Path) -> OkfResult<String> {
+            self.hashes.set(self.hashes.get() + 1);
+            Ok("aaa".to_string())
+        }
+
+        fn hash_objects_in(&self, _root: &Path, paths: &[PathBuf]) -> Vec<OkfResult<String>> {
+            self.batches.set(self.batches.get() + 1);
+            self.hashes.set(self.hashes.get() + paths.len());
+            paths.iter().map(|_| Ok("aaa".to_string())).collect()
+        }
+
+        fn last_commit(&self, _path: &Path) -> OkfResult<String> {
+            unreachable!("not used by this test")
+        }
+
+        fn show(&self, _rev: &str, _path: &Path) -> OkfResult<Vec<u8>> {
+            unreachable!("not used by this test")
+        }
+
+        fn ls_tree(&self, _rev: &str) -> OkfResult<Vec<String>> {
+            unreachable!("not used by this test")
+        }
+    }
+
+    #[test]
+    fn bundle_check_reuses_git_root_and_duplicate_fingerprints() {
+        let source = "type: Note\nsources:\n- resource: src/shared.py\n  kind: git-path\n  fingerprint:\n    blob_sha: aaa\n";
+        let other = "type: Note\nsources:\n- resource: src/other.py\n  kind: git-path\n  fingerprint:\n    blob_sha: aaa\n";
+        let bundle = bundle(vec![
+            concept("a", source),
+            concept("b", source),
+            concept("c", other),
+        ]);
+        let git = CountingGit::new();
+        let clock = FixedClock(NOW.to_string());
+
+        let report = StaleChecker::new(Path::new("repo"), &FakeFs::new(), &git, None, &clock)
+            .check_bundle(&bundle);
+
+        assert!(report.is_empty());
+        assert_eq!(git.worktree_roots.get(), 1, "resolve the worktree once");
+        assert_eq!(git.hashes.get(), 2, "hash each distinct source once");
+        assert_eq!(git.batches.get(), 1, "use one batch Git operation");
     }
 
     #[test]

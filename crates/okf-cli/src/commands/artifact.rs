@@ -2,15 +2,15 @@
 
 use crate::cli::{ArtifactListArgs, ArtifactResolveArgs, ArtifactShowArgs, IdArgs};
 use crate::output;
-use okf_core::bundle::loader::load_bundle;
+use okf_core::bundle::loader::load_concept;
 use okf_core::bundle::resolve::resolve_bundle;
 use okf_core::error::{OkfError, Result};
 use okf_core::model::standard::parse_timestamp;
 use okf_core::ports::clock::{Clock, SystemClock};
 use okf_core::query::artifact::{
-    fetch_artifact, list_artifacts, resolve_artifact, show_artifact, ArtifactKind,
+    fetch_artifact, list_artifacts, resolve_artifact, show_artifact, ArtifactKind, ArtifactResolver,
 };
-use okf_core::query::computation::inspect;
+use okf_core::query::computation::inspect_concept;
 use serde_json::json;
 
 pub fn run_list(args: &ArtifactListArgs, json_output: bool) -> Result<i32> {
@@ -30,12 +30,12 @@ pub fn run_list(args: &ArtifactListArgs, json_output: bool) -> Result<i32> {
         println!("(no artifacts)");
     } else {
         for entry in entries {
-            println!(
+            output::print_text_line(format_args!(
                 "{}\t{}\t{}",
                 entry.kind.as_str(),
                 entry.size,
                 entry.path.display()
-            );
+            ))?;
         }
     }
     Ok(0)
@@ -55,7 +55,7 @@ pub fn run_resolve(args: &ArtifactResolveArgs, json_output: bool) -> Result<i32>
             "message": result.message,
         }))?;
     } else {
-        println!(
+        output::print_text_line(format_args!(
             "{}\t{}\t{}",
             result.kind.as_str(),
             result
@@ -64,7 +64,7 @@ pub fn run_resolve(args: &ArtifactResolveArgs, json_output: bool) -> Result<i32>
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| result.resource.clone()),
             result.message.unwrap_or_default()
-        );
+        ))?;
     }
     Ok(
         if matches!(result.kind, ArtifactKind::Missing | ArtifactKind::Blocked) {
@@ -115,15 +115,15 @@ fn print_content(
             "text": content.text,
         }))?;
     } else if content.binary {
-        println!(
+        output::print_text_line(format_args!(
             "binary\t{}\t{}",
             content.sha256,
             content.resolved.path.unwrap().display()
-        );
+        ))?;
     } else if let Some(text) = content.text {
-        print!("{text}");
+        output::print_text(format_args!("{text}"))?;
         if !text.ends_with('\n') {
-            println!();
+            output::print_text_line(format_args!(""))?;
         }
     }
     Ok(0)
@@ -143,12 +143,14 @@ fn parse_lines(raw: &str) -> Result<(usize, usize)> {
 
 pub fn run_computation_check(args: &IdArgs, json_output: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
-    let bundle = load_bundle(&root)?;
-    let contract = inspect(&bundle, &args.concept)?;
+    let concept = load_concept(&root, &args.concept)?
+        .ok_or_else(|| OkfError::Usage(format!("concept not found: {}", args.concept)))?;
+    let contract = inspect_concept(&concept);
+    let resolver = ArtifactResolver::new(&root);
     let resolve = |resource: &Option<String>| {
         resource
             .as_deref()
-            .map(|r| resolve_artifact(&root, Some(&contract.concept.id.0), r))
+            .map(|r| resolver.resolve(Some(&contract.concept.id.0), r))
     };
     let computation = resolve(&contract.computation);
     let executor = resolve(&contract.executor_resource);
@@ -202,7 +204,7 @@ pub fn run_computation_check(args: &IdArgs, json_output: bool) -> Result<i32> {
             "execution": "not-run",
         }))?;
     } else {
-        println!(
+        output::print_text_line(format_args!(
             "{}\truntime={}\tvalid={}\tstatus={}\ttrust={}\tstale={}\texecution=not-run",
             contract.concept.id.0,
             contract.runtime.as_deref().unwrap_or("-"),
@@ -210,9 +212,9 @@ pub fn run_computation_check(args: &IdArgs, json_output: bool) -> Result<i32> {
             contract.concept.effective_status(),
             contract.concept.trust_tier().as_str(),
             stale.map(|v| v.to_string()).as_deref().unwrap_or("unknown")
-        );
+        ))?;
         for issue in &issues {
-            println!("  issue: {issue}");
+            output::print_text_line(format_args!("  issue: {issue}"))?;
         }
     }
     Ok(if issues.is_empty() { 0 } else { 1 })

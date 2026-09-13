@@ -87,6 +87,37 @@ pub fn generate_indexes(bundle: &Bundle) -> Vec<IndexFile> {
         .collect()
 }
 
+/// Generate one directory index without constructing content for every other directory.
+pub fn generate_index(bundle: &Bundle, directory: &std::path::Path) -> IndexFile {
+    let dir = directory.to_string_lossy().replace('\\', "/");
+    let prefix = if dir.is_empty() {
+        String::new()
+    } else {
+        format!("{dir}/")
+    };
+    let mut direct = Vec::new();
+    let mut child_dirs = BTreeSet::new();
+    for concept in &bundle.concepts {
+        let rel = concept.id.0.trim_start_matches('/');
+        let parent = std::path::Path::new(rel)
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(""))
+            .to_string_lossy()
+            .replace('\\', "/");
+        if parent == dir {
+            direct.push(concept);
+        } else if let Some(rest) = parent.strip_prefix(&prefix) {
+            if let Some(child) = rest.split('/').next().filter(|child| !child.is_empty()) {
+                child_dirs.insert(child.to_string());
+            }
+        }
+    }
+    IndexFile {
+        dir: directory.to_path_buf(),
+        content: render_dir_index(&direct, &child_dirs),
+    }
+}
+
 /// Render one directory's index: concepts grouped by `type`, then a `Subdirectories` section.
 fn render_dir_index(concepts: &[&Concept], child_dirs: &BTreeSet<String>) -> String {
     // Group by type (empty/missing type → "Other"), types sorted alphabetically.
@@ -201,6 +232,9 @@ pub fn write_indexes(bundle: &Bundle) -> Result<Vec<PathBuf>> {
                     .collect::<Vec<_>>()
                     .join(", ")
             )));
+        }
+        if std::fs::read(&target).is_ok_and(|existing| existing == final_content.as_bytes()) {
+            continue;
         }
         let temp = target.with_extension("md.okf-tmp");
         std::fs::write(&temp, final_content)
@@ -353,7 +387,7 @@ mod tests {
             .map(|p| std::fs::read_to_string(p).unwrap())
             .collect();
         let bundle2 = load_bundle(&root).unwrap();
-        write_indexes(&bundle2).unwrap();
+        let second_write = write_indexes(&bundle2).unwrap();
         let after: Vec<String> = written
             .iter()
             .map(|p| std::fs::read_to_string(p).unwrap())
@@ -361,6 +395,10 @@ mod tests {
         assert_eq!(
             before, after,
             "re-running write_indexes must not change any file"
+        );
+        assert!(
+            second_write.is_empty(),
+            "unchanged indexes must not be rewritten"
         );
 
         let _ = std::fs::remove_dir_all(&root);

@@ -1,5 +1,6 @@
 //! Safe, read-only resolution and bounded retrieval of OKF path-valued artifacts.
 
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -59,6 +60,25 @@ pub struct ArtifactContent {
     pub binary: bool,
 }
 
+/// Reusable artifact resolver which canonicalizes the bundle root once.
+pub struct ArtifactResolver {
+    root: PathBuf,
+    canonical_root: std::result::Result<PathBuf, String>,
+}
+
+impl ArtifactResolver {
+    pub fn new(root: &Path) -> Self {
+        Self {
+            root: root.to_path_buf(),
+            canonical_root: root.canonicalize().map_err(|error| error.to_string()),
+        }
+    }
+
+    pub fn resolve(&self, from: Option<&str>, resource: &str) -> ResolvedArtifact {
+        resolve_artifact_with_root(&self.root, &self.canonical_root, from, resource)
+    }
+}
+
 pub fn list_artifacts(
     root: &Path,
     directory: Option<&str>,
@@ -66,10 +86,12 @@ pub fn list_artifacts(
 ) -> Result<Vec<ArtifactEntry>> {
     let prefix = normalize_local(directory.unwrap_or(""), None)?;
     let mut out = Vec::new();
-    for rel in walk_files(root)? {
-        if !prefix.as_os_str().is_empty() && !rel.starts_with(&prefix) {
-            continue;
-        }
+    let scan_root = root.join(&prefix);
+    if !scan_root.is_dir() {
+        return Ok(out);
+    }
+    for nested in walk_files(&scan_root)? {
+        let rel = prefix.join(nested);
         let abs = root.join(&rel);
         let metadata =
             std::fs::metadata(&abs).map_err(|e| OkfError::Io(format!("{}: {e}", abs.display())))?;
@@ -88,6 +110,15 @@ pub fn list_artifacts(
 }
 
 pub fn resolve_artifact(root: &Path, from: Option<&str>, resource: &str) -> ResolvedArtifact {
+    ArtifactResolver::new(root).resolve(from, resource)
+}
+
+fn resolve_artifact_with_root(
+    root: &Path,
+    canonical_root: &std::result::Result<PathBuf, String>,
+    from: Option<&str>,
+    resource: &str,
+) -> ResolvedArtifact {
     let trimmed = resource.trim();
     if trimmed.len() >= 3
         && trimmed.as_bytes()[0].is_ascii_alphabetic()
@@ -147,15 +178,15 @@ pub fn resolve_artifact(root: &Path, from: Option<&str>, resource: &str) -> Reso
             message: None,
         };
     }
-    let canonical_root = match root.canonicalize() {
+    let canonical_root = match canonical_root {
         Ok(path) => path,
-        Err(e) => return blocked(resource, rel, e.to_string()),
+        Err(error) => return blocked(resource, rel, error.clone()),
     };
     let canonical = match abs.canonicalize() {
         Ok(path) => path,
         Err(e) => return blocked(resource, rel, e.to_string()),
     };
-    if !canonical.starts_with(&canonical_root) {
+    if !canonical.starts_with(canonical_root) {
         return blocked(resource, rel, "resolved path escapes bundle".to_string());
     }
     let metadata = match std::fs::metadata(&canonical) {
@@ -191,12 +222,27 @@ pub fn show_artifact(
         )));
     }
     let rel = resolved.path.as_ref().unwrap();
-    let bytes = std::fs::read(root.join(rel))
+    let mut file = std::fs::File::open(root.join(rel))
         .map_err(|e| OkfError::Io(format!("{}: {e}", rel.display())))?;
-    let sha256 = hex_sha256(&bytes);
-    let truncated = bytes.len() > max_bytes;
-    let slice = &bytes[..bytes.len().min(max_bytes)];
-    let (text, binary) = match std::str::from_utf8(slice) {
+    let mut digest = Sha256::new();
+    let mut prefix = Vec::with_capacity(max_bytes.min(64 * 1024));
+    let mut buffer = [0u8; 64 * 1024];
+    let mut total = 0usize;
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|e| OkfError::Io(format!("{}: {e}", rel.display())))?;
+        if read == 0 {
+            break;
+        }
+        digest.update(&buffer[..read]);
+        total += read;
+        let retain = (max_bytes - prefix.len()).min(read);
+        prefix.extend_from_slice(&buffer[..retain]);
+    }
+    let sha256 = format!("{:x}", digest.finalize());
+    let truncated = total > max_bytes;
+    let (text, binary) = match std::str::from_utf8(&prefix) {
         Ok(text) => {
             let selected = if let Some((start, end)) = lines {
                 if start == 0 || end < start {
@@ -206,10 +252,9 @@ pub fn show_artifact(
                 }
                 text.lines()
                     .enumerate()
-                    .filter_map(|(i, line)| {
-                        let n = i + 1;
-                        (n >= start && n <= end).then_some(line)
-                    })
+                    .skip(start - 1)
+                    .take(end - start + 1)
+                    .map(|(_, line)| line)
                     .collect::<Vec<_>>()
                     .join("\n")
             } else {

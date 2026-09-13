@@ -66,6 +66,27 @@ fn show_json_is_single_record() {
 }
 
 #[test]
+fn show_loads_only_the_requested_concept() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("wanted.md"),
+        "---\ntype: Note\ntitle: Wanted\n---\nbody\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.path().join("broken.md"),
+        "---\ntype: [unterminated\n---\n",
+    )
+    .unwrap();
+
+    okf()
+        .args(["show", "wanted", root.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Wanted"));
+}
+
+#[test]
 fn browse_reads_existing_index_and_synthesizes_missing_index() {
     let root = fixture("sample-bundle");
     okf()

@@ -1,6 +1,6 @@
 //! Compatibility-first diagnostics for upgrading existing bundles to corrected OKF v0.2 behavior.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
@@ -9,13 +9,13 @@ use sha2::{Digest, Sha256};
 use crate::bundle::loader::Bundle;
 use crate::bundle::walk::walk_markdown;
 use crate::check::lint::{lint_bundle, LintConfig};
-use crate::check::validate::{validate_bundle, ValidateRule};
+use crate::check::validate::{validate_document, ValidateRule, Violation};
 use crate::error::{OkfError, Result};
 use crate::model::concept::ConceptId;
 use crate::model::link::{classify, raw_links, resolve_link, LinkKind};
 use crate::ontology::load::try_load;
 use crate::parse::{markdown::split_frontmatter, parse_concept};
-use crate::query::artifact::{resolve_artifact, ArtifactKind};
+use crate::query::artifact::{ArtifactKind, ArtifactResolver};
 use serde_yaml::Value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +95,12 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
     }
     let paths = walk_markdown(root)?;
     let mut findings = Vec::new();
+    let mut documents: HashMap<PathBuf, Option<String>> = HashMap::new();
+    for path in &paths {
+        let bytes = std::fs::read(root.join(path))
+            .map_err(|error| OkfError::Io(format!("{}: {error}", root.join(path).display())))?;
+        documents.insert(path.clone(), String::from_utf8(bytes).ok());
+    }
 
     // The old loader honored Git ignore files; make newly visible documents explicit.
     let legacy: HashSet<PathBuf> = WalkBuilder::new(root)
@@ -132,11 +138,10 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
             if path.file_name().and_then(|s| s.to_str()) != Some("index.md") {
                 continue;
             }
-            let abs = root.join(path);
-            let Ok(content) = std::fs::read_to_string(&abs) else {
+            let Some(Some(content)) = documents.get(path) else {
                 continue;
             };
-            let (frontmatter, body) = split_frontmatter(&content);
+            let (frontmatter, body) = split_frontmatter(content);
             if body.trim().is_empty() {
                 let replacement = match frontmatter {
                     Some(fm) => format!(
@@ -147,7 +152,9 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
                     }
                 };
                 if apply {
+                    let abs = root.join(path);
                     atomic_write(&abs, replacement.as_bytes())?;
+                    documents.insert(path.clone(), Some(replacement));
                 }
                 push(
                     &mut findings,
@@ -165,8 +172,24 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
         }
     }
 
-    let validation = validate_bundle(root)?;
-    for violation in validation.violations {
+    let mut violations = Vec::new();
+    for path in &paths {
+        let rel = path.to_string_lossy().replace('\\', "/");
+        match documents.get(path).and_then(Option::as_deref) {
+            Some(content) => violations.extend(validate_document(&rel, content)),
+            None => violations.push(Violation {
+                file: rel,
+                rule: ValidateRule::InvalidUtf8,
+                message: "Markdown document is not valid UTF-8".to_string(),
+            }),
+        }
+    }
+    violations.sort_by(|a, b| {
+        a.file
+            .cmp(&b.file)
+            .then_with(|| a.rule.as_str().cmp(b.rule.as_str()))
+    });
+    for violation in violations {
         let repair = match violation.rule {
             ValidateRule::InvalidIndex if violation.message.contains("at least one") => {
                 RepairClass::Review
@@ -194,7 +217,7 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
         if matches!(name, "index.md" | "log.md") {
             continue;
         }
-        let Ok(content) = std::fs::read_to_string(root.join(path)) else {
+        let Some(Some(content)) = documents.get(path) else {
             continue;
         };
         let stem = path
@@ -202,7 +225,7 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
             .strip_suffix(".md")
             .unwrap_or_default()
             .to_string();
-        if let Ok(concept) = parse_concept(ConceptId::from_relative(&stem), &content) {
+        if let Ok(concept) = parse_concept(ConceptId::from_relative(&stem), content) {
             concepts.push(concept);
         }
     }
@@ -233,6 +256,7 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
         );
     }
 
+    let artifact_resolver = ArtifactResolver::new(root);
     for concept in &bundle.concepts {
         let mut resources: Vec<(String, String)> = Vec::new();
         if let Some(resource) = concept.frontmatter.get_str("resource") {
@@ -264,7 +288,7 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
             }
         }
         for (field, resource) in resources {
-            let resolved = resolve_artifact(root, Some(&concept.id.0), &resource);
+            let resolved = artifact_resolver.resolve(Some(&concept.id.0), &resource);
             if matches!(resolved.kind, ArtifactKind::Missing | ArtifactKind::Blocked) {
                 push(
                     &mut findings,

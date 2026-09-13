@@ -4,15 +4,14 @@
 //! against the currently-loaded bundle, reporting which concept ids were added / removed /
 //! modified. No printing — the CLI wave renders [`DiffResult`].
 //!
-//! Note (v1 limitation): `ls-tree` paths are treated as bundle-relative, i.e. the bundle root
-//! is assumed to be the git repo root. A sub-directory bundle is a later refinement.
+//! Subdirectory bundles are scoped to their worktree-relative prefix before blobs are read.
 use crate::bundle::loader::Bundle;
 use crate::error::Result;
 use crate::model::concept::{Concept, ConceptId};
 use crate::parse::parse_concept;
 use crate::ports::git::Git;
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Reserved filenames that are structural, not concepts (mirrors `bundle::loader`).
 const RESERVED: [&str; 2] = ["index.md", "log.md"];
@@ -36,13 +35,23 @@ impl DiffResult {
 
 /// Compute the concept-level diff of `bundle` against git ref `rev`.
 pub fn diff(bundle: &Bundle, git: &dyn Git, rev: &str) -> Result<DiffResult> {
+    let git_root = git.worktree_root(&bundle.root)?;
+    let prefix = bundle_prefix(&git_root, &bundle.root)?;
+
     // Concepts at the ref, keyed by id.
     let mut at_ref: BTreeMap<String, Concept> = BTreeMap::new();
-    for path in git.ls_tree(rev)? {
-        let Some(id) = concept_id_for(&path) else {
-            continue;
-        };
-        let bytes = git.show(rev, Path::new(&path))?;
+    let candidates: Vec<(PathBuf, ConceptId)> = git
+        .ls_tree_in(&git_root, rev, &prefix)?
+        .into_iter()
+        .filter_map(|repo_path| {
+            let relative = Path::new(&repo_path).strip_prefix(&prefix).ok()?;
+            let id = concept_id_for(&relative.to_string_lossy())?;
+            Some((PathBuf::from(repo_path), id))
+        })
+        .collect();
+    let paths: Vec<PathBuf> = candidates.iter().map(|(path, _)| path.clone()).collect();
+    let blobs = git.show_many_in(&git_root, rev, &paths)?;
+    for ((_, id), bytes) in candidates.into_iter().zip(blobs) {
         let content = String::from_utf8_lossy(&bytes);
         let concept = parse_concept(id.clone(), &content)?;
         at_ref.insert(id.0, concept);
@@ -77,6 +86,30 @@ pub fn diff(bundle: &Bundle, git: &dyn Git, rev: &str) -> Result<DiffResult> {
     result.removed.sort_by(|a, b| a.0.cmp(&b.0));
     result.modified.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(result)
+}
+
+fn bundle_prefix(git_root: &Path, bundle_root: &Path) -> Result<PathBuf> {
+    if git_root == bundle_root {
+        return Ok(PathBuf::new());
+    }
+    let absolute = if bundle_root.is_absolute() {
+        bundle_root.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|error| crate::error::OkfError::Environment(error.to_string()))?
+            .join(bundle_root)
+    };
+    let absolute = absolute.canonicalize().unwrap_or(absolute);
+    absolute
+        .strip_prefix(git_root)
+        .map(Path::to_path_buf)
+        .map_err(|_| {
+            crate::error::OkfError::Usage(format!(
+                "bundle {} is outside Git worktree {}",
+                bundle_root.display(),
+                git_root.display()
+            ))
+        })
 }
 
 /// Map a tracked path to a concept id, or `None` for non-concepts (non-`.md`, reserved).

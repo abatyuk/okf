@@ -20,28 +20,28 @@ impl SearchFilter {
     }
 }
 
-fn matches(concept: &Concept, filter: &SearchFilter) -> bool {
+fn matches(concept: &Concept, filter: &SearchFilter, needle: Option<&str>) -> bool {
     if let Some(ty) = &filter.type_ {
         if concept.concept_type() != Some(ty.as_str()) {
             return false;
         }
     }
     if let Some(tag) = &filter.tag {
-        if !concept.tags().iter().any(|t| t == tag) {
+        if !concept.has_tag(tag) {
             return false;
         }
     }
-    if let Some(text) = &filter.text {
-        let needle = text.to_lowercase();
-        let hay = format!(
-            "{}\n{}\n{}\n{}",
-            concept.id.0,
+    if let Some(needle) = needle {
+        let fields = [
+            concept.id.0.as_str(),
             concept.title().unwrap_or(""),
             concept.description().unwrap_or(""),
-            concept.body,
-        )
-        .to_lowercase();
-        if !hay.contains(&needle) {
+            concept.body.as_str(),
+        ];
+        if !fields
+            .iter()
+            .any(|field| field.to_lowercase().contains(needle))
+        {
             return false;
         }
     }
@@ -50,10 +50,11 @@ fn matches(concept: &Concept, filter: &SearchFilter) -> bool {
 
 /// Return the concepts matching `filter`, in bundle order.
 pub fn search<'a>(bundle: &'a Bundle, filter: &SearchFilter) -> Vec<&'a Concept> {
+    let needle = filter.text.as_ref().map(|text| text.to_lowercase());
     bundle
         .concepts
         .iter()
-        .filter(|c| matches(c, filter))
+        .filter(|c| matches(c, filter, needle.as_deref()))
         .collect()
 }
 

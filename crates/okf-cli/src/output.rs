@@ -5,10 +5,16 @@
 //! `id`/`trust_tier` (via [`concept_record`]); other record types have documented shapes.
 use okf_core::error::Result;
 use okf_core::model::concept::Concept;
-use okf_core::output::ndjson;
 use okf_core::output::record::concept_record;
 use okf_core::parse::writer;
 use serde_json::Value as Json;
+use std::cell::RefCell;
+use std::io::{BufWriter, Write};
+
+thread_local! {
+    static STDOUT: RefCell<BufWriter<std::io::Stdout>> =
+        RefCell::new(BufWriter::with_capacity(64 * 1024, std::io::stdout()));
+}
 
 #[derive(Debug)]
 struct Heading<'a> {
@@ -19,9 +25,28 @@ struct Heading<'a> {
 
 /// Print one NDJSON record (object per line).
 pub fn print_line(value: &Json) -> Result<()> {
-    print!("{}", ndjson::to_line(value)?);
-    println!();
-    Ok(())
+    STDOUT.with(|output| {
+        let mut output = output.borrow_mut();
+        serde_json::to_writer(&mut *output, value)
+            .map_err(|error| okf_core::error::OkfError::Internal(error.to_string()))?;
+        output.write_all(b"\n").map_err(Into::into)
+    })
+}
+
+pub fn flush() -> Result<()> {
+    STDOUT.with(|output| output.borrow_mut().flush().map_err(Into::into))
+}
+
+pub fn print_text(args: std::fmt::Arguments<'_>) -> Result<()> {
+    STDOUT.with(|output| output.borrow_mut().write_fmt(args).map_err(Into::into))
+}
+
+pub fn print_text_line(args: std::fmt::Arguments<'_>) -> Result<()> {
+    STDOUT.with(|output| {
+        let mut output = output.borrow_mut();
+        output.write_fmt(args)?;
+        output.write_all(b"\n").map_err(Into::into)
+    })
 }
 
 /// Print a sequence of NDJSON records.
@@ -66,15 +91,19 @@ pub fn print_concepts(concepts: &[&Concept], json: bool) -> Result<()> {
         .unwrap_or(6)
         .max(6);
 
-    println!(
+    let stdout = std::io::stdout();
+    let mut output = BufWriter::with_capacity(64 * 1024, stdout.lock());
+    writeln!(
+        output,
         "{:<id_w$}  {:<ty_w$}  {:<tier_w$}  {}",
         "ID",
         "TYPE",
         "TRUST",
         format_args!("{:<status_w$}  {}", "STATUS", "TITLE")
-    );
+    )?;
     for c in concepts {
-        println!(
+        writeln!(
+            output,
             "{:<id_w$}  {:<ty_w$}  {:<tier_w$}  {}",
             c.id.0,
             c.concept_type().unwrap_or("-"),
@@ -84,9 +113,9 @@ pub fn print_concepts(concepts: &[&Concept], json: bool) -> Result<()> {
                 c.effective_status(),
                 c.title().unwrap_or("")
             ),
-        );
+        )?;
     }
-    Ok(())
+    output.flush().map_err(Into::into)
 }
 
 /// Print a single concept's full content as an NDJSON record or human text.

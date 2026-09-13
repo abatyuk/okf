@@ -23,6 +23,11 @@ pub fn inspect<'a>(bundle: &'a Bundle, id: &str) -> Result<ComputationContract<'
     let concept = bundle
         .get(id)
         .ok_or_else(|| OkfError::Usage(format!("concept not found: {id}")))?;
+    Ok(inspect_concept(concept))
+}
+
+/// Inspect an already-loaded computation concept.
+pub fn inspect_concept(concept: &Concept) -> ComputationContract<'_> {
     let mut issues = Vec::new();
     if concept.concept_type() != Some("Attested Computation") {
         issues.push("concept type is not exact `Attested Computation`".to_string());
@@ -78,7 +83,7 @@ pub fn inspect<'a>(bundle: &'a Bundle, id: &str) -> Result<ComputationContract<'
         })
         .unwrap_or_default();
     let attester_resource = nested_string(concept, "attester", "resource");
-    Ok(ComputationContract {
+    ComputationContract {
         concept,
         runtime,
         parameters,
@@ -88,7 +93,7 @@ pub fn inspect<'a>(bundle: &'a Bundle, id: &str) -> Result<ComputationContract<'
         receipt,
         attester_resource,
         issues,
-    })
+    }
 }
 
 fn nested_string(concept: &Concept, family: &str, key: &str) -> Option<String> {

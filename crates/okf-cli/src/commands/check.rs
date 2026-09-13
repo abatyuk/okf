@@ -5,7 +5,7 @@ use crate::cli::{
     AffectedArgs, BundleArgs, DiffArgs, DoctorArgs, FailOnArgs, LintArgs, SourceScanArgs,
 };
 use crate::output;
-use okf_core::bundle::loader::load_bundle;
+use okf_core::bundle::loader::{load_bundle, load_bundle_metadata};
 use okf_core::bundle::resolve::resolve_bundle;
 use okf_core::bundle::walk::{walk_files, walk_markdown};
 use okf_core::check::doctor::doctor;
@@ -37,9 +37,9 @@ pub fn run_scan(args: &BundleArgs, json: bool) -> Result<i32> {
             }))?;
         }
     } else {
-        println!("{} Markdown file(s):", paths.len());
+        output::print_text_line(format_args!("{} Markdown file(s):", paths.len()))?;
         for path in &paths {
-            println!("  {}", path.display());
+            output::print_text_line(format_args!("  {}", path.display()))?;
         }
     }
     Ok(0)
@@ -63,7 +63,7 @@ pub fn run_source_scan(args: &SourceScanArgs, json_output: bool) -> Result<i32> 
         }
     } else {
         for path in files {
-            println!("{}", path.display());
+            output::print_text_line(format_args!("{}", path.display()))?;
         }
     }
     Ok(0)
@@ -83,10 +83,15 @@ pub fn run_validate(args: &BundleArgs, json: bool) -> Result<i32> {
             }))?;
         }
     } else if report.is_conformant() {
-        println!("conformant: no violations");
+        output::print_text_line(format_args!("conformant: no violations"))?;
     } else {
         for v in &report.violations {
-            println!("{}\t{}\t{}", v.file, v.rule.as_str(), v.message);
+            output::print_text_line(format_args!(
+                "{}\t{}\t{}",
+                v.file,
+                v.rule.as_str(),
+                v.message
+            ))?;
         }
         eprintln!("{} violation(s)", report.violations.len());
     }
@@ -113,16 +118,16 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
         }
     } else {
         if findings.is_empty() {
-            println!("clean: no findings");
+            output::print_text_line(format_args!("clean: no findings"))?;
         }
         for f in &findings {
-            println!(
+            output::print_text_line(format_args!(
                 "{}\t{}\t{}\t{}",
                 f.severity.as_str(),
                 f.rule,
                 f.concept.as_deref().unwrap_or("-"),
                 f.message
-            );
+            ))?;
         }
     }
 
@@ -145,7 +150,7 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
 /// `okf stale [bundle] [--fail-on <sev>]` — informational unless `--fail-on` is set.
 pub fn run_stale(args: &FailOnArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
-    let bundle = load_bundle(&root)?;
+    let bundle = load_bundle_metadata(&root)?;
     let report = check_stale(&bundle);
 
     if json {
@@ -163,20 +168,23 @@ pub fn run_stale(args: &FailOnArgs, json: bool) -> Result<i32> {
             }))?;
         }
     } else if report.is_empty() {
-        println!("in sync: nothing drifted");
+        output::print_text_line(format_args!("in sync: nothing drifted"))?;
     } else {
         for cd in &report.concepts {
             if let Some(exp) = &cd.expired {
-                println!("{}\texpired\tstale_after {exp}", cd.concept);
+                output::print_text_line(format_args!(
+                    "{}\texpired\tstale_after {exp}",
+                    cd.concept
+                ))?;
             }
             for s in &cd.sources {
-                println!(
+                output::print_text_line(format_args!(
                     "{}\t{}\t{}\t{}",
                     cd.concept,
                     s.drift.as_str(),
                     s.resource,
                     s.message
-                );
+                ))?;
             }
         }
     }
@@ -219,10 +227,10 @@ pub fn run_affected(args: &AffectedArgs, json: bool) -> Result<i32> {
             output::print_line(&json!({"kind": "affected", "concept": id.0}))?;
         }
     } else if ids.is_empty() {
-        println!("no affected concepts");
+        output::print_text_line(format_args!("no affected concepts"))?;
     } else {
         for id in &ids {
-            println!("{}", id.0);
+            output::print_text_line(format_args!("{}", id.0))?;
         }
     }
     discovery_exit(&args.fail_on, ids.is_empty())
@@ -246,16 +254,16 @@ pub fn run_diff(args: &DiffArgs, json: bool) -> Result<i32> {
             }
         }
     } else if d.is_empty() {
-        println!("no changes vs {}", args.git_ref);
+        output::print_text_line(format_args!("no changes vs {}", args.git_ref))?;
     } else {
         for id in &d.added {
-            println!("added\t{}", id.0);
+            output::print_text_line(format_args!("added\t{}", id.0))?;
         }
         for id in &d.removed {
-            println!("removed\t{}", id.0);
+            output::print_text_line(format_args!("removed\t{}", id.0))?;
         }
         for id in &d.modified {
-            println!("modified\t{}", id.0);
+            output::print_text_line(format_args!("modified\t{}", id.0))?;
         }
     }
     discovery_exit(&args.fail_on, d.is_empty())
@@ -348,22 +356,22 @@ pub fn run_doctor(args: &DoctorArgs, json_output: bool) -> Result<i32> {
         }))?;
     } else {
         for finding in &report.findings {
-            println!(
+            output::print_text_line(format_args!(
                 "{}\t{}\t{}\t{}\t{}",
                 finding.severity.as_str(),
                 finding.id,
                 finding.repair.as_str(),
                 finding.path.as_deref().unwrap_or("-"),
                 finding.message
-            );
+            ))?;
         }
-        println!(
+        output::print_text_line(format_args!(
             "doctor: {} file(s), {} concept(s), {} finding(s), ready={}",
             report.files_inspected,
             report.concepts_inspected,
             report.findings.len(),
             report.ready()
-        );
+        ))?;
         if args.fix_safe && !apply {
             eprintln!("safe fixes were dry-run only; pass --fix-safe --yes to apply");
         }

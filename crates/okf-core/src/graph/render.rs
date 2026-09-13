@@ -6,7 +6,7 @@
 //! Broken-link targets appear as nodes so breakage is visible in the rendered artifact.
 use crate::graph::build::LinkGraph;
 use crate::model::concept::ConceptId;
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Output format for [`render`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,8 +81,8 @@ fn collect(
     direction: GraphDirection,
     depth: Option<usize>,
 ) -> (Vec<String>, Vec<(String, String)>) {
-    let mut nodes: BTreeSet<String> = BTreeSet::new();
-    let mut edges: BTreeSet<(String, String)> = BTreeSet::new();
+    let mut nodes: HashSet<String> = HashSet::new();
+    let mut edges: HashSet<(String, String)> = HashSet::new();
 
     match root {
         Some(r) => {
@@ -126,7 +126,11 @@ fn collect(
         }
     }
 
-    (nodes.into_iter().collect(), edges.into_iter().collect())
+    let mut nodes: Vec<String> = nodes.into_iter().collect();
+    let mut edges: Vec<(String, String)> = edges.into_iter().collect();
+    nodes.sort_unstable();
+    edges.sort_unstable();
+    (nodes, edges)
 }
 
 /// Stable `id → n{index}` map over the sorted node list.

@@ -13,7 +13,12 @@ use crate::model::source::{Fingerprint, Source, SourceKind};
 use crate::ports::fs::FileSystem;
 use crate::ports::git::Git;
 use crate::ports::net::Net;
+use std::cell::{OnceCell, RefCell};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+type FileCache = HashMap<PathBuf, std::result::Result<Arc<[u8]>, String>>;
 
 /// Computes the current fingerprint for a source, dispatching on its kind.
 pub trait Fingerprinter {
@@ -27,6 +32,8 @@ pub struct Engine<'a> {
     pub fs: &'a dyn FileSystem,
     pub git: &'a dyn Git,
     pub net: Option<&'a dyn Net>,
+    git_root: OnceCell<PathBuf>,
+    files: RefCell<FileCache>,
 }
 
 impl<'a> Engine<'a> {
@@ -37,11 +44,99 @@ impl<'a> Engine<'a> {
         git: &'a dyn Git,
         net: Option<&'a dyn Net>,
     ) -> Self {
-        Self { root, fs, git, net }
+        Self {
+            root,
+            fs,
+            git,
+            net,
+            git_root: OnceCell::new(),
+            files: RefCell::new(HashMap::new()),
+        }
     }
 
     fn resolve(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
+    }
+
+    fn read(&self, path: PathBuf) -> Result<Arc<[u8]>> {
+        if let Some(cached) = self.files.borrow().get(&path) {
+            return cached
+                .clone()
+                .map_err(|message| OkfError::Io(message.to_string()));
+        }
+        let result = self
+            .fs
+            .read(&path)
+            .map(Arc::<[u8]>::from)
+            .map_err(|error| error.to_string());
+        self.files.borrow_mut().insert(path, result.clone());
+        result.map_err(OkfError::Io)
+    }
+
+    /// Resolve the containing worktree once for the lifetime of this engine. Bundle-wide
+    /// operations may fingerprint hundreds of sources from the same repository.
+    fn git_root(&self) -> Result<&Path> {
+        if self.git_root.get().is_none() {
+            let root = self.git.worktree_root(self.root)?;
+            // This engine is single-threaded (`OnceCell` is intentionally unsynchronized), so a
+            // failed set would indicate an internal programming error.
+            self.git_root.set(root).map_err(|_| {
+                OkfError::Internal("git worktree root initialized twice".to_string())
+            })?;
+        }
+        Ok(self
+            .git_root
+            .get()
+            .expect("git worktree root was initialized")
+            .as_path())
+    }
+
+    pub(crate) fn fingerprint_git_paths(&self, sources: &[Source]) -> Vec<Result<Fingerprint>> {
+        let root = match self.git_root() {
+            Ok(root) => root,
+            Err(error) => {
+                let message = error.to_string();
+                return sources
+                    .iter()
+                    .map(|_| Err(OkfError::Io(message.clone())))
+                    .collect();
+            }
+        };
+        let paths: Vec<PathBuf> = sources
+            .iter()
+            .map(|source| root.join(split_fragment(&source.resource).0))
+            .collect();
+        self.git
+            .hash_objects_in(root, &paths)
+            .into_iter()
+            .map(|result| {
+                result.map(|sha| Fingerprint::from_pairs(vec![("blob_sha".to_string(), sha)]))
+            })
+            .collect()
+    }
+
+    pub(crate) fn fingerprint_git_commits(&self, sources: &[Source]) -> Vec<Result<Fingerprint>> {
+        let root = match self.git_root() {
+            Ok(root) => root,
+            Err(error) => {
+                let message = error.to_string();
+                return sources
+                    .iter()
+                    .map(|_| Err(OkfError::Io(message.clone())))
+                    .collect();
+            }
+        };
+        let paths: Vec<PathBuf> = sources
+            .iter()
+            .map(|source| root.join(split_fragment(&source.resource).0))
+            .collect();
+        self.git
+            .last_commits_in(root, &paths)
+            .into_iter()
+            .map(|result| {
+                result.map(|sha| Fingerprint::from_pairs(vec![("commit_sha".to_string(), sha)]))
+            })
+            .collect()
     }
 }
 
@@ -50,15 +145,15 @@ impl Fingerprinter for Engine<'_> {
         let (path_part, fragment) = split_fragment(&source.resource);
         match &source.kind {
             SourceKind::GitPath => {
-                let git_root = self.git.worktree_root(self.root)?;
-                git::git_path_fp(self.git, &git_root.join(path_part))
+                let git_root = self.git_root()?;
+                git::git_path_fp_in(self.git, git_root, &git_root.join(path_part))
             }
             SourceKind::GitCommit => {
-                let git_root = self.git.worktree_root(self.root)?;
-                git::git_commit_fp(self.git, &git_root.join(path_part))
+                let git_root = self.git_root()?;
+                git::git_commit_fp_in(self.git, git_root, &git_root.join(path_part))
             }
             SourceKind::File => {
-                let bytes = self.fs.read(&self.resolve(path_part))?;
+                let bytes = self.read(self.resolve(path_part))?;
                 Ok(Fingerprint::from_pairs(vec![(
                     "sha256".to_string(),
                     canonicalize::sha256_hex(&bytes),
@@ -72,7 +167,7 @@ impl Fingerprinter for Engine<'_> {
                     ))
                 })?;
                 let (start, end) = parse_line_range(frag)?;
-                let bytes = self.fs.read(&self.resolve(path_part))?;
+                let bytes = self.read(self.resolve(path_part))?;
                 text::line_range_fp(&bytes, start, end)
             }
             SourceKind::MarkdownHeading => {
@@ -82,7 +177,7 @@ impl Fingerprinter for Engine<'_> {
                         source.resource
                     ))
                 })?;
-                let bytes = self.fs.read(&self.resolve(path_part))?;
+                let bytes = self.read(self.resolve(path_part))?;
                 text::markdown_heading_fp(&bytes, slug)
             }
             SourceKind::Url => url::url_fp(self.net, &source.resource),

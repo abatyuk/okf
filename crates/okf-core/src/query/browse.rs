@@ -3,9 +3,9 @@
 //! An existing index is returned without loading the bundle's concept documents. When the
 //! requested directory has no index, the consumer fallback allowed by the OKF specification is
 //! used: load the bundle and synthesize the directory listing in memory.
-use crate::bundle::loader::load_bundle;
+use crate::bundle::loader::load_bundle_metadata;
 use crate::error::{OkfError, Result};
-use crate::render::index::generate_indexes;
+use crate::render::index::generate_index;
 use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,12 +69,8 @@ pub fn browse(root: &Path, directory: Option<&str>) -> Result<BrowseResult> {
         });
     }
 
-    let bundle = load_bundle(root)?;
-    let content = generate_indexes(&bundle)
-        .into_iter()
-        .find(|index| index.dir == relative)
-        .map(|index| index.content)
-        .unwrap_or_else(|| "\n".to_string());
+    let bundle = load_bundle_metadata(root)?;
+    let content = generate_index(&bundle, &relative).content;
     Ok(BrowseResult {
         directory: display_directory(&relative),
         path,

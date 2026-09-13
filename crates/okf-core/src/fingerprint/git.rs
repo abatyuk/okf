@@ -11,10 +11,25 @@ pub fn git_path_fp(git: &dyn Git, path: &Path) -> Result<Fingerprint> {
     Ok(Fingerprint::from_pairs(vec![("blob_sha".to_string(), sha)]))
 }
 
+/// [`git_path_fp`] with a previously resolved worktree root.
+pub fn git_path_fp_in(git: &dyn Git, root: &Path, path: &Path) -> Result<Fingerprint> {
+    let sha = git.hash_object_in(root, path)?;
+    Ok(Fingerprint::from_pairs(vec![("blob_sha".to_string(), sha)]))
+}
+
 /// `git-commit`: last commit touching the path (`git log -1 --format=%H -- <path>`).
 /// Recorded under `commit_sha`. No hashing.
 pub fn git_commit_fp(git: &dyn Git, path: &Path) -> Result<Fingerprint> {
     let sha = git.last_commit(path)?;
+    Ok(Fingerprint::from_pairs(vec![(
+        "commit_sha".to_string(),
+        sha,
+    )]))
+}
+
+/// [`git_commit_fp`] with a previously resolved worktree root.
+pub fn git_commit_fp_in(git: &dyn Git, root: &Path, path: &Path) -> Result<Fingerprint> {
+    let sha = git.last_commit_in(root, path)?;
     Ok(Fingerprint::from_pairs(vec![(
         "commit_sha".to_string(),
         sha,

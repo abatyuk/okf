@@ -355,7 +355,7 @@ subsequent line describes one command. Every line is a standalone JSON object so
 stream and filter without a JSON-array parser.
 
 ```jsonl
-{"kind":"schema","tool":"okf","tool_version":"0.2.1","okf_spec":["0.2"],"ndjson_schema":"1"}
+{"kind":"schema","tool":"okf","tool_version":"0.2.2","okf_spec":["0.2"],"ndjson_schema":"1"}
 {"kind":"command","name":"list","group":"query","mutates":false,"summary":"List concepts with id, type, title, status, trust tier.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."}],"output":{"kind":"query","stream":"concept"}}
 {"kind":"command","name":"affected","group":"check","mutates":false,"summary":"Concepts needing review given changed links.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."},{"name":"changed","kind":"flag","type":"list<string>","required":true,"repeatable":true,"stdin":true},{"name":"transitive","kind":"flag","type":"bool","default":false},{"name":"depth","kind":"flag","type":"int","required":false}],"output":{"kind":"query","stream":"affected"}}
 {"kind":"command","name":"add","group":"mutate","mutates":true,"summary":"Add a concept scaffolded from the ontology.","args":[{"name":"path","kind":"positional","type":"path","required":true},{"name":"type","kind":"flag","type":"string","required":false},{"name":"title","kind":"flag","type":"string"},{"name":"attested","kind":"flag","type":"bool","default":false}],"output":{"kind":"mutation","stream":"change"}}

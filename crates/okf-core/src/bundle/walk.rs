@@ -18,20 +18,33 @@ pub fn walk_files(root: &Path) -> Result<Vec<PathBuf>> {
         )));
     }
     let mut out = Vec::new();
-    walk_dir(root, root, &mut out)?;
+    walk_dir(root, root, &mut out, &|_| true)?;
     out.sort();
     Ok(out)
 }
 
 /// Walk every `.md` file below `root`, regardless of Git ignore rules.
 pub fn walk_markdown(root: &Path) -> Result<Vec<PathBuf>> {
-    Ok(walk_files(root)?
-        .into_iter()
-        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("md"))
-        .collect())
+    if !root.is_dir() {
+        return Err(OkfError::Environment(format!(
+            "bundle path is not a directory: {}",
+            root.display()
+        )));
+    }
+    let mut out = Vec::new();
+    walk_dir(root, root, &mut out, &|path| {
+        path.extension().and_then(|e| e.to_str()) == Some("md")
+    })?;
+    out.sort();
+    Ok(out)
 }
 
-fn walk_dir(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+fn walk_dir(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<PathBuf>,
+    include: &dyn Fn(&Path) -> bool,
+) -> Result<()> {
     let mut entries = std::fs::read_dir(dir)
         .map_err(|e| OkfError::Io(format!("{}: {e}", dir.display())))?
         .collect::<std::result::Result<Vec<_>, _>>()
@@ -47,9 +60,9 @@ fn walk_dir(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
             .map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
         if ty.is_dir() {
             if !EXCLUDED_DIRS.contains(&name.as_ref()) {
-                walk_dir(root, &path, out)?;
+                walk_dir(root, &path, out, include)?;
             }
-        } else if ty.is_file() {
+        } else if ty.is_file() && include(&path) {
             out.push(
                 path.strip_prefix(root)
                     .map_err(|e| OkfError::Internal(e.to_string()))?

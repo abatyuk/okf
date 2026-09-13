@@ -22,11 +22,16 @@ pub fn run() -> i32 {
         }
     };
 
-    match commands::run(cli) {
+    let code = match commands::run(cli) {
         Ok(code) => code,
         Err(err) => {
             eprintln!("okf: {err}");
             err.exit_code()
         }
+    };
+    if let Err(err) = crate::output::flush() {
+        eprintln!("okf: {err}");
+        return err.exit_code();
     }
+    code
 }
