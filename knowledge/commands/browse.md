@@ -10,11 +10,11 @@ sources:
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
+    blob_sha: 2e9e16e4bfa3271ab135d7f1ca406374da1a1407
 - resource: crates/okf-cli/src/commands/query.rs
   kind: git-path
   fingerprint:
-    blob_sha: 98fcf5b787e69c801489823ffea093f747e64d22
+    blob_sha: 079709086641c8a57a21c3da0c2f2e027af390f3
 last_modified: 2026-09-09T13:13:42Z
 ---
 # okf browse
@@ -27,9 +27,9 @@ Use the root view first, then pass `--directory <path>` to descend into a promis
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--directory <value>` | string | no | Bundle-relative directory to browse (default: root `/`) (default: `/`) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `index`.

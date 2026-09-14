@@ -73,7 +73,7 @@ fn search_filters_by_type_tag_text() {
     let by_text = search(
         &bundle,
         &SearchFilter {
-            text: Some("REIMBURSEMENT".to_string()), // case-insensitive
+            text: vec!["REIMBURSEMENT".to_string()], // case-insensitive
             ..Default::default()
         },
     );

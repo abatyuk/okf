@@ -15,7 +15,7 @@ sources:
 - resource: crates/okf-core/src/graph/render.rs
   kind: git-path
   fingerprint:
-    blob_sha: fc4228d7b0dfeeaa202c0a7f61c20634e353f5ce
+    blob_sha: d983856c864548bae7ca134b4300434c7d584618
 last_modified: 2026-09-07T18:47:09Z
 ---
 # graph module

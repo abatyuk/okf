@@ -47,6 +47,79 @@ fn list_json_mirrors_frontmatter_with_id_and_trust() {
 }
 
 #[test]
+fn list_is_exactly_unfiltered_search_in_json_mode() {
+    let bundle = fixture("sample-bundle");
+    let list = okf()
+        .args(["list", bundle.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    let search = okf()
+        .args(["search", bundle.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    assert!(list.status.success());
+    assert!(search.status.success());
+    assert_eq!(list.stdout, search.stdout);
+}
+
+#[test]
+fn search_and_init_honor_environment_and_toml_bundle_resolution() {
+    let project = tempfile::tempdir().unwrap();
+    let configured = project.path().join("configured");
+    std::fs::create_dir(&configured).unwrap();
+    std::fs::write(
+        configured.join("configured.md"),
+        "---\ntype: Note\ntitle: Configured\n---\n",
+    )
+    .unwrap();
+    std::fs::write(project.path().join("okf.toml"), "bundle = \"configured\"\n").unwrap();
+
+    let config_search = okf()
+        .args(["search", "--text", "Configured", "--json"])
+        .current_dir(project.path())
+        .env_remove("OKF_BUNDLE")
+        .output()
+        .unwrap();
+    assert!(config_search.status.success());
+    assert_eq!(ndjson(&config_search.stdout)[0]["id"], "/configured");
+
+    let config_graph = okf()
+        .args(["graph", "--root", "configured", "--json"])
+        .current_dir(project.path())
+        .env_remove("OKF_BUNDLE")
+        .output()
+        .unwrap();
+    assert!(config_graph.status.success());
+    assert_eq!(ndjson(&config_graph.stdout)[0]["root"], "configured");
+
+    let env_bundle = project.path().join("environment");
+    std::fs::create_dir(&env_bundle).unwrap();
+    std::fs::write(
+        env_bundle.join("environment.md"),
+        "---\ntype: Note\ntitle: Environment\n---\n",
+    )
+    .unwrap();
+    let env_search = okf()
+        .args(["search", "--text", "Environment", "--json"])
+        .current_dir(project.path())
+        .env("OKF_BUNDLE", &env_bundle)
+        .output()
+        .unwrap();
+    assert!(env_search.status.success());
+    assert_eq!(ndjson(&env_search.stdout)[0]["id"], "/environment");
+
+    std::fs::write(project.path().join("okf.toml"), "bundle = \"new/bundle\"\n").unwrap();
+    let initialized = okf()
+        .arg("init")
+        .current_dir(project.path())
+        .env_remove("OKF_BUNDLE")
+        .output()
+        .unwrap();
+    assert!(initialized.status.success());
+    assert!(project.path().join("new/bundle/index.md").is_file());
+}
+
+#[test]
 fn show_json_is_single_record() {
     let out = okf()
         .args([
@@ -203,11 +276,153 @@ fn search_json_filters_by_type() {
 }
 
 #[test]
+fn search_text_matches_markdown_wrapping_but_not_paragraph_boundaries() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("wrapped.md"),
+        "---\ntype: Note\ntitle: Wrapped prose\n---\nalpha\nbeta\n\ngamma\ndelta\n",
+    )
+    .unwrap();
+
+    let search = |phrase: &str| {
+        let out = okf()
+            .args([
+                "search",
+                root.path().to_str().unwrap(),
+                "--text",
+                phrase,
+                "--json",
+            ])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        ndjson(&out.stdout)
+    };
+
+    assert_eq!(search("alpha beta")[0]["id"], "/wrapped");
+    assert_eq!(search("alpha   beta")[0]["id"], "/wrapped");
+    assert!(search("beta gamma").is_empty());
+}
+
+#[test]
+fn search_supports_modes_scopes_evidence_ranking_and_limits() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("a-body.md"),
+        "---\ntype: Note\ntitle: Body result\nowner: Jane Doe\nsearch: authored\n---\n# Intro\nNeedle **search** includes [gamma](https://example.test).\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.path().join("z-title.md"),
+        "---\ntype: Note\ntitle: Needle search\n---\nUnrelated body.\n",
+    )
+    .unwrap();
+
+    let run = |args: &[&str]| {
+        let mut command = okf();
+        command
+            .arg("search")
+            .arg(root.path())
+            .args(args)
+            .arg("--json");
+        let out = command.output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        ndjson(&out.stdout)
+    };
+
+    // Reader-visible Markdown and repeated phrases (AND).
+    let markdown = run(&["--text", "needle search", "--text", "includes gamma"]);
+    assert_eq!(markdown.len(), 1);
+    assert_eq!(markdown[0]["id"], "/a-body");
+    assert_eq!(markdown[0]["search"]["matches"][0]["field"], "body");
+    assert_eq!(markdown[0]["search"]["matches"][0]["line"], 8);
+    assert!(markdown[0]["search"]["matches"][0]["snippet"]
+        .as_str()
+        .unwrap()
+        .contains("Needle search"));
+    assert_eq!(markdown[0]["frontmatter_conflicts"]["search"], "authored");
+    let shown = okf()
+        .args([
+            "show",
+            "a-body",
+            root.path().to_str().unwrap(),
+            "--lines",
+            "8",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(shown.stdout).unwrap(),
+        "8: Needle **search** includes [gamma](https://example.test).\n"
+    );
+
+    assert!(run(&["--text", "needle search", "--match", "literal"])
+        .iter()
+        .all(|record| record["id"] != "/a-body"));
+    assert_eq!(
+        run(&["--text", "needle **search**", "--match", "literal"])[0]["id"],
+        "/a-body"
+    );
+    assert_eq!(
+        run(&["--text", "needle missing", "--match", "any", "--in", "body",])[0]["id"],
+        "/a-body"
+    );
+    assert_eq!(
+        run(&["--text", "needle gamma", "--match", "all"])[0]["id"],
+        "/a-body"
+    );
+
+    // Scope can include arbitrary frontmatter values.
+    assert_eq!(
+        run(&["--text", "Jane Doe", "--in", "frontmatter"])[0]["search"]["matches"][0]["field"],
+        "frontmatter.owner"
+    );
+    assert_eq!(
+        run(&["--text", "needle search", "--in", "title"])[0]["id"],
+        "/z-title"
+    );
+
+    // Relevance puts the exact title first; id sorting and limits are explicit.
+    let relevant = run(&["--text", "needle search"]);
+    assert_eq!(relevant[0]["id"], "/z-title");
+    assert_eq!(relevant[1]["id"], "/a-body");
+    let by_id = run(&["--text", "needle search", "--sort", "id", "--limit", "1"]);
+    assert_eq!(by_id.len(), 1);
+    assert_eq!(by_id[0]["id"], "/a-body");
+}
+
+#[test]
 fn validate_conformant_exits_zero() {
     okf()
         .args(["validate", fixture("sample-bundle").to_str().unwrap()])
         .assert()
         .success();
+}
+
+#[test]
+fn scan_supports_the_documented_fail_on_contract() {
+    okf()
+        .args([
+            "scan",
+            fixture("sample-bundle").to_str().unwrap(),
+            "--fail-on",
+            "never",
+        ])
+        .assert()
+        .success();
+    okf()
+        .args([
+            "scan",
+            fixture("sample-bundle").to_str().unwrap(),
+            "--fail-on",
+            "any",
+        ])
+        .assert()
+        .code(1);
 }
 
 #[test]
@@ -277,6 +492,58 @@ fn graph_mermaid_renders() {
 }
 
 #[test]
+fn graph_and_docs_honor_json_output() {
+    let graph = okf()
+        .args([
+            "graph",
+            fixture("linked-bundle").to_str().unwrap(),
+            "--root",
+            "policies/travel",
+            "--format",
+            "mermaid",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(graph.status.success());
+    let graph = ndjson(&graph.stdout);
+    assert_eq!(graph[0]["kind"], "graph");
+    assert_eq!(graph[0]["root"], "policies/travel");
+    assert!(graph[0]["content"]
+        .as_str()
+        .unwrap()
+        .starts_with("graph LR\n"));
+
+    let docs = okf()
+        .args([
+            "docs",
+            fixture("sample-bundle").to_str().unwrap(),
+            "--format",
+            "md",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(docs.status.success());
+    let docs = ndjson(&docs.stdout);
+    assert_eq!(docs[0]["kind"], "docs");
+    assert_eq!(docs[0]["format"], "md");
+    assert!(!docs[0]["content"].as_str().unwrap().is_empty());
+}
+
+#[test]
+fn finite_choice_flags_are_validated_by_clap() {
+    for args in [
+        vec!["graph", "--format", "unknown"],
+        vec!["docs", "--format", "unknown"],
+        vec!["scan", "--fail-on", "unknown"],
+        vec!["refresh", "missing", "--fail-on", "unknown"],
+    ] {
+        okf().args(args).assert().code(2);
+    }
+}
+
+#[test]
 fn links_lists_direct_normalized_targets_and_missing_state() {
     let out = okf()
         .args([
@@ -304,6 +571,7 @@ fn graph_can_bound_outgoing_neighborhood_depth() {
         .args([
             "graph",
             fixture("linked-bundle").to_str().unwrap(),
+            "--root",
             "policies/travel",
             "--direction",
             "outgoing",
@@ -326,6 +594,7 @@ fn graph_can_walk_incoming_neighborhood() {
         .args([
             "graph",
             fixture("linked-bundle").to_str().unwrap(),
+            "--root",
             "metrics/revenue",
             "--direction",
             "incoming",
@@ -348,6 +617,7 @@ fn schema_is_valid_ndjson_with_all_commands() {
     let records = ndjson(&out.stdout);
     assert_eq!(records[0]["kind"], "schema");
     assert_eq!(records[0]["tool"], "okf");
+    assert_eq!(records[0]["ndjson_schema"], "2");
 
     let commands: Vec<&str> = records
         .iter()
@@ -421,7 +691,7 @@ fn schema_is_valid_ndjson_with_all_commands() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| a["name"] == "set_section")
+        .find(|a| a["name"] == "set-section")
         .expect("--set-section arg");
     assert_eq!(set_section["value_names"].as_array().unwrap().len(), 2);
 
@@ -438,6 +708,63 @@ fn schema_is_valid_ndjson_with_all_commands() {
         .collect();
     assert!(ontology_arg_names.contains(&"ref"));
     assert!(!ontology_arg_names.contains(&"reference"));
+
+    let search = records
+        .iter()
+        .find(|record| record["name"] == "search")
+        .expect("search command");
+    let search_arg = |name: &str| {
+        search["args"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|argument| argument["name"] == name)
+            .unwrap()
+    };
+    assert_eq!(search_arg("limit")["type"], "int");
+    assert_eq!(
+        search_arg("bundle")["resolution"],
+        serde_json::json!(["explicit", "env:OKF_BUNDLE", "config:okf.toml", "cwd"])
+    );
+    assert!(search_arg("bundle")["default"].is_null());
+    assert_eq!(
+        search_arg("match")["possible_values"],
+        serde_json::json!(["phrase", "all", "any", "literal"])
+    );
+    assert_eq!(search_arg("text")["default"], serde_json::json!([]));
+    assert_eq!(
+        search_arg("in")["default"],
+        serde_json::json!(["id", "title", "description", "body"])
+    );
+
+    let graph = records
+        .iter()
+        .find(|record| record["name"] == "graph")
+        .expect("graph command");
+    assert!(graph["args"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|argument| argument["name"] == "root"));
+    let docs = records
+        .iter()
+        .find(|record| record["name"] == "docs")
+        .expect("docs command");
+    assert_eq!(docs["mutates"], true);
+    assert_eq!(docs["output"]["stream"], "docs,change");
+    assert_eq!(docs["output"]["stream_when"]["format=index"], "change");
+
+    let lint = records
+        .iter()
+        .find(|record| record["name"] == "lint")
+        .expect("lint command");
+    let lint_args = lint["args"].as_array().unwrap();
+    assert!(lint_args
+        .iter()
+        .any(|argument| argument["name"] == "fail-on" && argument["default"] == "error"));
+    assert!(!lint_args
+        .iter()
+        .any(|argument| argument["name"] == "fail_on"));
 }
 
 #[test]

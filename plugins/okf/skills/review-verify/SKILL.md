@@ -10,8 +10,10 @@ execute an Attested Computation and is never a substitute for a deterministic ru
 
 ## CLI and review scope
 
-Read `okf-cli-reference.md` in this skill directory. Prefer `OKF_BUNDLE`; the fully qualified
-write is `okf verify <concept-id> <bundle> --by <actor>`.
+Prefer `OKF_BUNDLE`; the fully qualified write is `okf verify <concept-id> <bundle> --by <actor>`.
+When exact flags or output shapes are needed, read the focused `references/cli.md`. If its
+generated tool version differs from the installed binary, use that command's `--help` output as
+the runtime authority.
 
 1. Select concepts using `okf list <bundle> --json`, `okf stats <bundle>`, and change context.
    Check `okf stale <bundle>` but keep lifecycle expiry, source credibility/modification, and

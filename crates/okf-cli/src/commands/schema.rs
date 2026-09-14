@@ -37,7 +37,14 @@ pub fn run_schema(_json: bool) -> Result<i32> {
         "tool": "okf",
         "tool_version": env!("CARGO_PKG_VERSION"),
         "okf_spec": OKF_SPEC,
-        "ndjson_schema": "1",
+        "ndjson_schema": "2",
+        "global_args": [{
+            "name": "json",
+            "type": "bool",
+            "default": false,
+            "help": "Emit NDJSON instead of human text or a bare artifact; schema is always NDJSON",
+        }],
+        "bundle_resolution": ["explicit", "env:OKF_BUNDLE", "config:okf.toml", "cwd"],
     }))?;
 
     let cli = Cli::command();
@@ -68,38 +75,49 @@ fn command_record(full_name: &str, cmd: &ClapCommand) -> Value {
             // Skip global/auto args (`--json`, `--help`, `--version`).
             id != "json" && id != "help" && id != "version" && !a.is_global_set()
         })
-        .map(arg_record)
+        .map(|arg| arg_record(full_name, arg))
         .collect();
+
+    let mutates_when = match full_name {
+        "doctor" => json!({"fix-safe": true, "yes": true, "dry-run": false}),
+        "docs" => json!({"format": "index"}),
+        _ => Value::Null,
+    };
+    let output = match full_name {
+        "docs" => json!({
+            "stream": "docs,change",
+            "stream_when": {"format=index": "change", "otherwise": "docs"},
+        }),
+        _ => json!({"stream": stream}),
+    };
 
     json!({
         "kind": "command",
         "name": full_name,
         "group": group,
         "mutates": mutates,
+        "mutates_when": mutates_when,
         "summary": summary,
         "args": args,
-        "output": {"stream": stream},
+        "output": output,
     })
 }
 
 /// Derive one arg's record from clap introspection.
-fn arg_record(arg: &clap::Arg) -> Value {
+fn arg_record(command: &str, arg: &clap::Arg) -> Value {
     let kind = if arg.is_positional() {
         "positional"
     } else {
         "flag"
     };
-    // Schema names normally retain clap's underscore-based id; renderers turn underscores into
-    // hyphens. An explicitly renamed long flag can differ from that derived spelling, though
-    // (for example, the `reference` field is exposed as `--ref`). In that case advertise the
-    // spelling a user can actually pass to the CLI.
+    // Positionals use their clap id; flags advertise the spelling users actually pass.
     let id = arg.get_id().as_str().trim_end_matches('_');
     let derived_long = id.replace('_', "-");
-    let name = match arg.get_long() {
-        Some(long) if long != derived_long => long,
-        _ => id,
-    }
-    .to_string();
+    let name = if arg.is_positional() {
+        id.to_string()
+    } else {
+        arg.get_long().unwrap_or(&derived_long).to_string()
+    };
     let action = arg.get_action();
     let is_bool = matches!(action, ArgAction::SetTrue | ArgAction::SetFalse);
     let repeatable = matches!(action, ArgAction::Append);
@@ -107,18 +125,85 @@ fn arg_record(arg: &clap::Arg) -> Value {
         "bool".to_string()
     } else if repeatable {
         "list<string>".to_string()
+    } else if matches!(
+        (command, id),
+        ("search", "limit")
+            | ("graph", "depth")
+            | ("artifact show", "max_bytes")
+            | ("affected", "depth")
+    ) {
+        "int".to_string()
+    } else if id == "bundle"
+        || matches!(
+            (command, id),
+            ("source-scan", "directory") | ("add", "path")
+        )
+    {
+        "path".to_string()
     } else {
         "string".to_string()
     };
 
-    let mut default: Option<String> = arg
-        .get_default_values()
-        .first()
-        .map(|s| s.to_string_lossy().into_owned());
-    // Bundle positionals resolve to $OKF_BUNDLE / cwd at runtime; advertise "." as the default.
-    if name == "bundle" && default.is_none() {
-        default = Some(".".to_string());
+    let mut default = if repeatable {
+        let delimiter = arg.get_value_delimiter();
+        Value::Array(
+            arg.get_default_values()
+                .iter()
+                .flat_map(|value| {
+                    let value = value.to_string_lossy();
+                    match delimiter {
+                        Some(delimiter) => value
+                            .split(delimiter)
+                            .map(|part| Value::String(part.to_string()))
+                            .collect::<Vec<_>>(),
+                        None => vec![Value::String(value.into_owned())],
+                    }
+                })
+                .collect(),
+        )
+    } else if matches!(action, ArgAction::SetTrue) {
+        json!(false)
+    } else if matches!(action, ArgAction::SetFalse) {
+        json!(true)
+    } else {
+        arg.get_default_values()
+            .first()
+            .map(|value| {
+                let value = value.to_string_lossy();
+                if ty == "int" {
+                    value
+                        .parse::<u64>()
+                        .map(Value::from)
+                        .unwrap_or_else(|_| Value::String(value.into_owned()))
+                } else {
+                    Value::String(value.into_owned())
+                }
+            })
+            .unwrap_or(Value::Null)
+    };
+    if default.is_null() {
+        default = match (command, id) {
+            ("graph", "direction") => json!("outgoing"),
+            ("lint", "fail_on") => json!("error"),
+            ("scan" | "stale" | "affected" | "diff" | "stats" | "refresh", "fail_on") => {
+                json!("never")
+            }
+            _ => Value::Null,
+        };
     }
+    let possible_values: Vec<String> = arg
+        .get_possible_values()
+        .iter()
+        .map(|value| value.get_name().to_string())
+        .collect();
+    let resolution = if id == "bundle" {
+        json!(["explicit", "env:OKF_BUNDLE", "config:okf.toml", "cwd"])
+    } else {
+        Value::Null
+    };
+    let stdin = matches!((command, id), ("affected", "changed"));
+    let resolution =
+        (name == "bundle").then(|| vec!["explicit", "env:OKF_BUNDLE", "config:okf.toml", "cwd"]);
 
     // The doc-comment help text, so consumers can document an arg without a `--help` round-trip.
     let help = arg.get_help().map(|s| s.to_string());
@@ -138,6 +223,9 @@ fn arg_record(arg: &clap::Arg) -> Value {
         "default": default,
         "help": help,
         "value_names": value_names,
+        "possible_values": possible_values,
+        "resolution": resolution,
+        "stdin": stdin,
     })
 }
 
@@ -183,7 +271,7 @@ fn meta(name: &str) -> (&'static str, bool, &'static str) {
         "ontology update" => ("mutate", true, "change"),
         "ontology remove" => ("mutate", true, "change"),
 
-        "docs" => ("render", false, "docs"),
+        "docs" => ("render", true, "docs,change"),
 
         _ => ("query", false, "concept"),
     }

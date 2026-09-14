@@ -16,9 +16,9 @@ Classifies a resource as a concept, reserved file, opaque artifact, external URL
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<resource>` | positional | yes | Resource path, URL, or scope descriptor |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `artifact-resolution`.

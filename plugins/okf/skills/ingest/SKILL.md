@@ -11,8 +11,10 @@ the CLI and retrieve only targeted slices.
 
 ## CLI and output rules
 
-Read `okf-cli-reference.md` in this skill directory. Prefer `OKF_BUNDLE` during multi-step work;
-one explicit form is `okf edit <concept-id> <bundle> --add-source resource=<path>`.
+Prefer `OKF_BUNDLE` during multi-step work; one explicit form is `okf edit <concept-id> <bundle>
+--add-source resource=<path>`. When exact flags or output shapes are needed, read the focused
+`references/cli.md`. If its generated tool version differs from the installed binary, use that
+command's `--help` output as the runtime authority.
 
 Producer rubric:
 

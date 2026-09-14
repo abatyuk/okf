@@ -7,6 +7,7 @@ use okf_core::error::Result;
 use okf_core::model::concept::Concept;
 use okf_core::output::record::concept_record;
 use okf_core::parse::writer;
+use okf_core::query::search::SearchHit;
 use serde_json::Value as Json;
 use std::cell::RefCell;
 use std::io::{BufWriter, Write};
@@ -116,6 +117,53 @@ pub fn print_concepts(concepts: &[&Concept], json: bool) -> Result<()> {
         )?;
     }
     output.flush().map_err(Into::into)
+}
+
+/// Print ranked search hits. Human output retains the concept table; NDJSON adds bounded
+/// evidence under a computed search object while preserving a conflicting frontmatter value.
+pub fn print_search_hits(hits: &[SearchHit<'_>], json: bool) -> Result<()> {
+    if json {
+        for hit in hits {
+            let matches: Vec<Json> = hit
+                .matches
+                .iter()
+                .map(|evidence| {
+                    serde_json::json!({
+                        "query": evidence.query,
+                        "field": evidence.field,
+                        "line": evidence.line,
+                        "snippet": evidence.snippet,
+                    })
+                })
+                .collect();
+            let mut record = concept_record(hit.concept);
+            if let Json::Object(object) = &mut record {
+                let search = serde_json::json!({
+                    "score": hit.score,
+                    "matches": matches,
+                });
+                if let Some(conflict) = object.insert("search".to_string(), search) {
+                    let previous = object.remove("frontmatter_conflicts");
+                    let mut conflicts = match previous {
+                        Some(Json::Object(conflicts)) => conflicts,
+                        Some(value) => {
+                            let mut conflicts = serde_json::Map::new();
+                            conflicts.insert("frontmatter_conflicts".to_string(), value);
+                            conflicts
+                        }
+                        None => serde_json::Map::new(),
+                    };
+                    conflicts.insert("search".to_string(), conflict);
+                    object.insert("frontmatter_conflicts".to_string(), Json::Object(conflicts));
+                }
+            }
+            print_line(&record)?;
+        }
+        return Ok(());
+    }
+
+    let concepts: Vec<&Concept> = hits.iter().map(|hit| hit.concept).collect();
+    print_concepts(&concepts, false)
 }
 
 /// Print a single concept's full content as an NDJSON record or human text.

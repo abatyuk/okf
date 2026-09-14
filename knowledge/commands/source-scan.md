@@ -17,6 +17,6 @@ Maps a repository or directory for ingest workflows. Unlike [okf scan](scan.md),
 |----------|------|----------|-------------|
 | `<directory>` | positional | yes | Source directory to inventory; it need not be an OKF bundle |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON.
 
 Output stream: `source-file`.

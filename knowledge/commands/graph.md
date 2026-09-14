@@ -10,15 +10,15 @@ sources:
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
+    blob_sha: 2e9e16e4bfa3271ab135d7f1ca406374da1a1407
 - resource: crates/okf-cli/src/commands/query.rs
   kind: git-path
   fingerprint:
-    blob_sha: 98fcf5b787e69c801489823ffea093f747e64d22
+    blob_sha: 079709086641c8a57a21c3da0c2f2e027af390f3
 - resource: crates/okf-core/src/graph/render.rs
   kind: git-path
   fingerprint:
-    blob_sha: fc4228d7b0dfeeaa202c0a7f61c20634e353f5ce
+    blob_sha: d983856c864548bae7ca134b4300434c7d584618
 last_modified: 2026-09-07T18:22:06Z
 ---
 # okf graph
@@ -26,17 +26,19 @@ last_modified: 2026-09-07T18:22:06Z
 Renders the entire link graph or a rooted neighborhood as mermaid, dot, or graphml. Rooted views
 can follow incoming, outgoing, or both edge directions and stop at a maximum neighbor distance.
 Use [links](links.md) when only one concept's direct outbound targets are needed.
+With `--json`, the selected graph artifact is returned as one `graph` record containing its
+format, root, direction, depth, and content.
 
 ## Arguments
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `<concept>` | positional | no | Optional concept at the neighborhood root; without one, render the entire graph |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--root <value>` | string | no | Optional concept at the neighborhood root; without one, render the entire graph |
 | `--format <value>` | string | no | Output format: mermaid (default), dot, or graphml (default: `mermaid`) |
-| `--direction <value>` | string | no | Edges to follow from the root: outgoing (default), incoming, or both |
-| `--depth <value>` | string | no | Maximum neighbor distance from the root (0 = root only; default: unbounded) |
+| `--direction <value>` | string | no | Edges to follow from the root: outgoing (default), incoming, or both (default: `outgoing`) |
+| `--depth <value>` | int | no | Maximum neighbor distance from the root (0 = root only; default: unbounded) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `graph`.

@@ -1,7 +1,7 @@
 //! init, add, edit, mv, rm, verify, refresh. Each emits a `change` record under `--json`.
 use crate::cli::{AddArgs, EditArgs, InitArgs, MvArgs, RefreshArgs, RmArgs, VerifyArgs};
 use crate::output;
-use okf_core::bundle::resolve::resolve_bundle;
+use okf_core::bundle::resolve::{resolve_bundle, resolve_bundle_target};
 use okf_core::error::Result;
 use okf_core::fingerprint::Engine;
 use okf_core::model::source::{Fingerprint, Source, SourceKind};
@@ -18,27 +18,10 @@ use okf_core::ports::clock::SystemClock;
 use okf_core::ports::fs::RealFs;
 use okf_core::ports::git::RealGit;
 use serde_json::json;
-use std::path::PathBuf;
-
-/// Resolve a bundle path that need not yet exist (for `init`): explicit arg, else $OKF_BUNDLE,
-/// else the current directory.
-fn init_target(arg: Option<&str>) -> Result<PathBuf> {
-    if let Some(a) = arg {
-        return Ok(PathBuf::from(a));
-    }
-    if let Ok(env) = std::env::var("OKF_BUNDLE") {
-        if !env.is_empty() {
-            return Ok(PathBuf::from(env));
-        }
-    }
-    std::env::current_dir().map_err(|e| {
-        okf_core::error::OkfError::Environment(format!("cannot read current directory: {e}"))
-    })
-}
 
 /// `okf init [bundle] [--title] [--no-index] [--no-ontology]`.
 pub fn run_init(args: &InitArgs, json: bool) -> Result<i32> {
-    let root = init_target(args.bundle.as_deref())?;
+    let root = resolve_bundle_target(args.bundle.as_deref())?;
     let opts = InitOptions {
         index: !args.no_index,
         ontology: !args.no_ontology,

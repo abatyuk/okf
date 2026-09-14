@@ -26,6 +26,14 @@ impl RenderFormat {
             _ => None,
         }
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Mermaid => "mermaid",
+            Self::Graphml => "graphml",
+            Self::Dot => "dot",
+        }
+    }
 }
 
 /// Which adjacent edges to follow when rendering a rooted graph neighborhood.
@@ -47,6 +55,14 @@ impl GraphDirection {
             "incoming" => Some(GraphDirection::Incoming),
             "both" => Some(GraphDirection::Both),
             _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Outgoing => "outgoing",
+            Self::Incoming => "incoming",
+            Self::Both => "both",
         }
     }
 }

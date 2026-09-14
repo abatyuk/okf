@@ -8,7 +8,7 @@
 * [Concept record (NDJSON)](ConceptRecord.md) - The machine representation of a concept: frontmatter JSON plus collision-safe computed identity, trust, lifecycle, generation, and verification views.
 * [ConceptId](ConceptId.md) - A concept's identity, equal to its bundle-relative path without the .md suffix (for example /metrics/revenue).
 * [ConceptType](ConceptType.md) - An ontology entry: a named type with its typed fields and reference rules.
-* [Config](Config.md) - The okf config model: project-local settings (such as the bundle location) consulted during bundle resolution between the CLI arg and the environment.
+* [Config](Config.md) - The okf config model: project-local settings consulted after an explicit bundle argument and OKF_BUNDLE, before falling back to the current directory.
 * [Field](Field.md) - A typed field on a concept type: a name, a FieldType, and a required flag.
 * [FieldType](FieldType.md) - The type of a field: string, text, int, bool, date, datetime, uri, enum, list, object, or a name defined under field_types.
 * [Finding](Finding.md) - A single lint result: a severity, a rule name, the concept it applies to, and a message.

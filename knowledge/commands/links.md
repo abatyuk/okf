@@ -10,11 +10,11 @@ sources:
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
+    blob_sha: 2e9e16e4bfa3271ab135d7f1ca406374da1a1407
 - resource: crates/okf-cli/src/commands/query.rs
   kind: git-path
   fingerprint:
-    blob_sha: 98fcf5b787e69c801489823ffea093f747e64d22
+    blob_sha: 079709086641c8a57a21c3da0c2f2e027af390f3
 - resource: crates/okf-core/src/model/link.rs
   kind: git-path
   fingerprint:
@@ -34,8 +34,8 @@ visible. Use [backlinks](backlinks.md) for the inverse one-hop query or a bounde
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `link`.

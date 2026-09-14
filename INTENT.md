@@ -58,15 +58,16 @@ human output (text/markdown) and machine output (JSON).
 ## Core CLI (Rust, deterministic)
 
 `<bundle>` is an optional directory: local dir (default), or from config file, or from an
-environment variable. Output format is a **global** flag (`--json` = NDJSON / `--text`),
-consistent across all commands. Commands are grouped by verb category.
+environment variable. Record-producing commands use the global `--json` flag for NDJSON;
+`schema` is always NDJSON, while graph/document artifacts are wrapped as records under
+`--json`. Commands are grouped by verb category.
 
 > **Implemented convention (v1):** `<bundle>` is the **optional trailing positional** on every
 > command. Resolution precedence (highest first): explicit arg → `$OKF_BUNDLE` env →
 > `bundle` key of the nearest `okf.toml` (found by walking up from cwd; its path is relative
 > to the config file) → cwd. Where a command has a required argument,
 > it comes first and the bundle trails, e.g. `okf show <concept-id> [bundle]`,
-> `okf diff <ref> [bundle]`; `okf graph [bundle] [concept] --format …`. The `<bundle> <arg>`
+> `okf diff <ref> [bundle]`; `okf graph [bundle] [--root <concept>] --format …`. The `<bundle> <arg>`
 > orderings shown in some examples below are illustrative — the trailing-bundle form is
 > authoritative. Also note two v1 behaviors: `lint --fix` is a no-op (no rule is auto-fixable
 > yet), and `--fail-on` on discovery commands (`stale`/`affected`/`diff`/`stats`/`scan`) fails
@@ -81,14 +82,17 @@ consistent across all commands. Commands are grouped by verb category.
 - `okf browse <bundle> [--directory <path>]` — read that directory's checked-in `index.md`,
   or synthesize the same view in memory when absent. This is the specification-native
   progressive-disclosure entry point.
-- `okf search <bundle> [--tag] [--type] [--text] [--field]` — search by tag, type, text, or field.
+- `okf search <bundle> [--tag] [--type] [--text] [--field]` — ranked search by tag, type,
+  repeatable text, or field. Text supports phrase/all/any/literal modes, field scopes,
+  reader-visible Markdown, deterministic relevance or ID ordering, bounded match evidence,
+  and result limits.
 - `okf list <bundle>` — **alias of `okf search` with no filter**; lists all concepts (ID,
   type, title, status, trust tier).
 - `okf show <concept-id> [bundle]` — show one concept's full content.
 - `okf links <concept-id> [bundle]` — normalized direct outbound concept links, including
   whether each target exists.
 - `okf backlinks <concept-id> [bundle]` — concepts that link to a given concept.
-- `okf graph <bundle> [concept] [--direction outgoing|incoming|both] [--depth N]
+- `okf graph <bundle> [--root <concept>] [--direction outgoing|incoming|both] [--depth N]
   [--format mermaid|...]` — render the whole graph or a bounded rooted neighborhood.
 - `okf resolve <link> [bundle]` — resolve a link/concept-ID to a concrete file path (agent utility).
 - `okf artifact list/resolve/show` — inventory, resolve, and retrieve bounded path-valued
@@ -355,20 +359,21 @@ subsequent line describes one command. Every line is a standalone JSON object so
 stream and filter without a JSON-array parser.
 
 ```jsonl
-{"kind":"schema","tool":"okf","tool_version":"0.2.2","okf_spec":["0.2"],"ndjson_schema":"1"}
-{"kind":"command","name":"list","group":"query","mutates":false,"summary":"List concepts with id, type, title, status, trust tier.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."}],"output":{"kind":"query","stream":"concept"}}
-{"kind":"command","name":"affected","group":"check","mutates":false,"summary":"Concepts needing review given changed links.","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"default":"."},{"name":"changed","kind":"flag","type":"list<string>","required":true,"repeatable":true,"stdin":true},{"name":"transitive","kind":"flag","type":"bool","default":false},{"name":"depth","kind":"flag","type":"int","required":false}],"output":{"kind":"query","stream":"affected"}}
-{"kind":"command","name":"add","group":"mutate","mutates":true,"summary":"Add a concept scaffolded from the ontology.","args":[{"name":"path","kind":"positional","type":"path","required":true},{"name":"type","kind":"flag","type":"string","required":false},{"name":"title","kind":"flag","type":"string"},{"name":"attested","kind":"flag","type":"bool","default":false}],"output":{"kind":"mutation","stream":"change"}}
+{"kind":"schema","tool":"okf","tool_version":"0.2.3","okf_spec":["0.2"],"ndjson_schema":"2","global_args":[{"name":"json","type":"bool","default":false}],"bundle_resolution":["explicit","env:OKF_BUNDLE","config:okf.toml","cwd"]}
+{"kind":"command","name":"list","group":"query","mutates":false,"mutates_when":null,"summary":"List all concepts (search with no filter)","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"repeatable":false,"default":null,"resolution":["explicit","env:OKF_BUNDLE","config:okf.toml","cwd"]}],"output":{"stream":"concept"}}
 ```
 
 - Every command declares `group` (`meta`/`query`/`check`/`mutate`/`render`) and a `mutates`
-  boolean — an agent can refuse to run mutations in a dry-run/read-only context.
-- `output.stream` names the per-line record type each command emits under `--json`
+  capability boolean; `mutates_when` identifies conditional writers such as `doctor` and
+  `docs --format index`.
+- Arguments declare actual scalar/list/path/int types, typed possible values, and bundle
+  resolution rather than pretending the effective default is always the current directory.
+- `output.stream` names the per-line record type or types a command emits under `--json`
   (`concept`, `finding`, `affected`, `change`, …). **`concept` records are not a fixed schema
   — they mirror the concept's frontmatter verbatim** plus computed `id` / `trust_tier`
   (see the NDJSON principle). Finding/affected/change records *do* have documented shapes.
-- Global flags (`--json`, `--bundle`, …) and the exit-code convention (below) live in the
-  header rather than on every command line.
+- Global flags and bundle-resolution precedence live in the header rather than being inferred
+  from a fake per-command default.
 
 ---
 

@@ -10,9 +10,10 @@ and any optional local modeling with the user.
 
 ## CLI and bundle access
 
-Read `okf-cli-reference.md` in this skill directory before choosing flags. It is generated from
-`okf schema`; do not rediscover arguments with help calls. In multi-step work, set
-`OKF_BUNDLE` once. One fully qualified example is `okf add notes/hello <bundle> --type Note`.
+In multi-step work, set `OKF_BUNDLE` once. One fully qualified example is `okf add notes/hello
+<bundle> --type Note`. When exact flags or output shapes are needed, read the focused
+`references/cli.md`. If its generated tool version differs from the installed binary, use that
+command's `--help` output as the runtime authority.
 
 Inspect bundle content through `okf browse`, `okf search`, `okf list`, and targeted `okf show`.
 For a large concept, use `okf show <concept-id> <bundle> --outline` followed by `--lines`.

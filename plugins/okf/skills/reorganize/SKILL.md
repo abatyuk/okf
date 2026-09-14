@@ -9,9 +9,11 @@ A concept id is its bundle-relative Markdown path. Use `okf mv`; it rewrites inb
 and internal standard source resources. Link rebasing legitimately edits referring documents,
 so a concept diff may show add/remove or modified referrers rather than a pure native rename.
 
-Read `okf-cli-reference.md` in this skill directory. Prefer `OKF_BUNDLE`. Correct explicit forms
-include `okf mv <old-id> <new-id> <bundle>`, `okf backlinks <concept-id> <bundle>`, and
-`okf links <concept-id> <bundle> --json`.
+Prefer `OKF_BUNDLE`. Correct explicit forms include `okf mv <old-id> <new-id> <bundle>`,
+`okf backlinks <concept-id> <bundle>`, and `okf links <concept-id> <bundle> --json`. When exact
+flags or output shapes are needed, read the focused `references/cli.md`. If its generated tool
+version differs from the installed binary, use that command's `--help` output as the runtime
+authority.
 
 ## Workflow
 
@@ -28,9 +30,10 @@ include `okf mv <old-id> <new-id> <bundle>`, `okf backlinks <concept-id> <bundle
    Inspect affected referring documents and the implementation's meaningful-change behavior;
    path-only rebasing should not be described as a content rewrite or runtime execution.
 5. After each batch, compare direct outbound links and backlinks. Use `okf graph <bundle>
-   <concept-id> --direction both --depth <N> --format mermaid` only when a wider neighborhood is
-   useful. Run `okf validate <bundle>` and advisory `okf lint <bundle> --fail-on never` against
-   the baseline. Resolve artifact paths with declaring document context and distinguish missing,
+   --root <concept-id> --direction both --depth <N> --format mermaid` only when a wider
+   neighborhood is useful. Run `okf validate <bundle>` and advisory
+   `okf lint <bundle> --fail-on never` against the baseline. Resolve artifact paths with
+   declaring document context and distinguish missing,
    blocked, and scope results.
 6. Regenerate reserved indexes with `okf docs <bundle> --format index` only after reviewing any
    curated index prose that could be overwritten. Validate reserved files again.

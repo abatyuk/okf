@@ -5,24 +5,35 @@ description: Answer questions from an OKF bundle through progressive disclosure,
 
 # Retrieve knowledge from an OKF bundle
 
-Read this skill's generated `okf-cli-reference.md` before choosing flags. Query the bundle via
-the CLI rather than bulk-reading it. Use `OKF_BUNDLE` for multi-step work; explicit examples are
-`okf show <concept-id> <bundle>` and `okf links <concept-id> <bundle> --json`.
+Query the bundle via the CLI rather than bulk-reading it. Use `OKF_BUNDLE` for multi-step work;
+explicit examples are `okf show <concept-id> <bundle>` and `okf links <concept-id> <bundle>
+--json`. When exact flags or output shapes are needed, read the focused `references/cli.md`. If
+its generated tool version differs from the installed binary, use that command's `--help` output
+as the runtime authority.
 
 ## Progressive disclosure
 
 1. Start with `okf browse <bundle>` unless the request already names a concept or exact filter.
    Descend with `--directory`; search with `okf search <bundle> --text <terms>` or structured
-   filters. Use `okf list <bundle>` only when the whole inventory is genuinely needed.
-2. For candidates, use `okf show <concept-id> <bundle> --outline`, then `--lines <START:END>`.
+   filters. Text phrases are case-insensitive and match reader-visible Markdown across inline
+   formatting and line wraps. Repeat `--text` when every phrase must occur; use `--match all`
+   for every token, `--match any` for discovery, and `--match literal` only for exact Markdown
+   source. Narrow noisy queries with `--in id,title,description,body,frontmatter`. Keep default
+   relevance ordering for discovery; use `--sort id` for stable inventory-style processing and
+   `--limit <N>` to bound context.
+2. With `--json`, use each result's `search.score` and `search.matches` to choose candidates.
+   Match evidence identifies the field, bounded snippet, and a serialized document line when
+   applicable; use that line to request a small `show --lines` window. Treat snippets as
+   navigation evidence, not enough context to answer from.
+3. For candidates, use `okf show <concept-id> <bundle> --outline`, then `--lines <START:END>`.
    Read a full concept only when small.
-3. Follow portable body links and standard internal `sources[].resource` lineage even without
+4. Follow portable body links and standard internal `sources[].resource` lineage even without
    ontology. Start with `okf links <concept-id> <bundle> --json` for direct outbound targets and
    `okf backlinks <concept-id> <bundle>` for direct inbound concepts. Render only the useful
-   neighborhood with `okf graph <bundle> <concept-id> --direction <outgoing|incoming|both>
+   neighborhood with `okf graph <bundle> --root <concept-id> --direction <outgoing|incoming|both>
    --depth <N> --format mermaid`; omit the root only when the entire graph is genuinely needed.
    Use `okf resolve <link> <bundle> --from <concept-id>` for a particular raw link.
-4. Join claim footnotes to `sources[].id`. Cite the declaring concept and relevant source or
+5. Join claim footnotes to `sources[].id`. Cite the declaring concept and relevant source or
    resolved artifact separately. Do not fill bundle gaps with assumptions.
 
 ## Trust and lifecycle decision

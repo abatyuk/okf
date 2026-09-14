@@ -17,8 +17,8 @@ Checks the exact type, required runtime, parameters, inline-or-file computation 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `computation-contract`.

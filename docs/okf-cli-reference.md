@@ -1,8 +1,10 @@
-# okf CLI — argument reference
+# okf CLI — complete argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.2, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.3, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
-**For skills:** consult this file to learn a command's arguments. **Do not** run `okf <cmd> --help` or `okf schema` first just to discover flags — they are all listed here. Every command also accepts the global `--json` flag (NDJSON output) and takes an optional trailing `bundle` positional that falls back to `$OKF_BUNDLE`, then the cwd.
+This complete reference is for developers and general CLI lookup. Skills carry smaller generated subsets so they do not load unrelated commands.
+
+Commands with a human form accept global `--json` for NDJSON; `schema` is always NDJSON. Bundle-aware commands take an optional trailing `bundle` positional resolved as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd. Meta commands have no bundle, and `source-scan` takes an explicit arbitrary directory.
 
 ## meta
 
@@ -30,9 +32,9 @@ List local artifacts and concepts under a bundle directory.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--directory <value>` | string | no | Bundle-relative directory to inventory (default: `references`) |
-| `--digest` | bool | no | Compute SHA-256 digests (reads each file) |
+| `--digest` | bool | no | Compute SHA-256 digests (reads each file) (default: `false`) |
 
 Output stream: `artifact`.
 
@@ -43,7 +45,7 @@ Resolve any OKF path-valued resource with document context.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<resource>` | positional | yes | Resource path, URL, or scope descriptor |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 
 Output stream: `artifact-resolution`.
@@ -55,11 +57,11 @@ Retrieve a bounded local text artifact; binary files return metadata only.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<resource>` | positional | yes | Local artifact path to retrieve |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 | `--lines <value>` | string | no | Retrieve only an inclusive, one-based START:END line range |
-| `--max-bytes <value>` | string | no | Maximum bytes read into output (default: `65536`) |
-| `--fetch` | bool | no | Explicitly request remote retrieval (requires a network-enabled build and policy) |
+| `--max-bytes <value>` | int | no | Maximum bytes read into output (default: `65536`) |
+| `--fetch` | bool | no | Explicitly request remote retrieval (requires a network-enabled build and policy) (default: `false`) |
 
 Output stream: `artifact-content`.
 
@@ -70,7 +72,7 @@ Concepts that link to a given concept.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `concept`.
 
@@ -80,7 +82,7 @@ Show a directory's index.md, synthesizing it when absent.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--directory <value>` | string | no | Bundle-relative directory to browse (default: root `/`) (default: `/`) |
 
 Output stream: `index`.
@@ -91,11 +93,11 @@ Render the link graph (or a bounded rooted neighborhood) as mermaid/dot/graphml.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `<concept>` | positional | no | Optional concept at the neighborhood root; without one, render the entire graph |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--root <value>` | string | no | Optional concept at the neighborhood root; without one, render the entire graph |
 | `--format <value>` | string | no | Output format: mermaid (default), dot, or graphml (default: `mermaid`) |
-| `--direction <value>` | string | no | Edges to follow from the root: outgoing (default), incoming, or both |
-| `--depth <value>` | string | no | Maximum neighbor distance from the root (0 = root only; default: unbounded) |
+| `--direction <value>` | string | no | Edges to follow from the root: outgoing (default), incoming, or both (default: `outgoing`) |
+| `--depth <value>` | int | no | Maximum neighbor distance from the root (0 = root only; default: unbounded) |
 
 Output stream: `graph`.
 
@@ -106,7 +108,7 @@ List the direct concept links defined by one concept.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `link`.
 
@@ -116,7 +118,7 @@ List all concepts (search with no filter).
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `concept`.
 
@@ -126,7 +128,7 @@ List the defined concept types.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `ontology_type`.
 
@@ -137,7 +139,7 @@ Show one concept type and its rules.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<name>` | positional | yes | Concept type name |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `ontology_type`.
 
@@ -148,7 +150,7 @@ Resolve a link/concept-id to a concrete bundle-relative file path.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<link>` | positional | yes | Link or concept id to resolve |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--from <value>` | string | no | Resolve a relative link against this containing concept id |
 
 Output stream: `resolved`.
@@ -159,10 +161,14 @@ Search concepts by type, tag, text, and/or frontmatter field.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--type <value>` | string | no | Filter by exact concept `type` |
 | `--tag <value>` | string | no | Filter by membership in the concept's `tags` |
-| `--text <value>` | string | no | Filter by case-insensitive substring across id/title/description/body |
+| `--text <value>` | list<string> | no | Text query (repeatable). Repeated phrases use AND semantics by default |
+| `--match <value>` | string | no | Text matching: phrase (default), all tokens, any token, or literal source text (default: `phrase`) |
+| `--in <value>` | list<string> | no | Text fields to search (comma-separated or repeatable) (default: `id,title,description,body`) |
+| `--sort <value>` | string | no | Result order: deterministic relevance (default) or concept id (default: `relevance`) |
+| `--limit <value>` | int | no | Return at most this many results after all filters and sorting |
 | `--field <value>` | list<string> | no | Filter by a frontmatter field, `key=value` (repeatable; AND) |
 
 Output stream: `concept`.
@@ -174,8 +180,8 @@ Show one concept's content, heading outline, or selected line range.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `--outline` | bool | no | Show only the Markdown heading outline with 1-based document line numbers |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--outline` | bool | no | Show only the Markdown heading outline with 1-based document line numbers (default: `false`) |
 | `--lines <value>` | string | no | Show only an inclusive 1-based document line range, `START:END` (or one line, `N`) |
 
 Output stream: `concept`.
@@ -188,11 +194,11 @@ Impact query: concepts needing review given a set of changed links.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--changed <value>` | list<string> | no | A changed link/concept-id/resource (repeatable; also read from stdin lines) |
-| `--transitive` | bool | no | Follow the cascade past direct dependents |
-| `--depth <value>` | string | no | Cap the number of hops when `--transitive` |
-| `--fail-on <value>` | string | no | Fail (exit 1) on any affected concept: never (default) | info | warn | error | any |
+| `--transitive` | bool | no | Follow the cascade past direct dependents (default: `false`) |
+| `--depth <value>` | int | no | Cap the number of hops when `--transitive` |
+| `--fail-on <value>` | string | no | Fail (exit 1) on any affected concept: never (default) | info | warn | error | any (default: `never`) |
 
 Output stream: `affected`.
 
@@ -203,7 +209,7 @@ Check and display a computation contract; never executes code.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `computation-contract`.
 
@@ -214,22 +220,22 @@ Concept-level diff of the working tree vs a git ref.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<git_ref>` | positional | yes | Git ref to diff against (e.g. `HEAD`, a branch, or a commit) |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `--fail-on <value>` | string | no | Fail (exit 1) on any change: never (default) | info | warn | error | any |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--fail-on <value>` | string | no | Fail (exit 1) on any change: never (default) | info | warn | error | any (default: `never`) |
 
 Output stream: `diff`.
 
-### `okf doctor` · _mutates_
+### `okf doctor` · _conditionally mutates_
 
 Diagnose compatibility and safely repair an existing bundle for OKF v0.2.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--target <value>` | string | no | Target OKF version (default: `0.2`) |
-| `--fix-safe` | bool | no | Enable the allow-listed safe repair set |
-| `--dry-run` | bool | no | Show safe repairs without writing (the default without --yes) |
-| `--yes` | bool | no | Confirm applying --fix-safe changes non-interactively |
+| `--fix-safe` | bool | no | Enable the allow-listed safe repair set (default: `false`) |
+| `--dry-run` | bool | no | Show safe repairs without writing (the default without --yes) (default: `false`) |
+| `--yes` | bool | no | Confirm applying --fix-safe changes non-interactively (default: `false`) |
 
 Output stream: `doctor-finding,doctor-summary`.
 
@@ -239,9 +245,9 @@ Advisory checks (broken links, missing fields, orphans, ontology violations).
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `--fix` | bool | no | Apply auto-fixable findings (v1: none are auto-fixable — reports what it would do) |
-| `--fail-on <value>` | string | no | Severity threshold that makes the run fail (exit 1): never|info|warn|error|any |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--fix` | bool | no | Apply auto-fixable findings (v1: none are auto-fixable — reports what it would do) (default: `false`) |
+| `--fail-on <value>` | string | no | Severity threshold that makes the run fail (exit 1): never|info|warn|error|any (default: `error`) |
 
 Output stream: `finding`.
 
@@ -251,7 +257,8 @@ Walk a bundle and report the candidate files that would be analyzed.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any (default: `never`) |
 
 Output stream: `scan`.
 
@@ -271,8 +278,8 @@ Drift detection: recorded vs. recomputed source fingerprints (+ `stale_after`).
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any (default: `never`) |
 
 Output stream: `drift`.
 
@@ -282,8 +289,8 @@ Bundle summary: counts by type, trust distribution, orphans.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any (default: `never`) |
 
 Output stream: `stats`.
 
@@ -293,7 +300,7 @@ Conformance validation — the spec's three hard rules only.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `violation`.
 
@@ -306,11 +313,11 @@ Add a new concept document, scaffolded from the ontology.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<path>` | positional | yes | Bundle-relative path of the new concept (with or without `.md`) |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--type <value>` | string | no | Concept `type` (an ontology concept-type key). Optional with `--attested` |
 | `--title <value>` | string | no | Concept title |
 | `--description <value>` | string | no | Concept description |
-| `--attested` | bool | no | Scaffold exact `type: Attested Computation`; requires `--runtime` |
+| `--attested` | bool | no | Scaffold exact `type: Attested Computation`; requires `--runtime` (default: `false`) |
 | `--set <value>` | list<string> | no | Set a custom scalar field at creation, `key=value` (repeatable) |
 | `--ref <value>` | list<string> | no | Set a declared reference at creation, `key=link` (repeatable) |
 | `--add-source <value>` | list<string> | no | Add a standard source, `resource=<path-or-uri>[,kind=<extension>][,id=...,...]` |
@@ -333,7 +340,7 @@ Edit a concept losslessly and invalidate its prior verification.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id to edit |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--set <value>` | list<string> | no | Set/update a scalar field, `key=value` (repeatable) |
 | `--unset <value>` | list<string> | no | Remove a field entirely, `key` (repeatable) |
 | `--add <value>` | list<string> | no | Append an item to a list field, `key=value` (repeatable, idempotent) |
@@ -343,7 +350,7 @@ Edit a concept losslessly and invalidate its prior verification.
 | `--remove-source <value>` | list<string> | no | Remove sources matching `<path-or-uri>` or `resource=<path-or-uri>[,kind=<kind>]` (repeatable) |
 | `--set-body <value>` | string | no | Replace the whole body. Use `@file` to read a file or `-` for stdin |
 | `--append-body <value>` | string | no | Append a block to the body. Use `@file` or `-` (stdin) |
-| `--clear-body` | bool | no | Empty the body |
+| `--clear-body` | bool | no | Empty the body (default: `false`) |
 | `--set-section <HEADING> <TEXT>` | list<string> | no | Replace a section's content, `<heading> <text>` (repeatable). Text accepts `@file`/`-` |
 | `--append-section <HEADING> <TEXT>` | list<string> | no | Append to a section, `<heading> <text>` (repeatable). Text accepts `@file`/`-` |
 | `--remove-section <value>` | list<string> | no | Remove a section (heading + content), `<heading>` (repeatable) |
@@ -356,10 +363,10 @@ Create a new empty OKF bundle.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory to create (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory to create (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--title <value>` | string | no | Title for the scaffolded root `index.md` |
-| `--no-index` | bool | no | Do not scaffold a root `index.md` |
-| `--no-ontology` | bool | no | Do not scaffold an `ontology.yaml` |
+| `--no-index` | bool | no | Do not scaffold a root `index.md` (default: `false`) |
+| `--no-ontology` | bool | no | Do not scaffold an `ontology.yaml` (default: `false`) |
 
 Output stream: `change`.
 
@@ -371,7 +378,7 @@ Move/rename a concept and rewrite every inbound link.
 |----------|------|----------|-------------|
 | `<old>` | positional | yes | Existing concept id |
 | `<new>` | positional | yes | New concept id |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `change`.
 
@@ -382,13 +389,13 @@ Define a new concept type with its fields and reference rules.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<name>` | positional | yes | Concept type name |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--description <value>` | string | no | Description of the concept type |
 | `--field <value>` | list<string> | no | A typed field, `key:type[:required][:v1|v2|...]` (repeatable) |
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
 | `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
 | `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
-| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested |
+| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested (default: `false`) |
 
 Output stream: `change`.
 
@@ -399,7 +406,7 @@ Remove a concept type.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<name>` | positional | yes | Concept type name to remove |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `change`.
 
@@ -410,13 +417,13 @@ Modify fields/references of an existing concept type.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<name>` | positional | yes | Concept type name |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--description <value>` | string | no | Description of the concept type |
 | `--field <value>` | list<string> | no | A typed field, `key:type[:required][:v1|v2|...]` (repeatable) |
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
 | `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
 | `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
-| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested |
+| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested (default: `false`) |
 
 Output stream: `change`.
 
@@ -427,8 +434,8 @@ Re-record source fingerprints after a change is acknowledged.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id to refresh |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `--fail-on <value>` | string | no | Fail (exit 1) when any source is skipped: never (default) | skipped | any |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--fail-on <value>` | string | no | Fail (exit 1) when any source is skipped: never (default) | skipped | any (default: `never`) |
 
 Output stream: `change`.
 
@@ -439,8 +446,8 @@ Remove a concept; refuse if backlinks would dangle unless `--force`.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id to remove |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `--force` | bool | no | Remove even if backlinks would dangle |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--force` | bool | no | Remove even if backlinks would dangle (default: `false`) |
 
 Output stream: `change`.
 
@@ -451,20 +458,20 @@ Append a `verified` entry (the write-side of trust).
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id to verify |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--by <value>` | string | yes | The reviewing actor (e.g. `human:andrey` or `process:ci`) |
 
 Output stream: `change`.
 
 ## render
 
-### `okf docs`
+### `okf docs` · _conditionally mutates_
 
 Generate documentation from a bundle.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--format <value>` | string | no | Output format: md|html|pdf|graphml|obsidian|index (default: `md`) |
 
-Output stream: `docs`.
+Output stream: `docs,change`.

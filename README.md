@@ -36,13 +36,17 @@ Requires a recent stable Rust. `git` on `PATH` is needed only for git-based sour
 
 ### Generated references
 
-Two doc surfaces are generated from `okf schema` and must be regenerated when the CLI changes:
-the per-skill CLI reference (`plugins/okf/skills/*/okf-cli-reference.md`) and the `## Arguments`
-section of each command concept (`knowledge/commands/*.md`). `cargo xtask install` / `cargo
-xtask build` do this for you; `cargo xtask docs` runs it on its own, and `cargo xtask docs
---check` fails (exit 1) if anything is stale — wire that into CI. A bare `cargo build` /
-`cargo install` cannot regenerate them (a build script can't run the not-yet-built binary), so
-use the `xtask` wrappers.
+Three doc surfaces are generated from `okf schema` and must be regenerated when the CLI changes:
+the [complete developer CLI reference](docs/okf-cli-reference.md), focused per-skill references
+(`plugins/okf/skills/*/references/cli.md`), and the `## Arguments` section of each command concept
+(`knowledge/commands/*.md`). The skill subsets are selected explicitly in
+`xtask/skill-scenarios.json`, keeping each skill self-contained without loading unrelated command
+documentation.
+
+`cargo xtask install` / `cargo xtask build` regenerate these files; `cargo xtask docs` runs the
+generation on its own, and `cargo xtask docs --check` fails (exit 1) if anything is stale—wire
+that into CI. A bare `cargo build` / `cargo install` cannot regenerate them (a build script cannot
+run the not-yet-built binary), so use the `xtask` wrappers.
 
 ## Quickstart
 
@@ -53,17 +57,19 @@ okf browse mybundle                   # read/synthesize the root index.md
 okf browse mybundle --directory notes # descend one directory without loading its concepts
 okf list mybundle                     # human table: id, type, trust tier, title
 okf list mybundle --json              # one JSON object per concept (NDJSON)
+okf search mybundle --text "travel policy" --match phrase --limit 10
 okf validate mybundle                 # conformance only (exit 1 if nonconformant)
 okf lint mybundle                     # advisory findings (broken links, missing desc, …)
 okf doctor mybundle                   # compatibility preflight for existing bundles
 okf artifact list mybundle            # inspect optional references/ artifacts
 okf links notes/hello mybundle --json # list direct normalized outbound links
-okf graph mybundle notes/hello --direction both --depth 2 # bounded neighborhood
+okf graph mybundle --root notes/hello --direction both --depth 2 # bounded neighborhood
 okf docs mybundle --format index      # write progressive-disclosure index.md files
 ```
 
-The bundle argument is an **optional trailing positional** on every command; when omitted it is
-resolved via the [configuration](#configuration) precedence below.
+Bundle-aware commands take an **optional trailing positional**; when omitted it is resolved via
+the [configuration](#configuration) precedence below. Meta commands take no bundle,
+`source-scan` takes an explicit arbitrary directory, and graph roots use `--root`.
 
 ## Configuration
 
@@ -75,7 +81,7 @@ Which bundle a command operates on is resolved in this order, **highest preceden
 4. the **current directory**.
 
 The resolved path must exist and be a directory, or the command fails with an environment error
-(exit 3).
+(exit 3). `init` uses the same precedence but permits the selected target not to exist yet.
 
 **Environment variables**
 
@@ -97,17 +103,23 @@ A present-but-malformed `okf.toml` is a usage error (exit 2).
 ## Output: text vs NDJSON
 
 Pass `--json` for machine output: **newline-delimited JSON**, one object per line, streamable.
-A `concept` record mirrors the concept's frontmatter **verbatim** plus a computed `id` and
-`trust_tier`:
+Graph and rendered-document artifacts are wrapped in a record with their format and content;
+`schema` is already NDJSON with or without the flag.
+A `concept` record mirrors the concept's frontmatter **verbatim** plus collision-safe computed
+identity, trust, lifecycle, generation, and verification views:
 
 ```jsonc
 {"id":"/metrics/revenue","type":"Metric","title":"Revenue","tags":["finance"],
  "verified":[{"by":"process:dbt","at":"2026-02-01"}],"trust_tier":"machine-confirmed"}
 ```
 
-`okf schema` emits the whole command surface as NDJSON (a header line + one line per command
-with its group, `mutates` flag, args, and output stream) so an agent can discover capabilities
-without hard-coding them.
+`okf search --text ... --json` additionally returns ranked, bounded match evidence under
+`search.score` and `search.matches`.
+
+`okf schema` emits schema contract v2 as NDJSON: a header describing global flags and bundle
+resolution, followed by commands with mutation capability/conditions, typed arguments, defaults,
+possible values, stdin support, and output streams. Flag names use their actual kebab-case CLI
+spelling.
 
 ## Commands
 
@@ -117,7 +129,7 @@ without hard-coding them.
 | **query** | `list`, `search`, `show`, `links`, `backlinks`, `graph`, `resolve`, `artifact list/resolve/show`, `ontology list`, `ontology show` |
 | **check** | `scan`, `source-scan`, `validate`, `lint`, `doctor`, `stale`, `affected`, `diff`, `stats`, `computation check` |
 | **mutate** | `init`, `add`, `edit`, `mv`, `rm`, `verify`, `refresh`, `ontology add/update/remove` |
-| **render** | `docs` (`--format html\|md\|pdf\|graphml\|obsidian\|index`) |
+| **render** | `docs` (`--format html\|md\|pdf\|graphml\|obsidian\|index`; only `index` mutates) |
 
 Highlights:
 
@@ -147,9 +159,14 @@ Highlights:
   concept to `unverified` until it is reviewed again.
 - **`show --outline` / `show --lines START:END`** expose a document's heading map and retrieve
   only the relevant numbered slice, avoiding full reads of large concepts.
+- **`search`** supports repeatable AND phrases, `phrase|all|any|literal` matching,
+  reader-visible Markdown, field scopes, deterministic relevance or ID ordering, bounded JSON
+  evidence, and result limits. Unfiltered search remains an exact alias of `list`.
 - **`links` / `backlinks` / `graph`** provide progressively wider relationship views: direct
   outgoing links, direct incoming concepts, or a rendered neighborhood constrained by
-  `--direction incoming|outgoing|both` and `--depth N`.
+  `--root <concept>`, `--direction incoming|outgoing|both`, and `--depth N`.
+- **`scan --fail-on`**, like other discovery checks, can turn non-empty informational results
+  into exit 1 for CI.
 
 ## Exit codes
 
@@ -226,9 +243,11 @@ The skills are namespaced by the plugin in both agents:
 | Reorganize the tree | `/okf:reorganize` | `$okf:reorganize` |
 
 The skills drive the `okf` CLI, so install the binary too (`cargo install --path crates/okf-cli`,
-or `cargo xtask install`). Each skill bundles a generated `okf-cli-reference.md` it reads from its
-own directory, so it never has to probe the CLI to learn arguments. Run `cargo xtask skills`
-and `cargo xtask docs --check` in CI to validate authored skill commands and generated references.
+or `cargo xtask install`). Each skill carries a generated `references/cli.md` containing only its
+workflow's commands and reads it when exact flags or output shapes are needed. If the installed
+binary version differs from the generated reference, command-specific `--help` is authoritative.
+Run `cargo xtask skills` and `cargo xtask docs --check` in CI to validate authored command examples,
+reference coverage, and generated documentation.
 
 ## Development
 

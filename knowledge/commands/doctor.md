@@ -15,12 +15,12 @@ Inventories an existing bundle with a tolerant raw-byte walker, reports hard con
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--target <value>` | string | no | Target OKF version (default: `0.2`) |
-| `--fix-safe` | bool | no | Enable the allow-listed safe repair set |
-| `--dry-run` | bool | no | Show safe repairs without writing (the default without --yes) |
-| `--yes` | bool | no | Confirm applying --fix-safe changes non-interactively |
+| `--fix-safe` | bool | no | Enable the allow-listed safe repair set (default: `false`) |
+| `--dry-run` | bool | no | Show safe repairs without writing (the default without --yes) (default: `false`) |
+| `--yes` | bool | no | Confirm applying --fix-safe changes non-interactively (default: `false`) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `doctor-finding,doctor-summary`.

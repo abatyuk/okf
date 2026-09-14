@@ -1,11 +1,11 @@
 //! clap command tree, groups, global `--json`. `okf schema` is derived from this tree.
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// Open Knowledge Format harness — deterministic hands over markdown + YAML bundles.
 #[derive(Debug, Parser)]
 #[command(name = "okf", version, about, long_about = None)]
 pub struct Cli {
-    /// Emit NDJSON (one JSON object per line) instead of human text.
+    /// Emit NDJSON instead of human text or a bare artifact; schema is always NDJSON.
     #[arg(long, global = true)]
     pub json: bool,
 
@@ -47,7 +47,7 @@ pub enum Command {
 
     // ---- CHECK ----
     /// Walk a bundle and report the candidate files that would be analyzed.
-    Scan(BundleArgs),
+    Scan(FailOnArgs),
     /// Inventory every regular source file without parsing it as an OKF concept.
     SourceScan(SourceScanArgs),
     /// Conformance validation — the spec's three hard rules only.
@@ -124,7 +124,7 @@ pub enum ComputationCmd {
 /// A bare bundle positional, shared by commands that take no other argument.
 #[derive(Debug, Args)]
 pub struct BundleArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
 }
 
@@ -136,7 +136,7 @@ pub struct SourceScanArgs {
 
 #[derive(Debug, Args)]
 pub struct SearchArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Filter by exact concept `type`.
     #[arg(long = "type")]
@@ -144,19 +144,59 @@ pub struct SearchArgs {
     /// Filter by membership in the concept's `tags`.
     #[arg(long = "tag")]
     pub tag: Option<String>,
-    /// Filter by case-insensitive substring across id/title/description/body.
+    /// Text query (repeatable). Repeated phrases use AND semantics by default.
     #[arg(long = "text")]
-    pub text: Option<String>,
+    pub text: Vec<String>,
+    /// Text matching: phrase (default), all tokens, any token, or literal source text.
+    #[arg(long = "match", value_enum, default_value_t = SearchMatchArg::Phrase)]
+    pub match_mode: SearchMatchArg,
+    /// Text fields to search (comma-separated or repeatable).
+    #[arg(
+        long = "in",
+        value_enum,
+        value_delimiter = ',',
+        default_value = "id,title,description,body"
+    )]
+    pub in_: Vec<SearchFieldArg>,
+    /// Result order: deterministic relevance (default) or concept id.
+    #[arg(long, value_enum, default_value_t = SearchSortArg::Relevance)]
+    pub sort: SearchSortArg,
+    /// Return at most this many results after all filters and sorting.
+    #[arg(long)]
+    pub limit: Option<usize>,
     /// Filter by a frontmatter field, `key=value` (repeatable; AND).
     #[arg(long = "field")]
     pub field: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum SearchMatchArg {
+    Phrase,
+    All,
+    Any,
+    Literal,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum SearchFieldArg {
+    Id,
+    Title,
+    Description,
+    Body,
+    Frontmatter,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum SearchSortArg {
+    Relevance,
+    Id,
 }
 
 #[derive(Debug, Args)]
 pub struct IdArgs {
     /// Concept id (leading slash optional), e.g. `tables/customers`.
     pub concept: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
 }
 
@@ -164,7 +204,7 @@ pub struct IdArgs {
 pub struct ShowArgs {
     /// Concept id (leading slash optional), e.g. `tables/customers`.
     pub concept: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Show only the Markdown heading outline with 1-based document line numbers.
     #[arg(long, conflicts_with = "lines")]
@@ -176,7 +216,7 @@ pub struct ShowArgs {
 
 #[derive(Debug, Args)]
 pub struct BrowseArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Bundle-relative directory to browse (default: root `/`).
     #[arg(long, default_value = "/")]
@@ -185,18 +225,19 @@ pub struct BrowseArgs {
 
 #[derive(Debug, Args)]
 pub struct GraphArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Optional concept at the neighborhood root; without one, render the entire graph.
+    #[arg(long = "root")]
     pub concept: Option<String>,
     /// Output format: mermaid (default), dot, or graphml.
-    #[arg(long, default_value = "mermaid")]
+    #[arg(long, default_value = "mermaid", value_parser = ["mermaid", "dot", "graphml"])]
     pub format: String,
     /// Edges to follow from the root: outgoing (default), incoming, or both.
     #[arg(
         long,
         value_parser = ["outgoing", "incoming", "both"],
-        requires = "concept"
+        default_value = "outgoing"
     )]
     pub direction: Option<String>,
     /// Maximum neighbor distance from the root (0 = root only; default: unbounded).
@@ -208,7 +249,7 @@ pub struct GraphArgs {
 pub struct ResolveArgs {
     /// Link or concept id to resolve.
     pub link: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Resolve a relative link against this containing concept id.
     #[arg(long)]
@@ -217,7 +258,7 @@ pub struct ResolveArgs {
 
 #[derive(Debug, Args)]
 pub struct ArtifactListArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Bundle-relative directory to inventory.
     #[arg(long, default_value = "references")]
@@ -231,7 +272,7 @@ pub struct ArtifactListArgs {
 pub struct ArtifactResolveArgs {
     /// Resource path, URL, or scope descriptor.
     pub resource: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Resolve a relative resource against this declaring concept id.
     #[arg(long)]
@@ -242,7 +283,7 @@ pub struct ArtifactResolveArgs {
 pub struct ArtifactShowArgs {
     /// Local artifact path to retrieve.
     pub resource: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Resolve a relative resource against this declaring concept id.
     #[arg(long)]
@@ -260,28 +301,36 @@ pub struct ArtifactShowArgs {
 
 #[derive(Debug, Args)]
 pub struct LintArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Apply auto-fixable findings (v1: none are auto-fixable — reports what it would do).
     #[arg(long)]
     pub fix: bool,
     /// Severity threshold that makes the run fail (exit 1): never|info|warn|error|any.
-    #[arg(long = "fail-on")]
+    #[arg(
+        long = "fail-on",
+        value_parser = ["never", "info", "warn", "error", "any"],
+        default_value = "error"
+    )]
     pub fail_on: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct FailOnArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Fail (exit 1) on any result: never (default) | info | warn | error | any.
-    #[arg(long = "fail-on")]
+    #[arg(
+        long = "fail-on",
+        value_parser = ["never", "info", "warn", "error", "any"],
+        default_value = "never"
+    )]
     pub fail_on: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct AffectedArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// A changed link/concept-id/resource (repeatable; also read from stdin lines).
     #[arg(long = "changed")]
@@ -293,7 +342,11 @@ pub struct AffectedArgs {
     #[arg(long)]
     pub depth: Option<usize>,
     /// Fail (exit 1) on any affected concept: never (default) | info | warn | error | any.
-    #[arg(long = "fail-on")]
+    #[arg(
+        long = "fail-on",
+        value_parser = ["never", "info", "warn", "error", "any"],
+        default_value = "never"
+    )]
     pub fail_on: Option<String>,
 }
 
@@ -301,19 +354,23 @@ pub struct AffectedArgs {
 pub struct DiffArgs {
     /// Git ref to diff against (e.g. `HEAD`, a branch, or a commit).
     pub git_ref: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Fail (exit 1) on any change: never (default) | info | warn | error | any.
-    #[arg(long = "fail-on")]
+    #[arg(
+        long = "fail-on",
+        value_parser = ["never", "info", "warn", "error", "any"],
+        default_value = "never"
+    )]
     pub fail_on: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct DoctorArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Target OKF version.
-    #[arg(long, default_value = "0.2")]
+    #[arg(long, default_value = "0.2", value_parser = ["0.2"])]
     pub target: String,
     /// Enable the allow-listed safe repair set.
     #[arg(long = "fix-safe")]
@@ -328,7 +385,7 @@ pub struct DoctorArgs {
 
 #[derive(Debug, Args)]
 pub struct InitArgs {
-    /// Bundle directory to create (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory to create (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Title for the scaffolded root `index.md`.
     #[arg(long)]
@@ -345,7 +402,7 @@ pub struct InitArgs {
 pub struct AddArgs {
     /// Bundle-relative path of the new concept (with or without `.md`).
     pub path: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Concept `type` (an ontology concept-type key). Optional with `--attested`.
     #[arg(long = "type")]
@@ -401,7 +458,7 @@ pub struct AddArgs {
 pub struct EditArgs {
     /// Concept id to edit.
     pub concept: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Set/update a scalar field, `key=value` (repeatable).
     #[arg(long = "set")]
@@ -449,10 +506,14 @@ pub struct EditArgs {
 pub struct RefreshArgs {
     /// Concept id to refresh.
     pub concept: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Fail (exit 1) when any source is skipped: never (default) | skipped | any.
-    #[arg(long = "fail-on")]
+    #[arg(
+        long = "fail-on",
+        value_parser = ["never", "skipped", "any"],
+        default_value = "never"
+    )]
     pub fail_on: Option<String>,
 }
 
@@ -462,7 +523,7 @@ pub struct MvArgs {
     pub old: String,
     /// New concept id.
     pub new: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
 }
 
@@ -470,7 +531,7 @@ pub struct MvArgs {
 pub struct RmArgs {
     /// Concept id to remove.
     pub concept: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Remove even if backlinks would dangle.
     #[arg(long)]
@@ -481,7 +542,7 @@ pub struct RmArgs {
 pub struct VerifyArgs {
     /// Concept id to verify.
     pub concept: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// The reviewing actor (e.g. `human:andrey` or `process:ci`).
     #[arg(long = "by")]
@@ -490,10 +551,14 @@ pub struct VerifyArgs {
 
 #[derive(Debug, Args)]
 pub struct DocsArgs {
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Output format: md|html|pdf|graphml|obsidian|index.
-    #[arg(long, default_value = "md")]
+    #[arg(
+        long,
+        default_value = "md",
+        value_parser = ["md", "html", "pdf", "graphml", "obsidian", "index"]
+    )]
     pub format: String,
 }
 
@@ -501,7 +566,7 @@ pub struct DocsArgs {
 pub struct OntShowArgs {
     /// Concept type name.
     pub name: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
 }
 
@@ -509,7 +574,7 @@ pub struct OntShowArgs {
 pub struct OntRemoveArgs {
     /// Concept type name to remove.
     pub name: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
 }
 
@@ -517,7 +582,7 @@ pub struct OntRemoveArgs {
 pub struct OntEditArgs {
     /// Concept type name.
     pub name: String,
-    /// Bundle directory (defaults to $OKF_BUNDLE, then the current directory).
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
     /// Description of the concept type.
     #[arg(long)]

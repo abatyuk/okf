@@ -10,7 +10,7 @@ sources:
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
+    blob_sha: 2e9e16e4bfa3271ab135d7f1ca406374da1a1407
 last_modified: 2026-09-07T18:22:06Z
 ---
 # okf ontology update
@@ -22,14 +22,14 @@ Modifies the fields or references of an existing concept type.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<name>` | positional | yes | Concept type name |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--description <value>` | string | no | Description of the concept type |
 | `--field <value>` | list<string> | no | A typed field, `key:type[:required][:v1|v2|...]` (repeatable) |
 | `--ref <value>` | list<string> | no | A reference rule, `key:Target[|Target2]:cardinality` (repeatable) |
 | `--remove-field <value>` | list<string> | no | Remove a typed field (update only; repeatable) |
 | `--remove-ref <value>` | list<string> | no | Remove a reference rule (update only; repeatable) |
-| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested |
+| `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested (default: `false`) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `change`.

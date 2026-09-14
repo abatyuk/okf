@@ -10,8 +10,10 @@ granularity, attribution, and unresolved legacy semantics require judgment.
 
 ## CLI and conformance model
 
-Read this skill's generated `okf-cli-reference.md` before using flags. Prefer `OKF_BUNDLE` for a
-multi-step workflow. A fully qualified mutation is `okf add <path> <bundle> --type <Type>`.
+Prefer `OKF_BUNDLE` for a multi-step workflow. A fully qualified mutation is `okf add <path>
+<bundle> --type <Type>`. When exact flags or output shapes are needed, read the focused
+`references/cli.md`. If its generated tool version differs from the installed binary, use that
+command's `--help` output as the runtime authority.
 
 Conformance requires parseable frontmatter, a non-empty `type`, and valid reserved files.
 `title`, `description`, applicable `resource`, `tags`, structural Markdown, and absolute

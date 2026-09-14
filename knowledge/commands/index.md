@@ -27,7 +27,7 @@
 * [okf resolve](resolve.md) - Resolves a link or concept id to a concrete bundle-relative file path.
 * [okf rm](rm.md) - Removes a concept, refusing if backlinks would dangle unless --force is given.
 * [okf scan](scan.md) - Walks the physical bundle tree and reports every Markdown file without parsing concepts.
-* [okf schema](schema.md) - Prints machine-readable CLI metadata as NDJSON: every command with its group, mutates flag, args, and output shape.
+* [okf schema](schema.md) - Prints machine-readable CLI metadata as NDJSON: commands, mutation conditions, typed arguments, resolution, and output shapes.
 * [okf search](search.md) - Searches concepts by type, tag, free text, and/or frontmatter field, returning matching concept records.
 * [okf show](show.md) - Shows a concept in full, as a heading outline with line numbers, or as a selected line range.
 * [okf source-scan](source-scan.md) - Inventories every regular file in a source directory without parsing it as an OKF bundle.

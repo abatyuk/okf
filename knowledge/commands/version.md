@@ -10,7 +10,7 @@ sources:
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
+    blob_sha: 2e9e16e4bfa3271ab135d7f1ca406374da1a1407
 last_modified: 2026-09-07T18:22:07Z
 ---
 # okf version
@@ -21,6 +21,6 @@ Prints the CLI version and the OKF spec version(s) it supports.
 
 _No arguments._
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON.
 
 Output stream: `version`.

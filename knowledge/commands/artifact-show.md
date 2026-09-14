@@ -16,12 +16,12 @@ Returns bounded UTF-8 text or binary metadata and a digest. Remote HTTP(S) retri
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<resource>` | positional | yes | Local artifact path to retrieve |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 | `--lines <value>` | string | no | Retrieve only an inclusive, one-based START:END line range |
-| `--max-bytes <value>` | string | no | Maximum bytes read into output (default: `65536`) |
-| `--fetch` | bool | no | Explicitly request remote retrieval (requires a network-enabled build and policy) |
+| `--max-bytes <value>` | int | no | Maximum bytes read into output (default: `65536`) |
+| `--fetch` | bool | no | Explicitly request remote retrieval (requires a network-enabled build and policy) (default: `false`) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `artifact-content`.

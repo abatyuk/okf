@@ -1,5 +1,8 @@
 //! search, list, show, backlinks, links, graph, resolve.
-use crate::cli::{BrowseArgs, BundleArgs, GraphArgs, IdArgs, ResolveArgs, SearchArgs, ShowArgs};
+use crate::cli::{
+    BrowseArgs, BundleArgs, GraphArgs, IdArgs, ResolveArgs, SearchArgs, SearchFieldArg,
+    SearchMatchArg, SearchSortArg, ShowArgs,
+};
 use crate::output;
 use okf_core::bundle::loader::{concept_exists, load_bundle, load_bundle_metadata, load_concept};
 use okf_core::bundle::resolve::resolve_bundle;
@@ -12,7 +15,9 @@ use okf_core::model::link::outbound_links;
 use okf_core::ontology::load::try_load;
 use okf_core::query::browse::browse;
 use okf_core::query::resolve::resolve_at;
-use okf_core::query::search::{search, SearchFilter};
+use okf_core::query::search::{
+    search, search_detailed, SearchField, SearchFilter, SearchSort, TextMatchMode,
+};
 use serde_json::json;
 
 /// `okf list [bundle]` — list all concepts (search with no filter).
@@ -31,21 +36,54 @@ pub fn run_search(args: &SearchArgs, json: bool) -> Result<i32> {
         type_: args.type_.clone(),
         tag: args.tag.clone(),
         text: args.text.clone(),
+        match_mode: match args.match_mode {
+            SearchMatchArg::Phrase => TextMatchMode::Phrase,
+            SearchMatchArg::All => TextMatchMode::All,
+            SearchMatchArg::Any => TextMatchMode::Any,
+            SearchMatchArg::Literal => TextMatchMode::Literal,
+        },
+        fields: args
+            .in_
+            .iter()
+            .map(|field| match field {
+                SearchFieldArg::Id => SearchField::Id,
+                SearchFieldArg::Title => SearchField::Title,
+                SearchFieldArg::Description => SearchField::Description,
+                SearchFieldArg::Body => SearchField::Body,
+                SearchFieldArg::Frontmatter => SearchField::Frontmatter,
+            })
+            .collect(),
+        sort: match args.sort {
+            SearchSortArg::Relevance => SearchSort::Relevance,
+            SearchSortArg::Id => SearchSort::Id,
+        },
     };
-    let bundle = if filter.text.is_some() {
+    let bundle = if !filter.text.is_empty() {
         load_bundle(&root)?
     } else {
         load_bundle_metadata(&root)?
     };
-    let mut results = search(&bundle, &filter);
+    let mut results = search_detailed(&bundle, &filter);
 
     // `--field key=value` is a CLI-side post-filter (core `SearchFilter` has no field slot).
     let field_filters = parse_field_filters(&args.field)?;
     if !field_filters.is_empty() {
-        results.retain(|c| field_filters.iter().all(|(k, v)| field_matches(c, k, v)));
+        results.retain(|hit| {
+            field_filters
+                .iter()
+                .all(|(key, value)| field_matches(hit.concept, key, value))
+        });
+    }
+    if let Some(limit) = args.limit {
+        results.truncate(limit);
     }
 
-    output::print_concepts(&results, json)?;
+    if args.text.is_empty() {
+        let concepts: Vec<&Concept> = results.iter().map(|hit| hit.concept).collect();
+        output::print_concepts(&concepts, json)?;
+    } else {
+        output::print_search_hits(&results, json)?;
+    }
     Ok(0)
 }
 
@@ -163,9 +201,8 @@ pub fn run_links(args: &IdArgs, json: bool) -> Result<i32> {
     Ok(0)
 }
 
-/// `okf graph [bundle] [concept] [--direction ...] [--depth N] --format`.
-/// Emits a graph artifact (not NDJSON).
-pub fn run_graph(args: &GraphArgs, _json: bool) -> Result<i32> {
+/// `okf graph [bundle] [--root concept] [--direction ...] [--depth N] --format`.
+pub fn run_graph(args: &GraphArgs, json_output: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
     let ontology = try_load(&root)?;
@@ -188,7 +225,18 @@ pub fn run_graph(args: &GraphArgs, _json: bool) -> Result<i32> {
         direction,
         args.depth,
     );
-    output::print_text(format_args!("{out}"))?;
+    if json_output {
+        output::print_line(&json!({
+            "kind": "graph",
+            "format": format.as_str(),
+            "root": args.concept,
+            "direction": direction.as_str(),
+            "depth": args.depth,
+            "content": out,
+        }))?;
+    } else {
+        output::print_text(format_args!("{out}"))?;
+    }
     Ok(0)
 }
 

@@ -24,7 +24,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 /// `okf scan [bundle]` — report the candidate concept files the loader would analyze.
-pub fn run_scan(args: &BundleArgs, json: bool) -> Result<i32> {
+pub fn run_scan(args: &FailOnArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let paths = walk_markdown(&root)?;
     if json {
@@ -42,7 +42,7 @@ pub fn run_scan(args: &BundleArgs, json: bool) -> Result<i32> {
             output::print_text_line(format_args!("  {}", path.display()))?;
         }
     }
-    Ok(0)
+    discovery_exit(&args.fail_on, paths.is_empty())
 }
 
 pub fn run_source_scan(args: &SourceScanArgs, json_output: bool) -> Result<i32> {

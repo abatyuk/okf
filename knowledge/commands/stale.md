@@ -1,7 +1,7 @@
 ---
 type: Command
 title: okf stale
-description: 'Detects extension fingerprint drift and lifecycle expiry using offset-aware, inclusive stale_after comparison.'
+description: Detects extension fingerprint drift and lifecycle expiry using offset-aware, inclusive stale_after comparison.
 group: check
 mutates: false
 implemented_by:
@@ -10,7 +10,7 @@ sources:
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
+    blob_sha: 2e9e16e4bfa3271ab135d7f1ca406374da1a1407
 last_modified: 2026-09-07T18:22:07Z
 ---
 # okf stale
@@ -21,9 +21,9 @@ Compares recorded source fingerprint extensions against recomputed values and ap
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
-| `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any (default: `never`) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `drift`.

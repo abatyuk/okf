@@ -5,9 +5,10 @@ description: Reconcile OKF concepts after source or concept changes using lifecy
 
 # Update concepts after changes
 
-Read the generated `okf-cli-reference.md` in this skill directory. Prefer `OKF_BUNDLE` for a
-workflow. Fully qualified examples include `okf diff <git-ref> <bundle>` and
-`okf affected <bundle> --changed <resource>`.
+Prefer `OKF_BUNDLE` for a workflow. Fully qualified examples include `okf diff <git-ref> <bundle>`
+and `okf affected <bundle> --changed <resource>`. When exact flags or output shapes are needed,
+read the focused `references/cli.md`. If its generated tool version differs from the installed
+binary, use that command's `--help` output as the runtime authority.
 
 ## Detect and classify
 

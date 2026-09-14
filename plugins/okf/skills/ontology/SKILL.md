@@ -8,9 +8,11 @@ description: Author and maintain the optional tool-local ontology.yaml with advi
 `ontology.yaml` is a spec-external sidecar. It is neither required for an OKF bundle nor a type
 registry. Unknown types are conformant; ontology findings are advisory.
 
-Read this skill's generated `okf-cli-reference.md`. Prefer `OKF_BUNDLE`; explicit forms are
-`okf ontology show <name> <bundle>` and `okf ontology add <name> <bundle>`. Use ontology commands
-for deterministic writes rather than editing the sidecar directly.
+Prefer `OKF_BUNDLE`; explicit forms are `okf ontology show <name> <bundle>` and `okf ontology add
+<name> <bundle>`. Use ontology commands for deterministic writes rather than editing the sidecar
+directly. When exact flags or output shapes are needed, read the focused `references/cli.md`. If
+its generated tool version differs from the installed binary, use that command's `--help` output
+as the runtime authority.
 
 ## Workflow
 

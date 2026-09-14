@@ -5,9 +5,10 @@ description: Infer an optional advisory ontology.yaml from observed OKF concepts
 
 # Infer a local ontology from a bundle
 
-Read the generated `okf-cli-reference.md` in this skill directory. Query bundle content through
-the CLI, using outlines and line slices for large concepts. Prefer `OKF_BUNDLE`; one explicit form
-is `okf ontology add <name> <bundle>`.
+Query bundle content through the CLI, using outlines and line slices for large concepts. Prefer
+`OKF_BUNDLE`; one explicit form is `okf ontology add <name> <bundle>`. When exact flags or output
+shapes are needed, read the focused `references/cli.md`. If its generated tool version differs
+from the installed binary, use that command's `--help` output as the runtime authority.
 
 ## Workflow
 

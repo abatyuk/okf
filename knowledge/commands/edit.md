@@ -10,7 +10,7 @@ sources:
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 7a22138be071fc20ede774d812f9f98d018e7341
+    blob_sha: 2e9e16e4bfa3271ab135d7f1ca406374da1a1407
 last_modified: 2026-09-07T18:22:06Z
 ---
 # okf edit
@@ -28,7 +28,7 @@ to `unverified` until the revised document is reviewed and verified again.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id to edit |
-| `<bundle>` | positional | no | Bundle directory (defaults to $OKF_BUNDLE, then the current directory) (default: `.`) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--set <value>` | list<string> | no | Set/update a scalar field, `key=value` (repeatable) |
 | `--unset <value>` | list<string> | no | Remove a field entirely, `key` (repeatable) |
 | `--add <value>` | list<string> | no | Append an item to a list field, `key=value` (repeatable, idempotent) |
@@ -38,11 +38,11 @@ to `unverified` until the revised document is reviewed and verified again.
 | `--remove-source <value>` | list<string> | no | Remove sources matching `<path-or-uri>` or `resource=<path-or-uri>[,kind=<kind>]` (repeatable) |
 | `--set-body <value>` | string | no | Replace the whole body. Use `@file` to read a file or `-` for stdin |
 | `--append-body <value>` | string | no | Append a block to the body. Use `@file` or `-` (stdin) |
-| `--clear-body` | bool | no | Empty the body |
+| `--clear-body` | bool | no | Empty the body (default: `false`) |
 | `--set-section <HEADING> <TEXT>` | list<string> | no | Replace a section's content, `<heading> <text>` (repeatable). Text accepts `@file`/`-` |
 | `--append-section <HEADING> <TEXT>` | list<string> | no | Append to a section, `<heading> <text>` (repeatable). Text accepts `@file`/`-` |
 | `--remove-section <value>` | list<string> | no | Remove a section (heading + content), `<heading>` (repeatable) |
 
-Every command also accepts global `--json` and an optional trailing `bundle` positional.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 
 Output stream: `change`.

@@ -43,6 +43,14 @@ pub fn run_docs(args: &DocsArgs, json: bool) -> Result<i32> {
     }
 
     let artifact = render_docs(&bundle, ontology.as_ref(), format)?;
-    print!("{artifact}");
+    if json {
+        output::print_line(&json!({
+            "kind": "docs",
+            "format": format.as_str(),
+            "content": artifact,
+        }))?;
+    } else {
+        print!("{artifact}");
+    }
     Ok(0)
 }

@@ -9,8 +9,9 @@ description: Diagnose and repair an existing OKF knowledge base for v0.2 using o
 checks in prompt logic. Bring the bundle to target-ready state when repairs are mechanical; stop
 at an explicit user-decision boundary when meaning or identity is ambiguous.
 
-Read this skill's generated `okf-cli-reference.md`. Prefer `OKF_BUNDLE`; the preflight is
-`okf doctor <bundle> --target 0.2 --json`.
+Prefer `OKF_BUNDLE`; the preflight is `okf doctor <bundle> --target 0.2 --json`. When exact flags
+or output shapes are needed, read the focused `references/cli.md`. If its generated tool version
+differs from the installed binary, use that command's `--help` output as the runtime authority.
 
 ## Workflow
 
