@@ -1,6 +1,6 @@
 # okf CLI — complete argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.3, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.4, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 This complete reference is for developers and general CLI lookup. Skills carry smaller generated subsets so they do not load unrelated commands.
 

@@ -847,7 +847,7 @@ mod tests {
         }]);
         let commands = [&show, &add];
         let selected = commands_for_skill("retrieval", &scenarios, &commands).unwrap();
-        let header = json!({"tool_version": "0.2.3", "okf_spec": ["0.2"]});
+        let header = json!({"tool_version": "0.2.4", "okf_spec": ["0.2"]});
         let reference = cli_reference(&header, &selected, Some("retrieval"));
 
         assert!(reference.contains("# okf CLI — retrieval command reference"));

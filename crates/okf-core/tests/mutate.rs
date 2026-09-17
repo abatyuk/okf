@@ -578,6 +578,52 @@ fn mv_rewrites_every_inbound_link_and_rebases_moved_relative_links() {
     assert!(mv::mv(root, "policies/travel", "x/y").is_err());
 }
 
+#[test]
+fn mv_handles_a_destination_directory_that_prefixes_the_source_sibling() {
+    let tmp = temp_bundle();
+    let root = tmp.path();
+    write_file(
+        root,
+        "ontology.yaml",
+        "okf_ontology: '0.1'\nconcepts:\n  Note: {}\n",
+    );
+    write_file(
+        root,
+        "specs/clients/tui-rework.md",
+        "---\ntype: Note\n---\n",
+    );
+    write_file(
+        root,
+        "specs/clients/tui-rework/a.md",
+        "---\ntype: Note\n---\n",
+    );
+    write_file(
+        root,
+        "specs/clients/tui-rework/b.md",
+        "---\ntype: Note\n---\n",
+    );
+    write_file(
+        root,
+        "referrer.md",
+        "---\ntype: Note\n---\n[b](/specs/clients/tui-rework/b.md)\n",
+    );
+
+    mv::mv(root, "specs/clients/tui-rework/a", "specs/clients/tui/a").unwrap();
+    let forward = mv::mv(root, "specs/clients/tui-rework/b", "specs/clients/tui/b").unwrap();
+    assert_eq!(
+        forward.rewritten,
+        vec![ConceptId::from_relative("referrer")]
+    );
+    assert!(read_file(root, "referrer.md").contains("/specs/clients/tui/b.md"));
+
+    let reverse = mv::mv(root, "specs/clients/tui/b", "specs/clients/tui-rework/b").unwrap();
+    assert_eq!(
+        reverse.rewritten,
+        vec![ConceptId::from_relative("referrer")]
+    );
+    assert!(read_file(root, "referrer.md").contains("/specs/clients/tui-rework/b.md"));
+}
+
 // ---------------------------------------------------------------------------- rm
 
 #[test]

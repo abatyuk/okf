@@ -1,6 +1,6 @@
 # okf CLI — review-verify command reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.3, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` (tool 0.2.4, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 This focused reference contains only commands selected for the `review-verify` workflow. Consult it when exact arguments or output shapes are needed. If the installed `okf` version differs from the generated tool version above, or rejects documented syntax, use that command's `--help` output as the runtime authority.
 

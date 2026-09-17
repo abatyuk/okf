@@ -101,6 +101,13 @@ fn load_bundle_with(root: &Path, include_body: bool) -> Result<Bundle> {
         concepts.push(concept);
     }
 
+    // Filesystem path ordering is not always concept-id ordering. For example,
+    // `tui/a.md` sorts before `tui-rework.md` as a path because `tui` is a full
+    // component, while `/tui-rework` sorts before `/tui/a` as a string because
+    // `-` precedes `/`. Bundle::get uses binary search, so establish its stated
+    // id-ordering invariant explicitly after loading.
+    concepts.sort_by(|a, b| a.id.0.cmp(&b.id.0));
+
     Ok(Bundle {
         root: root.to_path_buf(),
         concepts,
@@ -181,5 +188,19 @@ mod tests {
         let concept = load_concept(root.path(), "good").unwrap().unwrap();
         assert_eq!(concept.concept_type(), Some("Note"));
         assert!(load_bundle(root.path()).is_err());
+    }
+
+    #[test]
+    fn bundle_is_sorted_by_concept_id_when_file_and_directory_prefixes_collide() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("tui")).unwrap();
+        std::fs::write(root.path().join("tui/a.md"), "---\ntype: Note\n---\n").unwrap();
+        std::fs::write(root.path().join("tui-rework.md"), "---\ntype: Note\n---\n").unwrap();
+
+        let bundle = load_bundle(root.path()).unwrap();
+        let ids: Vec<&str> = bundle.concepts.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ids, vec!["/tui-rework", "/tui/a"]);
+        assert!(bundle.get("/tui-rework").is_some());
+        assert!(bundle.get("/tui/a").is_some());
     }
 }
