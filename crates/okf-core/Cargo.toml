@@ -12,15 +12,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 serde_yaml = "0.9"
 indexmap = { version = "2", features = ["serde"] }
-thiserror = "1"
-sha2 = "0.10"
+thiserror = "2"
+sha2 = "0.11"
 ignore = "0.4"
 regex = "1"
-pulldown-cmark = "0.11"
-toml = "0.8"
+pulldown-cmark = "0.13"
+toml = "1"
 
 # Network fingerprints (`url` source kind) — optional, gated behind `url-sources`.
-ureq = { version = "2", optional = true }
+ureq = { version = "3", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

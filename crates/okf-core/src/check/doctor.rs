@@ -3,8 +3,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use crate::fingerprint::canonicalize::sha256_hex;
 use ignore::WalkBuilder;
-use sha2::{Digest, Sha256};
 
 use crate::bundle::loader::Bundle;
 use crate::bundle::walk::walk_markdown;
@@ -443,7 +443,7 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
             finding.path.as_deref().unwrap_or(""),
             finding.message
         );
-        let digest = format!("{:x}", Sha256::digest(identity.as_bytes()));
+        let digest = sha256_hex(identity.as_bytes());
         finding.id = format!("DOC-{}", &digest[..12]);
     }
     Ok(DoctorReport {

@@ -359,7 +359,7 @@ subsequent line describes one command. Every line is a standalone JSON object so
 stream and filter without a JSON-array parser.
 
 ```jsonl
-{"kind":"schema","tool":"okf","tool_version":"0.2.5","okf_spec":["0.2"],"ndjson_schema":"2","global_args":[{"name":"json","type":"bool","default":false}],"bundle_resolution":["explicit","env:OKF_BUNDLE","config:okf.toml","cwd"]}
+{"kind":"schema","tool":"okf","tool_version":"0.2.6","okf_spec":["0.2"],"ndjson_schema":"2","global_args":[{"name":"json","type":"bool","default":false}],"bundle_resolution":["explicit","env:OKF_BUNDLE","config:okf.toml","cwd"]}
 {"kind":"command","name":"list","group":"query","mutates":false,"mutates_when":null,"summary":"List all concepts (search with no filter)","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"repeatable":false,"default":null,"resolution":["explicit","env:OKF_BUNDLE","config:okf.toml","cwd"]}],"output":{"stream":"concept"}}
 ```
 

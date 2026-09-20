@@ -28,10 +28,18 @@ impl Net for RealNet {
         let resp = ureq::get(url)
             .call()
             .map_err(|e| OkfError::Io(format!("fetch {url}: {e}")))?;
-        let etag = resp.header("etag").map(str::to_string);
-        let last_modified = resp.header("last-modified").map(str::to_string);
+        let etag = resp
+            .headers()
+            .get("etag")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        let last_modified = resp
+            .headers()
+            .get("last-modified")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
         let mut body = Vec::new();
-        std::io::Read::read_to_end(&mut resp.into_reader(), &mut body)
+        std::io::Read::read_to_end(&mut resp.into_body().into_reader(), &mut body)
             .map_err(|e| OkfError::Io(format!("read body {url}: {e}")))?;
         Ok(HttpResponse {
             etag,

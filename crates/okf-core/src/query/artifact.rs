@@ -240,7 +240,11 @@ pub fn show_artifact(
         let retain = (max_bytes - prefix.len()).min(read);
         prefix.extend_from_slice(&buffer[..retain]);
     }
-    let sha256 = format!("{:x}", digest.finalize());
+    let sha256 = digest
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
     let truncated = total > max_bytes;
     let (text, binary) = match std::str::from_utf8(&prefix) {
         Ok(text) => {
@@ -290,11 +294,14 @@ fn fetch_impl(resource: &str, max_bytes: usize) -> Result<ArtifactContent> {
     use std::time::Duration;
 
     let response = ureq::get(resource)
-        .timeout(Duration::from_secs(15))
+        .config()
+        .timeout_global(Some(Duration::from_secs(15)))
+        .build()
         .call()
         .map_err(|e| OkfError::Environment(format!("remote artifact fetch failed: {e}")))?;
     let mut bytes = Vec::new();
     response
+        .into_body()
         .into_reader()
         .take(max_bytes as u64 + 1)
         .read_to_end(&mut bytes)
@@ -404,7 +411,7 @@ fn looks_like_scope(s: &str) -> bool {
 }
 
 fn hex_sha256(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    crate::fingerprint::canonicalize::sha256_hex(bytes)
 }
 
 #[cfg(test)]
