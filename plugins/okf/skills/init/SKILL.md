@@ -5,60 +5,68 @@ description: Start a new OKF v0.2 bundle, optionally define a tool-local ontolog
 
 # Initialize an OKF bundle
 
-Use the CLI for deterministic writes and checks. Decide the domain, portable concept content,
-and any optional local modeling with the user.
+Use the CLI for writes and checks. Use the domain, scope, and modeling choices already supplied;
+choose ordinary defaults for reversible scaffolding. Ask only about unresolved choices that
+materially change the requested bundle.
 
 ## CLI and bundle access
 
 In multi-step work, set `OKF_BUNDLE` once. One fully qualified example is `okf add notes/hello
-<bundle> --type Note`. When exact flags or output shapes are needed, read the focused
-`references/cli.md`. If its generated tool version differs from the installed binary, use that
+<bundle> --type Note`. Before using an unfamiliar command or flag, read its entry in
+`references/cli.md`. If the installed version differs or rejects documented syntax, use that
 command's `--help` output as the runtime authority.
 
-Inspect bundle content through `okf browse`, `okf search`, `okf list`, and targeted `okf show`.
-For a large concept, use `okf show <concept-id> <bundle> --outline` followed by `--lines`.
+Inspect bundle content through `okf browse`, `okf search`, `okf list`, and targeted `okf show`. For
+text search, use `okf search <bundle> --text "query terms" --limit 10`; the positional is always the
+bundle path, never the query. Use `okf list <bundle>` for an unfiltered inventory. For a large
+concept, use `okf show <concept-id> <bundle> --outline`, then `okf show <concept-id> <bundle>
+--lines <START:END>`.
 
 ## Portable OKF versus local policy
 
 - Required for bundle conformance: parseable frontmatter, non-empty `type`, and valid reserved
   `index.md`/`log.md` structures. Unknown custom type strings are valid.
-- Recommended: `title`, `description`, applicable `resource`, `tags`, useful Markdown structure,
-  and absolute bundle-relative concept links.
+- Recommended: `title`, `description`, applicable `resource`, `tags`, useful Markdown structure, and
+  absolute bundle-relative concept links.
 - Optional with defined semantics: `sources`, `generated`, `verified`, lifecycle fields, and the
   Attested Computation family.
-- `ontology.yaml`, source `kind`/`fingerprint`, and sync metadata are tool extensions. Ontology
-  lint is advisory and never changes OKF conformance.
+- `ontology.yaml`, source `kind`/`fingerprint`, and sync metadata are tool extensions. Ontology lint
+  is advisory and never changes OKF conformance.
 
 ## Workflow
 
-1. Run `okf init <bundle>`. Confirm that its root index is structurally valid with
-   `okf validate <bundle>`; an empty bundle still needs a non-empty `#` heading when indexed.
+1. Run `okf init <bundle>`; it creates an empty ontology sidecar by default. Use `okf init <bundle>
+   --no-ontology` when no local ontology is wanted. Confirm that its root index is structurally
+   valid with `okf validate <bundle>`; an empty bundle still needs a non-empty `#` heading when
+   indexed.
 2. If local type rules add value, define them with `okf ontology add <name> <bundle>` and inspect
-   them with `okf ontology show <name> <bundle>`. Do not present this sidecar as an OKF registry
-   or requirement. Keep exact type strings; unknown types remain portable.
+   them with `okf ontology show <name> <bundle>`. Do not present this sidecar as an OKF registry or
+   requirement. Keep exact type strings; unknown types remain portable.
 3. Create ordinary concepts with `okf add <path> <bundle> --type <Type>`. Add grounded title,
-   description, prose, and sources. If generation provenance is desired, pass the actual actor
-   with `--generated-by`; never label agent-authored material `human:<id>`.
-4. For a standard computation, use exact `type: Attested Computation` via `okf add <path>
-   <bundle> --attested --runtime <runtime>` and declare parameters. Choose exactly one sanctioned
-   computation form: `--computation <resource>` or `--inline-computation <text-or-@file>`.
-   Executor, receipt, and attester resources describe a contract; creating or reading it does
-   not authorize execution. `okf computation check <concept-id> <bundle>` only inspects it.
+   description with `--title "Title" --description "Summary"`. Add prose after creation with `okf
+   edit <concept-id> <bundle> --set-body @/tmp/concept-body.md`; the file contains Markdown body
+   only. Add a source with `okf edit <concept-id> <bundle> --add-source
+   "resource=<path>,id=source-1"`. If generation provenance is desired, pass `--generated-by
+   <actor>` to add; the CLI supplies the timestamp. Never label agent-authored material
+   `human:<id>`.
+4. Only for a requested computation, use exact `Attested Computation` with `okf add <path> <bundle>
+   --attested --runtime <runtime>`. Read the add/computation sections of `references/cli.md` for
+   parameters, inline/file forms, and contract resources. Inspect with `okf computation check
+   <concept-id> <bundle>`; this does not execute or attest a run.
 5. Add portable Markdown links for relationships. Ontology references may supplement them.
-6. Run `okf validate <bundle>`, then advisory `okf lint <bundle> --fail-on never`. Generate
-   indexes with `okf docs <bundle> --format index` and confirm them with `okf browse <bundle>`.
+6. Run `okf validate <bundle>`, then advisory `okf lint <bundle> --fail-on never`. Generate indexes
+   with `okf docs <bundle> --format index` only when their bodies are generated content or
+   replacement is already authorized; the command replaces index prose across the bundle. Preserve
+   curated indexes otherwise. Confirm generated indexes with `okf browse <bundle>`.
 
-## Optional `references/`
+## Supporting material
 
-Create `references/` only when the user wants authorized local supporting material in the
-bundle. It is an optional naming convention, not a conformance profile. Markdown files there
-are ordinary concepts; SQL, Python, schemas, run instructions, and binaries are opaque artifacts.
-Record the declaring concept and original provenance. Prefer a URL when material should not be
-mirrored. Use `okf artifact list <bundle>` and `okf artifact resolve <resource> <bundle> --from
-<concept-id>`; retrieve only bounded text with `okf artifact show <resource> <bundle> --lines
-<START:END> --max-bytes <N>`.
-Local resolution must stay inside the bundle after symlinks; remote fetch requires explicit
-authorization and policy. Artifact inspection never grants execution authority.
+`references/` is optional: Markdown files there are concepts; other files are artifacts. Copy only
+material within the authorized scope and preserve its provenance. Use `okf artifact list <bundle>`
+to inventory its default `references/` directory, or add `--directory <directory>` for another
+directory. Resolve paths with `okf artifact resolve <resource> <bundle> --from <concept-id>`;
+consult the artifact sections of `references/cli.md` for bounded reads and external-source handling.
+Inspection never authorizes execution.
 
-Report the bundle, types, concepts, computation contracts, validation result, and separately
-accepted lint guidance.
+Report what was created, validation, and relevant lint findings. Include computation or artifact
+details only when those features were used.

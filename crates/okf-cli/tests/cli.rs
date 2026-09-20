@@ -139,6 +139,83 @@ fn show_json_is_single_record() {
 }
 
 #[test]
+fn skill_reading_workflow_distinguishes_metadata_from_body_and_preserves_curated_index() {
+    let dir = tempfile::tempdir().unwrap();
+    let bundle = dir.path().to_str().unwrap();
+    let index = "---\nokf_version: \"0.2\"\n---\n# Curated overview\n\nAuthored context.\n";
+    std::fs::write(dir.path().join("index.md"), index).unwrap();
+    std::fs::write(
+        dir.path().join("policy.md"),
+        "---\ntype: Note\ntitle: Policy\n---\n# Policy\n\nA material claim to review.\n",
+    )
+    .unwrap();
+
+    let metadata = okf()
+        .args(["show", "policy", bundle, "--json"])
+        .output()
+        .unwrap();
+    assert!(metadata.status.success());
+    let records = ndjson(&metadata.stdout);
+    assert_eq!(records[0]["title"], "Policy");
+    assert!(!String::from_utf8_lossy(&metadata.stdout).contains("A material claim"));
+
+    let body = okf().args(["show", "policy", bundle]).output().unwrap();
+    assert!(body.status.success());
+    assert!(String::from_utf8_lossy(&body.stdout).contains("A material claim"));
+    let slice = okf()
+        .args(["show", "policy", bundle, "--lines", "5:7", "--json"])
+        .output()
+        .unwrap();
+    assert!(slice.status.success());
+    let records = ndjson(&slice.stdout);
+    assert_eq!(
+        records[0]["lines"][2]["text"],
+        "A material claim to review."
+    );
+
+    // Read-only navigation preserves curated text; index generation explicitly replaces it.
+    okf().args(["browse", bundle]).assert().success();
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("index.md")).unwrap(),
+        index
+    );
+    okf()
+        .args(["docs", bundle, "--format", "index"])
+        .assert()
+        .success();
+    let generated = std::fs::read_to_string(dir.path().join("index.md")).unwrap();
+    assert!(!generated.contains("Authored context."));
+    assert!(generated.contains("policy.md"));
+    assert!(generated.contains("okf_version"));
+    okf().args(["validate", bundle]).assert().success();
+}
+
+#[test]
+fn skill_search_workflow_narrows_fields_and_handles_no_matches() {
+    let dir = tempfile::tempdir().unwrap();
+    let bundle = dir.path().to_str().unwrap();
+    std::fs::write(
+        dir.path().join("policy.md"),
+        "---\ntype: Note\ntitle: Policy\ncustom: secret-token\n---\n# Policy\n\nTravel reimbursement.\n",
+    )
+    .unwrap();
+    let query = |term: &str, fields: Option<&str>| {
+        let mut cmd = okf();
+        cmd.args(["search", bundle, "--text", term, "--json"]);
+        if let Some(fields) = fields {
+            cmd.args(["--in", fields]);
+        }
+        let out = cmd.output().unwrap();
+        assert!(out.status.success());
+        ndjson(&out.stdout)
+    };
+    assert_eq!(query("reimbursement", None).len(), 1);
+    assert!(query("reimbursement", Some("title,description")).is_empty());
+    assert!(query("secret-token", None).is_empty());
+    assert_eq!(query("secret-token", Some("frontmatter")).len(), 1);
+}
+
+#[test]
 fn show_loads_only_the_requested_concept() {
     let root = tempfile::tempdir().unwrap();
     std::fs::write(

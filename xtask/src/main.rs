@@ -327,7 +327,7 @@ fn cli_reference(header: &Value, commands: &[&Value], skill: Option<&str>) -> St
         None => out.push_str("# okf CLI — complete argument reference\n\n"),
     }
     out.push_str(&format!(
-        "> **Generated** by `cargo xtask docs` from `okf schema --json` (tool {}, OKF spec {}). \
+        "> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool {}, OKF spec {}). \
          Do not hand-edit; regenerate instead.\n\n",
         header["tool_version"].as_str().unwrap_or("?"),
         header["okf_spec"]
@@ -356,7 +356,11 @@ fn cli_reference(header: &Value, commands: &[&Value], skill: Option<&str>) -> St
         "Commands with a human form accept global `--json` for NDJSON; `schema` is always \
          NDJSON. Bundle-aware commands take an optional trailing `bundle` positional resolved as \
          explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd. Meta commands have no \
-         bundle, and `source-scan` takes an explicit arbitrary directory.\n\n",
+         bundle, and `source-scan` takes an explicit arbitrary directory.\n\n\
+         Exit codes: 0 means success under the selected failure threshold, not necessarily no \
+         findings; 1 means findings or an unsuccessful resolution; 2 means usage errors; \
+         3 means environment/I/O/YAML errors; 4 means an internal error. Inspect findings even with \
+         `--fail-on never`. NDJSON is one record per line, not a JSON array.\n\n",
     );
 
     let mut groups: Vec<&str> = GROUP_ORDER.to_vec();
@@ -395,9 +399,103 @@ fn cli_reference(header: &Value, commands: &[&Value], skill: Option<&str>) -> St
                 "\n\nOutput stream: `{}`.\n\n",
                 c["output"]["stream"].as_str().unwrap_or("")
             ));
+            let notes = command_guidance(c["name"].as_str().unwrap_or(""));
+            if !notes.is_empty() {
+                out.push_str(notes);
+                out.push_str("\n\n");
+            }
         }
     }
     format!("{}\n", out.trim_end())
+}
+
+/// Curated usage semantics alongside schema-derived arguments. Keep these notes focused on
+/// observable behavior that cannot be inferred from the argument table.
+fn command_guidance(name: &str) -> &'static str {
+    match name {
+        "show" => "Without `--json`, show includes the serialized frontmatter and full Markdown body. \
+            Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, \
+            `effective_status`, `effective_generated_at`, `latest_verified_at`, and \
+            `verification_current`. It does not include the body. `--outline --json` returns \
+            `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns \
+            `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer \
+            to the serialized document, including frontmatter. An outline or selected slice \
+            does not establish complete document-review coverage.",
+        "list" => "JSON records contain frontmatter and computed lifecycle/trust metadata, not bodies. \
+            Aggregate field occurrence counts from these records before opening prose. Inventory \
+            is unbounded; scope or filter the output before loading a large result into context.",
+        "search" => "The positional argument is the bundle, never query text. Text requires `--text`; \
+            structured filters work without it. No filters means inventory. Text-search JSON \
+            adds `search.score` and bounded `search.matches` to metadata records, not full bodies. \
+            Structured-only search has no text-match evidence. `--in title,description` narrows \
+            the default fields; adding `frontmatter` broadens them. Empty results exit successfully \
+            and establish only that this query found no matches.",
+        "artifact resolve" => "**Path namespaces:** a leading `/` means bundle-root-relative, not an \
+            operating-system absolute path. Other local paths resolve against the declaring concept's \
+            directory when `--from` is supplied, otherwise the bundle root. Keep `--from` on the \
+            subsequent read too. JSON uses `artifact_kind` (concept, artifact, reserved, external, \
+            scope, missing, or blocked), `path`, `exists`, `size`, and `message`. Missing/blocked \
+            resolution exits 1. A scope descriptor is provenance, not a missing file.\n\n\
+            **Repository sources:** with repo `/work/app`, bundle `/work/app/knowledge`, and declaring \
+            concept `notes/service`, `/references/spec.txt` resolves to \
+            `/work/app/knowledge/references/spec.txt`. A `kind=git-path` or `git-commit` source \
+            `src/service.rs` is instead fingerprinted from the Git worktree root as \
+            `/work/app/src/service.rs`; the artifact resolver does not reinterpret paths by source kind. \
+            File/line-range/markdown-heading fingerprints use bundle-relative paths. Record the \
+            actual source location and convention; do not assume fingerprint and artifact paths coincide. \
+            Inspect external repository evidence with normal source tools within existing read \
+            authorization. Do not rewrite provenance, bypass containment, or mirror files merely \
+            to make artifact resolution succeed.",
+        "artifact show" => "For document-relative paths, pass the same `--from` used during resolution. \
+            JSON includes `text`, `binary`, `truncated`, `size`, `sha256`, and `path`. Binary files \
+            provide metadata only. Inspect `truncated` before treating a read as complete; human \
+            output alone does not expose this flag. Use bounded line windows and a sufficient byte \
+            budget for the needed range; do not infer absence from a truncated result. Use `show` \
+            for concepts and this command for opaque or reserved files.\n\n\
+            Local artifact reads remain inside the canonical bundle after symlinks. For a URL, \
+            `--fetch` requires a network-enabled build and authorization covering that source. \
+            A user request to inspect a named source can supply that authorization; no separate \
+            OKF policy file is specified by this command. If unavailable, use an authorized external \
+            retrieval tool or report the evidence gap. Do not send ambient credentials. \
+            Reading computation, executor, or attester code never authorizes execution.",
+        "docs" => "`--format index` writes indexes throughout the bundle, replacing their bodies; \
+            it does not merge curated prose. Use it only when all affected index bodies are generated \
+            or replacement is already authorized. Preserve curated indexes and edit only necessary \
+            links otherwise. Validate after writes. Other formats emit output rather than updating \
+            indexes; the default is `md`.",
+        "ontology add" | "ontology update" => "Built-in field types: `string`, `text`, `int`, `bool`, \
+            `date`, `datetime`, `uri`, `enum`, `list`, `object`; custom type names must resolve in \
+            the existing sidecar's `field_types`. Reference cardinalities are `0..1` (optional one), \
+            `1..1` (exactly one), `0..n` (optional many), and `1..n` (at least one). For example, \
+            `--field \"stage:enum:draft|active\"` declares choices and \
+            `--ref \"depends_on:Service:0..n\"` permits zero or more Service links. Observed \
+            presence alone does not justify a required rule. These flags describe advisory local \
+            rules, not portable OKF conformance requirements.",
+        "add" => "Creation scaffolds a concept; supply Markdown body afterward with `edit --set-body`. \
+            `--generated-by` records the supplied actor and the CLI's current timestamp. Do not \
+            invent a historical generation time or actor. For a requested computation only, \
+            `--attested --runtime <runtime>` selects exact `Attested Computation`; declare actual \
+            parameters with repeatable `--parameter name:type:required` (omit `:required` when optional). \
+            Choose `--computation <resource>` or `--inline-computation @file`, then add reviewed \
+            executor/receipt/attester fields as needed. These describe a contract and authorize no execution.",
+        "edit" => "`--set` accepts scalar values, not arbitrary YAML objects; a dotted key is not a \
+            nested-field update. Use `--add-source-json @file` for a complete source mapping. For \
+            unsupported complex metadata preservation, inspect the existing representation and \
+            use a narrow lossless file edit within scope, then validate. Do not flatten mappings \
+            or fabricate verification. Meaningful edits remove active `verified` events and update \
+            existing `generated.at`; preserve needed historical evidence separately. Body files \
+            contain Markdown only, without frontmatter. Section flags take heading and text as \
+            separate values. Malformed YAML must be repaired before this command can load it.",
+        "refresh" => "Refresh updates supported source fingerprints across the concept, not content or \
+            standard source modification dates. Review those sources against the final content first, \
+            whether or not the content needed rewriting. JSON reports `updated`/`unchanged` counts and \
+            `skipped` entries with reasons. `--fail-on skipped` exits 1 when any source was skipped; \
+            successfully processed fingerprints may already have been written. Report unresolved \
+            sources instead of treating refresh as proof of complete synchronization.",
+        "computation check" => "Inspect-only: `execution: not-run` is not a passing runtime attestation. \
+            Document verification and inspection of executable resources never establish a run verdict.",
+        _ => "",
+    }
 }
 
 /// Replace everything from `## <heading>` to EOF with `new_block`; append if the heading is
@@ -446,10 +544,10 @@ fn run_skill_checks() {
             }
         };
 
-        for snippet in inline_code(&body)
-            .into_iter()
-            .filter(|code| code.trim_start().starts_with("okf "))
-        {
+        for snippet in inline_code(&body).into_iter().filter(|code| {
+            let mut words = code.split_whitespace();
+            words.next() == Some("okf") && words.next().is_some()
+        }) {
             validate_command(&snippet, &commands, &rel_path, &mut errors);
             if let Some(command) = command_name(&snippet, &commands) {
                 if !reference_commands.contains(&command) {
@@ -546,8 +644,9 @@ fn validate_scenario_checklists(
         if expected.is_empty() {
             errors.push(format!("{name}: scenario has no expected commands"));
         }
+        let normalized_body = body.split_whitespace().collect::<Vec<_>>().join(" ");
         for command in expected.iter().filter_map(Value::as_str) {
-            if !body.contains(command) {
+            if !normalized_body.contains(command) {
                 errors.push(format!(
                     "{name}: scenario expects command `{command}` to be taught"
                 ));
@@ -654,7 +753,11 @@ fn inline_code(markdown: &str) -> Vec<String> {
 }
 
 fn validate_command(snippet: &str, commands: &[&Value], path: &str, errors: &mut Vec<String>) {
-    let tokens: Vec<&str> = snippet.split_whitespace().collect();
+    let Some(words) = shlex::split(snippet) else {
+        errors.push(format!("{path}: invalid quoting in `{snippet}`"));
+        return;
+    };
+    let tokens: Vec<&str> = words.iter().map(String::as_str).collect();
     if tokens.first() != Some(&"okf") {
         return;
     }
@@ -671,6 +774,12 @@ fn validate_command(snippet: &str, commands: &[&Value], path: &str, errors: &mut
         return;
     };
 
+    // A bare command name is a prose mention. Once arguments appear, the snippet is
+    // an invocation and must provide all required positionals, flags, and values.
+    if tokens.len() == 1 + command_parts.len() {
+        return;
+    }
+
     let args = command["args"].as_array().cloned().unwrap_or_default();
     let positionals: Vec<&Value> = args
         .iter()
@@ -681,10 +790,11 @@ fn validate_command(snippet: &str, commands: &[&Value], path: &str, errors: &mut
         .filter(|arg| arg["required"].as_bool().unwrap_or(false))
         .count();
     let mut positional_tokens = Vec::new();
+    let mut seen_flags = Vec::new();
     let mut index = 1 + command_parts.len();
 
     while index < tokens.len() {
-        let token = tokens[index].trim_matches(|c: char| c == ',' || c == '.' || c == ';');
+        let token = tokens[index];
         if token.starts_with("--") {
             let flag = token
                 .trim_start_matches("--")
@@ -701,8 +811,26 @@ fn validate_command(snippet: &str, commands: &[&Value], path: &str, errors: &mut
                 index += 1;
                 continue;
             };
-            if arg["type"] != "bool" && !token.contains('=') {
-                index += 1;
+            seen_flags.push(flag);
+            if arg["type"] != "bool" {
+                let arity = arg["value_names"]
+                    .as_array()
+                    .map_or(1, |names| names.len().max(1));
+                let mut supplied = usize::from(token.contains('='));
+                while supplied < arity {
+                    match tokens.get(index + 1) {
+                        Some(value) if !value.starts_with("--") => {
+                            index += 1;
+                            supplied += 1;
+                        }
+                        _ => break,
+                    }
+                }
+                if supplied < arity {
+                    errors.push(format!(
+                        "{path}: missing value for --{flag} (expected {arity}) in `{snippet}`"
+                    ));
+                }
             }
         } else {
             positional_tokens.push(token);
@@ -710,7 +838,17 @@ fn validate_command(snippet: &str, commands: &[&Value], path: &str, errors: &mut
         index += 1;
     }
 
-    if !positional_tokens.is_empty() && positional_tokens.len() < required_positionals {
+    for arg in &args {
+        if arg["kind"] != "positional" && arg["required"].as_bool().unwrap_or(false) {
+            let flag = arg["name"].as_str().unwrap_or("");
+            if !seen_flags.contains(&flag) {
+                errors.push(format!(
+                    "{path}: missing required flag --{flag} in `{snippet}`"
+                ));
+            }
+        }
+    }
+    if positional_tokens.len() < required_positionals {
         errors.push(format!(
             "{path}: too few positional arguments in `{snippet}`"
         ));
@@ -838,6 +976,90 @@ mod tests {
     }
 
     #[test]
+    fn skill_command_mentions_are_not_invocations() {
+        let command = backlinks();
+        let mut errors = Vec::new();
+        validate_command("okf backlinks", &[&command], "skill", &mut errors);
+        assert!(errors.is_empty());
+        validate_command("okf backlinks --json", &[&command], "skill", &mut errors);
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("too few positional")));
+    }
+
+    #[test]
+    fn skill_command_check_requires_flags_and_their_values() {
+        let command = json!({
+            "name": "verify",
+            "args": [
+                {"name": "concept", "kind": "positional", "required": true},
+                {"name": "by", "kind": "flag", "type": "string", "required": true}
+            ]
+        });
+        for (snippet, expected) in [
+            ("okf verify notes/test", "missing required flag --by"),
+            ("okf verify notes/test --by", "missing value"),
+            ("okf verify notes/test --by --json", "missing value"),
+        ] {
+            let mut errors = Vec::new();
+            validate_command(snippet, &[&command], "skill", &mut errors);
+            assert!(
+                errors.iter().any(|error| error.contains(expected)),
+                "{errors:?}"
+            );
+        }
+        for snippet in [
+            "okf verify notes/test --by process:ci",
+            "okf verify notes/test --by=process:ci",
+        ] {
+            let mut errors = Vec::new();
+            validate_command(snippet, &[&command], "skill", &mut errors);
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+    }
+
+    #[test]
+    fn skill_command_check_handles_quoted_multi_value_flags() {
+        let command = json!({
+            "name": "edit",
+            "args": [
+                {"name": "concept", "kind": "positional", "required": true},
+                {"name": "set-section", "kind": "flag", "type": "list<string>",
+                 "value_names": ["HEADING", "TEXT"]}
+            ]
+        });
+        for snippet in [
+            "okf edit notes/test --set-section \"Next steps\" '@/tmp/section body.md'",
+            "okf edit notes/test --set-section='Next steps' 'Updated text'",
+        ] {
+            let mut errors = Vec::new();
+            validate_command(snippet, &[&command], "skill", &mut errors);
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+        for (snippet, expected) in [
+            (
+                "okf edit notes/test --set-section 'Next steps'",
+                "missing value",
+            ),
+            (
+                "okf edit notes/test --set-section 'Next steps' --json",
+                "missing value",
+            ),
+            (
+                "okf edit notes/test --set-section 'Next steps",
+                "invalid quoting",
+            ),
+        ] {
+            let mut errors = Vec::new();
+            validate_command(snippet, &[&command], "skill", &mut errors);
+            assert!(
+                errors.iter().any(|error| error.contains(expected)),
+                "{errors:?}"
+            );
+        }
+    }
+
+    #[test]
     fn focused_reference_contains_only_mapped_commands() {
         let show = command("show", "query");
         let add = command("add", "mutate");
@@ -847,7 +1069,7 @@ mod tests {
         }]);
         let commands = [&show, &add];
         let selected = commands_for_skill("retrieval", &scenarios, &commands).unwrap();
-        let header = json!({"tool_version": "0.2.4", "okf_spec": ["0.2"]});
+        let header = json!({"tool_version": "0.2.5", "okf_spec": ["0.2"]});
         let reference = cli_reference(&header, &selected, Some("retrieval"));
 
         assert!(reference.contains("# okf CLI — retrieval command reference"));

@@ -17,10 +17,11 @@
       "add",
       "init",
       "ontology add",
-      "docs"
+      "docs",
+      "edit"
     ],
     "prohibited_claims": ["ontology is required by OKF", "arbitrary attested type"],
-    "mutation_boundary": "Confirm subjective type rules and never execute computation artifacts.",
+    "mutation_boundary": "Use supplied type decisions; clarify unresolved semantics and never execute computation artifacts.",
     "report_contains": ["concepts created", "validation", "advisory lint"]
   },
   {
@@ -35,7 +36,12 @@
       "lint",
       "validate",
       "add",
-      "refresh"
+      "refresh",
+      "edit",
+      "docs",
+      "show",
+      "browse",
+      "search"
     ],
     "prohibited_claims": ["every source requires kind", "migration establishes verification"],
     "mutation_boundary": "Preserve legacy values and require review before assigning unknown semantics.",
@@ -53,7 +59,11 @@
       "source-scan",
       "validate",
       "add",
-      "edit"
+      "edit",
+      "docs",
+      "show",
+      "browse",
+      "search"
     ],
     "prohibited_claims": ["every concept must have a source", "inspection authorizes execution"],
     "mutation_boundary": "Do not store unauthorized material, secrets, or unsanctioned executable computations.",
@@ -72,7 +82,8 @@
       "resolve",
       "search",
       "show",
-      "computation check"
+      "computation check",
+      "list"
     ],
     "prohibited_claims": ["verification proves this run", "computation check executes"],
     "mutation_boundary": "Read-only; remote fetch and execution require separate authorization.",
@@ -110,7 +121,8 @@
       "validate",
       "edit",
       "mv",
-      "refresh"
+      "refresh",
+      "docs"
     ],
     "prohibited_claims": ["refresh clears stale_after", "refresh updates source last_modified"],
     "mutation_boundary": "Reconcile meaning before refresh and route meaningful rewrites to re-verification.",
@@ -127,7 +139,9 @@
       "validate",
       "ontology add",
       "ontology remove",
-      "ontology update"
+      "ontology update",
+      "show",
+      "artifact show"
     ],
     "prohibited_claims": ["ontology controls conformance", "aliases are Attested Computations"],
     "mutation_boundary": "Confirm subjective local rules before applying them or cascading concept changes.",
@@ -148,10 +162,12 @@
       "stats",
       "validate",
       "ontology add",
-      "ontology update"
+      "ontology update",
+      "ontology remove",
+      "artifact show"
     ],
     "prohibited_claims": ["observed once means required", "unknown types are invalid"],
-    "mutation_boundary": "Present evidence and obtain user confirmation before writing inferred rules.",
+    "mutation_boundary": "Present evidence; apply rules already authorized and clarify unresolved consequential semantics.",
     "report_contains": ["support counts", "confidence", "built-ins excluded"]
   },
   {
@@ -167,7 +183,11 @@
       "lint",
       "validate",
       "mv",
-      "docs"
+      "docs",
+      "artifact resolve",
+      "artifact show",
+      "show",
+      "edit"
     ],
     "prohibited_claims": ["moves never edit referrers", "opaque artifacts are concepts"],
     "mutation_boundary": "Review the mapping, use okf mv for concepts, and separately authorize artifact moves.",
@@ -187,10 +207,12 @@
       "lint",
       "validate",
       "verify",
-      "docs"
+      "docs",
+      "edit",
+      "show"
     ],
     "prohibited_claims": ["doctor fixes semantic findings automatically", "doctor creates a backup"],
-    "mutation_boundary": "Require recovery, preview safe fixes, confirm writes, and stop for ambiguous semantics.",
+    "mutation_boundary": "Diagnose read-only first; preserve recovery for writes, preview safe fixes, honor existing authorization, and stop affected writes for unresolved semantics.",
     "report_contains": ["stable finding IDs", "preserved extensions", "remaining decisions"]
   }
 ]

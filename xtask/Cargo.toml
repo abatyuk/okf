@@ -1,8 +1,9 @@
 [package]
 name = "xtask"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 publish = false
 
 [dependencies]
 serde_json = "1"
+shlex = "2"
