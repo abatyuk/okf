@@ -15,7 +15,7 @@ last_modified: 2026-09-07T18:22:06Z
 ---
 # okf mv
 
-Moves or renames a concept and rewrites body links, ontology references, and standard internal `sources[].resource` paths. It also rebases the moved concept's relative standard paths.
+Moves or renames a concept and rewrites body links, ontology references, and standard internal `sources[].resource` paths. It also rebases the moved concept's relative standard paths. Repository-relative `git-path` and `git-commit` source resources remain unchanged.
 
 ## Arguments
 

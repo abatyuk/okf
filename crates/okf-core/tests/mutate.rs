@@ -579,6 +579,25 @@ fn mv_rewrites_every_inbound_link_and_rebases_moved_relative_links() {
 }
 
 #[test]
+fn mv_preserves_repository_relative_source_paths() {
+    let tmp = temp_bundle();
+    let root = tmp.path();
+    write_file(
+        root,
+        "source.md",
+        "---\ntype: T\nsources:\n- resource: src/anchor.txt\n  kind: git-path\n- resource: src/history.txt\n  kind: git-commit\n---\n",
+    );
+
+    mv::mv(root, "source", "archive/2026/source").unwrap();
+
+    let moved = read_file(root, "archive/2026/source.md");
+    assert!(moved.contains("resource: src/anchor.txt\n"), "{moved}");
+    assert!(moved.contains("resource: src/history.txt\n"), "{moved}");
+    assert!(!moved.contains("../../src/anchor.txt"), "{moved}");
+    assert!(!moved.contains("../../src/history.txt"), "{moved}");
+}
+
+#[test]
 fn mv_handles_a_destination_directory_that_prefixes_the_source_sibling() {
     let tmp = temp_bundle();
     let root = tmp.path();

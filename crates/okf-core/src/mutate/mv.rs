@@ -152,10 +152,19 @@ where
     // Standard OKF path-valued fields are understood without an ontology.
     if let Some(Value::Sequence(sources)) = concept.frontmatter.map.get_mut("sources") {
         for source in sources {
-            if let Some(resource) = source
-                .as_mapping_mut()
-                .and_then(|m| m.get_mut(Value::String("resource".to_string())))
-            {
+            let Some(source) = source.as_mapping_mut() else {
+                continue;
+            };
+            let repository_relative = source
+                .get(Value::String("kind".to_string()))
+                .and_then(Value::as_str)
+                .is_some_and(|kind| matches!(kind, "git-path" | "git-commit"));
+            // These source kinds resolve from the Git worktree root, so the declaring
+            // concept's location has no bearing on their resource path.
+            if repository_relative {
+                continue;
+            }
+            if let Some(resource) = source.get_mut(Value::String("resource".to_string())) {
                 if rewrite_in_value(resource, rewrite) {
                     changed = true;
                 }
