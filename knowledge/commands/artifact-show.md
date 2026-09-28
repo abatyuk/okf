@@ -15,7 +15,7 @@ Returns bounded UTF-8 text or binary metadata and a digest. Remote HTTP(S) retri
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<resource>` | positional | yes | Local artifact path to retrieve |
+| `<resource>` | positional | yes | Artifact path relative to the bundle root, or to --from when provided |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 | `--lines <value>` | string | no | Retrieve only an inclusive, one-based START:END line range |

@@ -419,7 +419,10 @@ fn command_guidance(name: &str) -> &'static str {
             `verification_current`. It does not include the body. `--outline --json` returns \
             `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns \
             `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer \
-            to the serialized document, including frontmatter. An outline or selected slice \
+            to the serialized document, including frontmatter, excluding the three-line display header. \
+            `show -n` (or `--numbered`) prints the full document with these numbers and no header; \
+            its JSON uses the same line-range record. `show --body` prints only raw Markdown; \
+            with `--json` it returns a body record containing `id` and `body`. An outline or selected slice \
             does not establish complete document-review coverage.",
         "list" => "JSON records contain frontmatter and computed lifecycle/trust metadata, not bodies. \
             Aggregate field occurrence counts from these records before opening prose. Inventory \
@@ -430,6 +433,22 @@ fn command_guidance(name: &str) -> &'static str {
             Structured-only search has no text-match evidence. `--in title,description` narrows \
             the default fields; adding `frontmatter` broadens them. Empty results exit successfully \
             and establish only that this query found no matches.",
+        "artifact list" => "The positional path selects a bundle root relative to the current directory. \
+            To filter within the selected bundle, use `--directory contracts/x`; printed paths remain \
+            relative to the bundle root.",
+        "artifact put" => "Write bytes from `@file` to a bundle-relative opaque or reserved artifact. \
+            The default (and `--create-only`) refuses an existing destination; `--replace` permits \
+            replacement. Parent directories are created as needed. Concept and configuration files \
+            are protected, and paths must remain inside the bundle. Recorded source fingerprints \
+            are preserved so `stale` detects changes; review citing concepts before `refresh`.",
+        "stale" => "Sources with fingerprint kinds but no recorded fingerprint are reported as \
+            `unrecorded`; unreadable sources are reported even without a baseline. Standard sources \
+            without a fingerprint kind are provenance only. Use `--fail-on any` for a failing exit status \
+            when findings exist. `validate` checks conformance, not source health.",
+        "lint" => "For sources with a fingerprint kind, `source-unrecorded` warns when no baseline exists. \
+            `source-missing` errors when file, line-range, or markdown-heading sources cannot be \
+            fingerprinted, even without a baseline. Lint does not fetch URLs or inspect Git sources. \
+            Use `--fail-on warn` to fail on warnings as well as errors.",
         "artifact resolve" => "**Path namespaces:** a leading `/` means bundle-root-relative, not an \
             operating-system absolute path. Other local paths resolve against the declaring concept's \
             directory when `--from` is supplied, otherwise the bundle root. Keep `--from` on the \
@@ -471,7 +490,8 @@ fn command_guidance(name: &str) -> &'static str {
             `--ref \"depends_on:Service:0..n\"` permits zero or more Service links. Observed \
             presence alone does not justify a required rule. These flags describe advisory local \
             rules, not portable OKF conformance requirements.",
-        "add" => "Creation scaffolds a concept; supply Markdown body afterward with `edit --set-body`. \
+        "add" => "Creation scaffolds a concept; `--body @file` supplies Markdown in the same write \
+            (literal text and `-` for stdin also work). Input failures leave no skeleton concept. \
             `--generated-by` records the supplied actor and the CLI's current timestamp. Do not \
             invent a historical generation time or actor. For a requested computation only, \
             `--attested --runtime <runtime>` selects exact `Attested Computation`; declare actual \
@@ -485,7 +505,10 @@ fn command_guidance(name: &str) -> &'static str {
             or fabricate verification. Meaningful edits remove active `verified` events and update \
             existing `generated.at`; preserve needed historical evidence separately. Body files \
             contain Markdown only, without frontmatter. Section flags take heading and text as \
-            separate values. Malformed YAML must be repaired before this command can load it.",
+            separate values. `--replace OLD NEW` replaces exactly one literal body match; `--all` \
+            replaces every match and still fails if none exist. `--rename-section OLD NEW` \
+            changes a uniquely matched heading without replacing its content. Malformed YAML \
+            must be repaired before this command can load it.",
         "refresh" => "Refresh updates supported source fingerprints across the concept, not content or \
             standard source modification dates. Review those sources against the final content first, \
             whether or not the content needed rewriting. JSON reports `updated`/`unchanged` counts and \
@@ -1069,7 +1092,7 @@ mod tests {
         }]);
         let commands = [&show, &add];
         let selected = commands_for_skill("retrieval", &scenarios, &commands).unwrap();
-        let header = json!({"tool_version": "0.2.7", "okf_spec": ["0.2"]});
+        let header = json!({"tool_version": "0.2.8", "okf_spec": ["0.2"]});
         let reference = cli_reference(&header, &selected, Some("retrieval"));
 
         assert!(reference.contains("# okf CLI — retrieval command reference"));

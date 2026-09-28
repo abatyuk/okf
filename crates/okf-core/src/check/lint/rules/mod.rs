@@ -5,4 +5,5 @@ pub mod missing_description;
 pub mod missing_title;
 pub mod ontology_violation;
 pub mod orphan;
+pub mod source_health;
 pub mod spec_v02;

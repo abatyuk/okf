@@ -246,6 +246,7 @@ fn meta(name: &str) -> (&'static str, bool, &'static str) {
         "artifact list" => ("query", false, "artifact"),
         "artifact resolve" => ("query", false, "artifact-resolution"),
         "artifact show" => ("query", false, "artifact-content"),
+        "artifact put" => ("mutate", true, "artifact-write"),
         "computation check" => ("check", false, "computation-contract"),
         "ontology list" => ("query", false, "ontology_type"),
         "ontology show" => ("query", false, "ontology_type"),

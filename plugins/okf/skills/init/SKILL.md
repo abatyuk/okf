@@ -42,10 +42,11 @@ concept, use `okf show <concept-id> <bundle> --outline`, then `okf show <concept
 2. If local type rules add value, define them with `okf ontology add <name> <bundle>` and inspect
    them with `okf ontology show <name> <bundle>`. Do not present this sidecar as an OKF registry or
    requirement. Keep exact type strings; unknown types remain portable.
-3. Create ordinary concepts with `okf add <path> <bundle> --type <Type>`. Add grounded title,
-   description with `--title "Title" --description "Summary"`. Add prose after creation with `okf
-   edit <concept-id> <bundle> --set-body @/tmp/concept-body.md`; the file contains Markdown body
-   only. Add a source with `okf edit <concept-id> <bundle> --add-source
+3. Create ordinary concepts with `okf add <path> <bundle> --type <Type> --body
+   @/tmp/concept-body.md`. Add grounded title and description with `--title "Title"
+   --description "Summary"`. The file contains Markdown body only;
+   unreadable input fails before creating a skeleton. Add a source with `okf edit <concept-id>
+   <bundle> --add-source
    "resource=<path>,id=source-1"`. If generation provenance is desired, pass `--generated-by
    <actor>` to add; the CLI supplies the timestamp. Never label agent-authored material
    `human:<id>`.
@@ -59,6 +60,14 @@ concept, use `okf show <concept-id> <bundle> --outline`, then `okf show <concept
    replacement is already authorized; the command replaces index prose across the bundle. Preserve
    curated indexes otherwise. Confirm generated indexes with `okf browse <bundle>`.
 
+When local fingerprint tracking is enabled with a source `kind`, review its evidence and run
+`okf refresh <concept-id> <bundle> --fail-on skipped` to record the baseline. `okf stale <bundle>
+--fail-on any` distinguishes `unrecorded` (no baseline), `missing` (cannot fingerprint), and
+`drifted` (changed baseline). Standard kind-less provenance is not fingerprint-checked. Inspect
+findings even when a command succeeds: stale defaults to a successful exit on findings, and
+`lint --fail-on never` is reporting only. Use `okf lint <bundle> --fail-on warn` when source warnings
+must fail a health gate; conformance validation alone does not establish source health.
+
 ## Supporting material
 
 `references/` is optional: Markdown files there are concepts; other files are artifacts. Copy only
@@ -67,6 +76,12 @@ to inventory its default `references/` directory, or add `--directory <directory
 directory. Resolve paths with `okf artifact resolve <resource> <bundle> --from <concept-id>`;
 consult the artifact sections of `references/cli.md` for bounded reads and external-source handling.
 Inspection never authorizes execution.
+
+For an authorized artifact copy or authored schema, use `okf artifact put
+contracts/x/references/schema.json @/tmp/schema.json <bundle>`. The destination is bundle-relative;
+the input file is relative to cwd. Creation is the default; use `--replace` only for an intended
+replacement. Writes preserve recorded fingerprints, so review citing concepts before refreshing
+them. This command does not execute artifacts or grant permission to copy external material.
 
 Report what was created, validation, and relevant lint findings. Include computation or artifact
 details only when those features were used.

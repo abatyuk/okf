@@ -34,6 +34,7 @@ pub fn run(cli: Cli) -> Result<i32> {
             ArtifactCmd::List(a) => artifact::run_list(a, json),
             ArtifactCmd::Resolve(a) => artifact::run_resolve(a, json),
             ArtifactCmd::Show(a) => artifact::run_show(a, json),
+            ArtifactCmd::Put(a) => artifact::run_put(a, json),
         },
         Command::Computation(cmd) => match cmd {
             ComputationCmd::Check(a) => artifact::run_computation_check(a, json),

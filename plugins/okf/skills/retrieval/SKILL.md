@@ -31,8 +31,10 @@ use `okf list <bundle> --json` for an intended inventory. Use `okf browse <bundl
    not enough context to answer from.
 3. Read a small candidate directly with `okf show <concept-id> <bundle>`. For large concepts, use
    `okf show <concept-id> <bundle> --outline`, then `--lines <START:END>` around relevant sections.
-   Plain `show --json` contains metadata, not the body; use human output or `show --lines` for
-   prose.
+   Plain `show --json` contains metadata, not the body. For a small concept's prose alone, use
+   `okf show <concept-id> <bundle> --body`; `--body --json` provides an explicit body record.
+   `okf show <concept-id> <bundle> --numbered` (short form `-n`) uses the same document numbering
+   as `--lines`, including frontmatter and excluding the plain display header. Keep outline/line windows for large documents.
 4. Follow portable body links and standard internal `sources[].resource` lineage when needed to
    support the answer; these work without ontology. Start with `okf links <concept-id> <bundle>
    --json` for direct outbound targets and `okf backlinks <concept-id> <bundle>` for direct inbound

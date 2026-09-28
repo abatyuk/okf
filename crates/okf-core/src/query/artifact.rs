@@ -1,6 +1,6 @@
-//! Safe, read-only resolution and bounded retrieval of OKF path-valued artifacts.
+//! Safe resolution, bounded retrieval, and explicit writes of OKF path-valued artifacts.
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -58,6 +58,121 @@ pub struct ArtifactContent {
     pub sha256: String,
     pub truncated: bool,
     pub binary: bool,
+}
+
+/// The result of an artifact write. Source fingerprints are deliberately not refreshed:
+/// replacement remains visible to source drift checks until the author reviews it.
+#[derive(Debug, Clone)]
+pub struct ArtifactWrite {
+    pub path: PathBuf,
+    pub kind: ArtifactKind,
+    pub size: u64,
+    pub sha256: String,
+    pub replaced: bool,
+}
+
+/// Write opaque or reserved artifacts atomically. New parent directories are created;
+/// symlinks in the destination path are rejected, including dangling symlinks.
+pub fn put_artifact(
+    root: &Path,
+    resource: &str,
+    bytes: &[u8],
+    replace: bool,
+) -> Result<ArtifactWrite> {
+    if resource.is_empty() || is_uri(resource) || resource.contains(['#', '?']) {
+        return Err(OkfError::Usage(
+            "artifact put requires a bundle-relative file path without a query or fragment"
+                .to_string(),
+        ));
+    }
+    let rel = normalize_local(resource, None)?;
+    if rel.components().any(|part| {
+        let name = part.as_os_str().to_string_lossy();
+        name.starts_with('.') || matches!(name.as_ref(), "okf.toml" | "ontology.yaml")
+    }) {
+        return Err(OkfError::Usage(
+            "artifact put cannot write hidden paths or tool configuration (okf.toml, ontology.yaml)".to_string(),
+        ));
+    }
+    let kind = classify_existing(&rel);
+    if rel.file_name().is_none() || kind == ArtifactKind::Concept {
+        return Err(OkfError::Usage(
+            "artifact put requires an opaque/reserved artifact; use add or edit for concepts"
+                .to_string(),
+        ));
+    }
+    let root = root.canonicalize()?;
+    let mut parent = root.clone();
+    for component in rel.parent().unwrap_or(Path::new("")).components() {
+        parent.push(component);
+        match std::fs::symlink_metadata(&parent) {
+            Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => {}
+            Ok(_) => {
+                return Err(OkfError::Usage(format!(
+                    "artifact destination parent must be a directory without symlinks: {}",
+                    parent.display()
+                )))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => std::fs::create_dir(&parent)?,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let destination = root.join(&rel);
+    let replaced = match std::fs::symlink_metadata(&destination) {
+        Ok(meta) if meta.is_file() && !meta.file_type().is_symlink() => {
+            if !replace {
+                return Err(OkfError::Usage(format!(
+                    "artifact already exists: {}; use --replace to overwrite it",
+                    rel.display()
+                )));
+            }
+            true
+        }
+        Ok(_) => {
+            return Err(OkfError::Usage(format!(
+                "artifact destination must be a regular file without symlinks: {}",
+                rel.display()
+            )))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(e.into()),
+    };
+    static NEXT_TEMP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let (temp, mut file) = loop {
+        let sequence = NEXT_TEMP.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let temp = parent.join(format!(".okf-put-{}-{sequence}.tmp", std::process::id()));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)
+        {
+            Ok(file) => break (temp, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.into()),
+        }
+    };
+    let write_result = (|| -> Result<()> {
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        if replace {
+            std::fs::rename(&temp, &destination)?;
+        } else {
+            // Publishing with a hard link makes create-only atomic even if another writer
+            // creates the destination after the preflight check.
+            std::fs::hard_link(&temp, &destination)?;
+        }
+        Ok(())
+    })();
+    let _ = std::fs::remove_file(&temp);
+    write_result?;
+    Ok(ArtifactWrite {
+        path: rel,
+        kind,
+        size: bytes.len() as u64,
+        sha256: hex_sha256(bytes),
+        replaced,
+    })
 }
 
 /// Reusable artifact resolver which canonicalizes the bundle root once.

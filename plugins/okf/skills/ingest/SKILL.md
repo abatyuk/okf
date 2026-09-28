@@ -37,10 +37,10 @@ Producer rubric:
    inspect plausible matches. Update an existing concept when appropriate; do not duplicate it. Stop
    research when the requested concepts and their material claims have adequate evidence; report
    unresolved points rather than expanding to unrelated subsystems. Add new concepts with `okf add
-   <path> <bundle> --type <Type>`. When generation provenance is enabled, pass `--generated-by
-   <actor>`; the CLI supplies the explicit-offset timestamp. Write the body after creation with `okf
-   edit <concept-id> <bundle> --set-body @/tmp/concept-body.md` (Markdown body only, no
-   frontmatter).
+   <path> <bundle> --type <Type> --body @/tmp/concept-body.md` (Markdown body only, no
+   frontmatter). This creates content in one write and leaves no skeleton if the input is unreadable.
+   When generation provenance is enabled, pass `--generated-by <actor>`; the CLI supplies the
+   explicit-offset timestamp.
 4. Add standard sources with `okf edit <concept-id> <bundle> --add-source
    "resource=<path>,id=source-1"`. For a full source mapping, use `okf edit <concept-id> <bundle>
    --add-source-json @/tmp/source.yaml`. Each entry needs `resource`; use stable `id` values and
@@ -60,6 +60,14 @@ Producer rubric:
    authorized. It overwrites index prose throughout the bundle; preserve curated indexes otherwise.
    Validate after generating indexes.
 
+When local fingerprint tracking is enabled with a source `kind`, review its evidence and run
+`okf refresh <concept-id> <bundle> --fail-on skipped` to record the baseline. `okf stale <bundle>
+--fail-on any` distinguishes `unrecorded` (no baseline), `missing` (cannot fingerprint), and
+`drifted` (changed baseline). Standard kind-less provenance is not fingerprint-checked. Inspect
+findings even when a command succeeds: stale defaults to a successful exit on findings, and
+`lint --fail-on never` is reporting only. Use `okf lint <bundle> --fail-on warn` when source warnings
+must fail a health gate; conformance validation alone does not establish source health.
+
 ## Source locations
 
 `references/` is an optional location for authorized copies; Markdown files are concepts and other
@@ -69,6 +77,12 @@ bundle/document-relative artifact paths use different roots: read the artifact r
 <resource> <bundle> --from <concept-id>` and bounded `okf artifact show` for bundle artifacts.
 Inspect authorized external repository sources with normal source tools; do not change provenance or
 copy them merely to bypass a blocked artifact read. Inspection is not permission to execute code.
+
+For an authorized artifact copy or authored schema, use `okf artifact put
+contracts/x/references/schema.json @/tmp/schema.json <bundle>`. The destination is bundle-relative;
+the input file is relative to cwd. Creation is the default; use `--replace` only for an intended
+replacement. Writes preserve recorded fingerprints, so review citing concepts before refreshing
+them. This command does not execute artifacts or grant permission to copy external material.
 
 Report created/updated/skipped concepts, source evidence, validation, and any unresolved scope.
 Include optional extensions or copied artifacts only when used.

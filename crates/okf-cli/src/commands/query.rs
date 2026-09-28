@@ -92,11 +92,21 @@ pub fn run_show(args: &ShowArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     match load_concept(&root, &args.concept)? {
         Some(concept) => {
-            if args.outline {
+            if args.body {
+                if json {
+                    output::print_line(&json!({
+                        "kind": "body", "id": concept.id.0, "body": concept.body,
+                    }))?;
+                } else {
+                    output::print_text(format_args!("{}", concept.body))?;
+                }
+            } else if args.outline {
                 output::print_concept_outline(&concept, json)?;
             } else if let Some(raw) = &args.lines {
                 let (start, end) = parse_line_range(raw)?;
                 output::print_concept_lines(&concept, start, end, json)?;
+            } else if args.numbered {
+                output::print_concept_lines(&concept, 1, usize::MAX, json)?;
             } else {
                 output::print_concept(&concept, json)?;
             }

@@ -18,7 +18,10 @@ authority.
 1. Open a named concept directly. When the review scope is not already specified, select concepts
    using `okf list <bundle> --json`, `okf stats <bundle>`, and change context. Check `okf stale
    <bundle>` but keep lifecycle expiry, source credibility/modification, and fingerprint drift as
-   separate review facts.
+   separate review facts. `unrecorded` means no fingerprint baseline, `missing` means fingerprinting
+   failed, and `drifted` means the baseline changed. Stale findings exit successfully by default;
+   use `--fail-on any` for a health gate and inspect the findings either way. Kind-less sources are
+   not fingerprint-checked. Review evidence directly; do not refresh merely to make checks green.
 2. Read the complete relevant document, using `okf show <concept-id> <bundle> --outline`, then `okf
    show <concept-id> <bundle> --lines <START:END>` when large. The concept argument is required even
    when `OKF_BUNDLE` is set. Plain `show --json` is metadata only. Review all material claims,

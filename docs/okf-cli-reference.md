@@ -1,6 +1,6 @@
 # okf CLI — complete argument reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.2.7, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.2.8, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 This complete reference is for developers and general CLI lookup. Skills carry smaller generated subsets so they do not load unrelated commands.
 
@@ -34,11 +34,13 @@ List local artifacts and concepts under a bundle directory.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `<bundle>` | positional | no | Bundle root directory; use --directory to select a directory within the bundle |
 | `--directory <value>` | string | no | Bundle-relative directory to inventory (default: `references`) |
 | `--digest` | bool | no | Compute SHA-256 digests (reads each file) (default: `false`) |
 
 Output stream: `artifact`.
+
+The positional path selects a bundle root relative to the current directory. To filter within the selected bundle, use `--directory contracts/x`; printed paths remain relative to the bundle root.
 
 ### `okf artifact resolve`
 
@@ -62,7 +64,7 @@ Retrieve a bounded local text artifact; binary files return metadata only.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<resource>` | positional | yes | Local artifact path to retrieve |
+| `<resource>` | positional | yes | Artifact path relative to the bundle root, or to --from when provided |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 | `--lines <value>` | string | no | Retrieve only an inclusive, one-based START:END line range |
@@ -197,10 +199,12 @@ Show one concept's content, heading outline, or selected line range.
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--outline` | bool | no | Show only the Markdown heading outline with 1-based document line numbers (default: `false`) |
 | `--lines <value>` | string | no | Show only an inclusive 1-based document line range, `START:END` (or one line, `N`) |
+| `--numbered` | bool | no | Print document line numbers (including frontmatter); excludes the display header (default: `false`) |
+| `--body` | bool | no | Print only the raw Markdown body, without frontmatter or display headers (default: `false`) |
 
 Output stream: `concept`.
 
-Without `--json`, show includes the serialized frontmatter and full Markdown body. Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, `effective_status`, `effective_generated_at`, `latest_verified_at`, and `verification_current`. It does not include the body. `--outline --json` returns `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer to the serialized document, including frontmatter. An outline or selected slice does not establish complete document-review coverage.
+Without `--json`, show includes the serialized frontmatter and full Markdown body. Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, `effective_status`, `effective_generated_at`, `latest_verified_at`, and `verification_current`. It does not include the body. `--outline --json` returns `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer to the serialized document, including frontmatter, excluding the three-line display header. `show -n` (or `--numbered`) prints the full document with these numbers and no header; its JSON uses the same line-range record. `show --body` prints only raw Markdown; with `--json` it returns a body record containing `id` and `body`. An outline or selected slice does not establish complete document-review coverage.
 
 ## check
 
@@ -269,6 +273,8 @@ Advisory checks (broken links, missing fields, orphans, ontology violations).
 
 Output stream: `finding`.
 
+For sources with a fingerprint kind, `source-unrecorded` warns when no baseline exists. `source-missing` errors when file, line-range, or markdown-heading sources cannot be fingerprinted, even without a baseline. Lint does not fetch URLs or inspect Git sources. Use `--fail-on warn` to fail on warnings as well as errors.
+
 ### `okf scan`
 
 Walk a bundle and report the candidate files that would be analyzed.
@@ -300,6 +306,8 @@ Drift detection: recorded vs. recomputed source fingerprints (+ `stale_after`).
 | `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any (default: `never`) |
 
 Output stream: `drift`.
+
+Sources with fingerprint kinds but no recorded fingerprint are reported as `unrecorded`; unreadable sources are reported even without a baseline. Standard sources without a fingerprint kind are provenance only. Use `--fail-on any` for a failing exit status when findings exist. `validate` checks conformance, not source health.
 
 ### `okf stats`
 
@@ -335,6 +343,7 @@ Add a new concept document, scaffolded from the ontology.
 | `--type <value>` | string | no | Concept `type` (an ontology concept-type key). Optional with `--attested` |
 | `--title <value>` | string | no | Concept title |
 | `--description <value>` | string | no | Concept description |
+| `--body <value>` | string | no | Replace the generated Markdown body. Use `@file` or `-` for stdin |
 | `--attested` | bool | no | Scaffold exact `type: Attested Computation`; requires `--runtime` (default: `false`) |
 | `--set <value>` | list<string> | no | Set a custom scalar field at creation, `key=value` (repeatable) |
 | `--ref <value>` | list<string> | no | Set a declared reference at creation, `key=link` (repeatable) |
@@ -351,7 +360,23 @@ Add a new concept document, scaffolded from the ontology.
 
 Output stream: `change`.
 
-Creation scaffolds a concept; supply Markdown body afterward with `edit --set-body`. `--generated-by` records the supplied actor and the CLI's current timestamp. Do not invent a historical generation time or actor. For a requested computation only, `--attested --runtime <runtime>` selects exact `Attested Computation`; declare actual parameters with repeatable `--parameter name:type:required` (omit `:required` when optional). Choose `--computation <resource>` or `--inline-computation @file`, then add reviewed executor/receipt/attester fields as needed. These describe a contract and authorize no execution.
+Creation scaffolds a concept; `--body @file` supplies Markdown in the same write (literal text and `-` for stdin also work). Input failures leave no skeleton concept. `--generated-by` records the supplied actor and the CLI's current timestamp. Do not invent a historical generation time or actor. For a requested computation only, `--attested --runtime <runtime>` selects exact `Attested Computation`; declare actual parameters with repeatable `--parameter name:type:required` (omit `:required` when optional). Choose `--computation <resource>` or `--inline-computation @file`, then add reviewed executor/receipt/attester fields as needed. These describe a contract and authorize no execution.
+
+### `okf artifact put` · _mutates_
+
+Create or replace a local artifact; citing source fingerprints remain unchanged.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<resource>` | positional | yes | Destination path relative to the bundle root (opaque or reserved artifacts only) |
+| `<input>` | positional | yes | Read artifact bytes from @file (file path is relative to the current directory) |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--create-only` | bool | no | Refuse to overwrite an existing file (the default) (default: `false`) |
+| `--replace` | bool | no | Allow replacement of an existing artifact, leaving source fingerprints for drift checks (default: `false`) |
+
+Output stream: `artifact-write`.
+
+Write bytes from `@file` to a bundle-relative opaque or reserved artifact. The default (and `--create-only`) refuses an existing destination; `--replace` permits replacement. Parent directories are created as needed. Concept and configuration files are protected, and paths must remain inside the bundle. Recorded source fingerprints are preserved so `stale` detects changes; review citing concepts before `refresh`.
 
 ### `okf edit` · _mutates_
 
@@ -370,14 +395,17 @@ Edit a concept losslessly and invalidate its prior verification.
 | `--remove-source <value>` | list<string> | no | Remove sources matching `<path-or-uri>` or `resource=<path-or-uri>[,kind=<kind>]` (repeatable) |
 | `--set-body <value>` | string | no | Replace the whole body. Use `@file` to read a file or `-` for stdin |
 | `--append-body <value>` | string | no | Append a block to the body. Use `@file` or `-` (stdin) |
+| `--replace <OLD> <NEW>` | list<string> | no | Replace body text, `<old> <new>` (repeatable; defaults to exactly one match) |
+| `--all` | bool | no | Replace every occurrence matched by `--replace` (default: `false`) |
 | `--clear-body` | bool | no | Empty the body (default: `false`) |
 | `--set-section <HEADING> <TEXT>` | list<string> | no | Replace a section's content, `<heading> <text>` (repeatable). Text accepts `@file`/`-` |
 | `--append-section <HEADING> <TEXT>` | list<string> | no | Append to a section, `<heading> <text>` (repeatable). Text accepts `@file`/`-` |
 | `--remove-section <value>` | list<string> | no | Remove a section (heading + content), `<heading>` (repeatable) |
+| `--rename-section <OLD> <NEW>` | list<string> | no | Rename a section heading, `<old> <new>` (repeatable) |
 
 Output stream: `change`.
 
-`--set` accepts scalar values, not arbitrary YAML objects; a dotted key is not a nested-field update. Use `--add-source-json @file` for a complete source mapping. For unsupported complex metadata preservation, inspect the existing representation and use a narrow lossless file edit within scope, then validate. Do not flatten mappings or fabricate verification. Meaningful edits remove active `verified` events and update existing `generated.at`; preserve needed historical evidence separately. Body files contain Markdown only, without frontmatter. Section flags take heading and text as separate values. Malformed YAML must be repaired before this command can load it.
+`--set` accepts scalar values, not arbitrary YAML objects; a dotted key is not a nested-field update. Use `--add-source-json @file` for a complete source mapping. For unsupported complex metadata preservation, inspect the existing representation and use a narrow lossless file edit within scope, then validate. Do not flatten mappings or fabricate verification. Meaningful edits remove active `verified` events and update existing `generated.at`; preserve needed historical evidence separately. Body files contain Markdown only, without frontmatter. Section flags take heading and text as separate values. `--replace OLD NEW` replaces exactly one literal body match; `--all` replaces every match and still fails if none exist. `--rename-section OLD NEW` changes a uniquely matched heading without replacing its content. Malformed YAML must be repaired before this command can load it.
 
 ### `okf init` · _mutates_
 

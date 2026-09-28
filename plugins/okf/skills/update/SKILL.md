@@ -14,8 +14,10 @@ that command's `--help` output as the runtime authority.
 
 Use the relevant detectors and keep their meanings separate:
 
-- `okf stale <bundle>` reports `stale_after` expiry and supported source fingerprint drift. It does
-  not claim every top-level resource is fingerprinted.
+- `okf stale <bundle> --fail-on any` reports expiry and source findings: `unrecorded` means no
+  baseline, `missing` means fingerprinting failed, and `drifted` means a recorded baseline changed.
+  Without `--fail-on any`, findings still exit successfully. Standard kind-less provenance and
+  top-level resources are not automatically fingerprinted.
 - Standard source `last_modified`, credibility, and usage signals inform review but are not the same
   as local fingerprint drift.
 - `okf affected <bundle> --changed <link-or-resource>` follows corrected body and standard source
@@ -52,7 +54,16 @@ actual concept-content change. A concept may have more than one.
 6. Re-run stale/affected checks, `okf validate <bundle>`, and advisory `okf lint <bundle> --fail-on
    never`. Regenerate indexes with `okf docs <bundle> --format index` only when needed and their
    bodies are generated or replacement is already authorized; preserve curated prose otherwise.
-   Validate after index generation.
+   Validate after index generation. Inspect lint findings despite its reporting-only exit; use
+   `okf lint <bundle> --fail-on warn` for a source-health gate. Missing local sources are errors,
+   and unrecorded fingerprints are warnings; neither is repaired by conformance validation.
+
+For a phrase correction, use `okf edit <concept-id> <bundle> --replace "Old phrase" "New phrase"`;
+exactly one literal body match is required. Use `--all` only when every occurrence should change.
+Rename a uniquely matched heading with `okf edit <concept-id> <bundle> --rename-section
+"Old heading" "New heading"`; its content and level are preserved. Failed matching leaves the
+file unchanged. Use `okf show <concept-id> <bundle> --body` if a full body is needed for editing,
+without splitting display headers or frontmatter delimiters.
 
 ## Source access
 
@@ -60,6 +71,12 @@ actual concept-content change. A concept may have more than one.
 context on artifact reads. For repository-relative fingerprints, external source access, or
 truncation, use the artifact sections of `references/cli.md`. Existing authorization to inspect a
 source counts; do not bypass bundle containment. Reading code does not authorize execution.
+
+For an authorized artifact copy or authored schema, use `okf artifact put
+contracts/x/references/schema.json @/tmp/schema.json <bundle>`. The destination is bundle-relative;
+the input file is relative to cwd. Creation is the default; use `--replace` only for an intended
+replacement. Writes preserve recorded fingerprints, so review citing concepts before refreshing
+them. This command does not execute artifacts or grant permission to copy external material.
 
 Report changes, validation, and remaining evidence gaps. Include fingerprint-only refreshes,
 unchanged expiry, and verification consequences when relevant to this update.

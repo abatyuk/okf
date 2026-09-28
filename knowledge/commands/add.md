@@ -26,6 +26,7 @@ Adds a new concept document, scaffolded from the ontology so required fields and
 | `--type <value>` | string | no | Concept `type` (an ontology concept-type key). Optional with `--attested` |
 | `--title <value>` | string | no | Concept title |
 | `--description <value>` | string | no | Concept description |
+| `--body <value>` | string | no | Replace the generated Markdown body. Use `@file` or `-` for stdin |
 | `--attested` | bool | no | Scaffold exact `type: Attested Computation`; requires `--runtime` (default: `false`) |
 | `--set <value>` | list<string> | no | Set a custom scalar field at creation, `key=value` (repeatable) |
 | `--ref <value>` | list<string> | no | Set a declared reference at creation, `key=link` (repeatable) |

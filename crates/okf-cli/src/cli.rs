@@ -38,7 +38,7 @@ pub enum Command {
     Graph(GraphArgs),
     /// Resolve a link/concept-id to a concrete bundle-relative file path.
     Resolve(ResolveArgs),
-    /// List, resolve, or retrieve path-valued bundle artifacts without executing them.
+    /// List, resolve, retrieve, or write path-valued bundle artifacts without executing them.
     #[command(subcommand)]
     Artifact(ArtifactCmd),
     /// Inspect Attested Computation contracts without executing them.
@@ -113,6 +113,8 @@ pub enum ArtifactCmd {
     Resolve(ArtifactResolveArgs),
     /// Retrieve a bounded local text artifact; binary files return metadata only.
     Show(ArtifactShowArgs),
+    /// Create or replace a local artifact; citing source fingerprints remain unchanged.
+    Put(ArtifactPutArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -212,6 +214,12 @@ pub struct ShowArgs {
     /// Show only an inclusive 1-based document line range, `START:END` (or one line, `N`).
     #[arg(long, value_name = "START:END", conflicts_with = "outline")]
     pub lines: Option<String>,
+    /// Print document line numbers (including frontmatter); excludes the display header.
+    #[arg(short = 'n', long, conflicts_with_all = ["outline", "body"])]
+    pub numbered: bool,
+    /// Print only the raw Markdown body, without frontmatter or display headers.
+    #[arg(long, conflicts_with_all = ["outline", "lines", "numbered"])]
+    pub body: bool,
 }
 
 #[derive(Debug, Args)]
@@ -258,7 +266,7 @@ pub struct ResolveArgs {
 
 #[derive(Debug, Args)]
 pub struct ArtifactListArgs {
-    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
+    /// Bundle root directory; use --directory to select a directory within the bundle.
     pub bundle: Option<String>,
     /// Bundle-relative directory to inventory.
     #[arg(long, default_value = "references")]
@@ -281,7 +289,7 @@ pub struct ArtifactResolveArgs {
 
 #[derive(Debug, Args)]
 pub struct ArtifactShowArgs {
-    /// Local artifact path to retrieve.
+    /// Artifact path relative to the bundle root, or to --from when provided.
     pub resource: String,
     /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
@@ -297,6 +305,23 @@ pub struct ArtifactShowArgs {
     /// Explicitly request remote retrieval (requires a network-enabled build and policy).
     #[arg(long)]
     pub fetch: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ArtifactPutArgs {
+    /// Destination path relative to the bundle root (opaque or reserved artifacts only).
+    pub resource: String,
+    /// Read artifact bytes from @file (file path is relative to the current directory).
+    #[arg(value_name = "@FILE")]
+    pub input: String,
+    /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
+    pub bundle: Option<String>,
+    /// Refuse to overwrite an existing file (the default).
+    #[arg(long, conflicts_with = "replace")]
+    pub create_only: bool,
+    /// Allow replacement of an existing artifact, leaving source fingerprints for drift checks.
+    #[arg(long, conflicts_with = "create_only")]
+    pub replace: bool,
 }
 
 #[derive(Debug, Args)]
@@ -413,6 +438,9 @@ pub struct AddArgs {
     /// Concept description.
     #[arg(long)]
     pub description: Option<String>,
+    /// Replace the generated Markdown body. Use `@file` or `-` for stdin.
+    #[arg(long)]
+    pub body: Option<String>,
     /// Scaffold exact `type: Attested Computation`; requires `--runtime`.
     #[arg(long)]
     pub attested: bool,
@@ -488,6 +516,12 @@ pub struct EditArgs {
     /// Append a block to the body. Use `@file` or `-` (stdin).
     #[arg(long = "append-body")]
     pub append_body: Option<String>,
+    /// Replace body text, `<old> <new>` (repeatable; defaults to exactly one match).
+    #[arg(long = "replace", num_args = 2, value_names = ["OLD", "NEW"])]
+    pub replace: Vec<String>,
+    /// Replace every occurrence matched by `--replace`.
+    #[arg(long, requires = "replace")]
+    pub all: bool,
     /// Empty the body.
     #[arg(long = "clear-body")]
     pub clear_body: bool,
@@ -500,6 +534,9 @@ pub struct EditArgs {
     /// Remove a section (heading + content), `<heading>` (repeatable).
     #[arg(long = "remove-section")]
     pub remove_section: Vec<String>,
+    /// Rename a section heading, `<old> <new>` (repeatable).
+    #[arg(long = "rename-section", num_args = 2, value_names = ["OLD", "NEW"])]
+    pub rename_section: Vec<String>,
 }
 
 #[derive(Debug, Args)]

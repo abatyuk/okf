@@ -59,6 +59,7 @@ pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
         concept_type: args.type_.clone(),
         title: args.title.clone(),
         description: args.description.clone(),
+        body: resolve_opt(&args.body, &mut stdin_cache)?,
         attested: args.attested,
         sets: parse_pairs("--set", &args.set)?
             .into_iter()
@@ -132,9 +133,12 @@ pub fn run_edit(args: &EditArgs, json: bool) -> Result<i32> {
         clear_body: args.clear_body,
         set_body: resolve_opt(&args.set_body, &mut stdin_cache)?,
         append_body: resolve_opt(&args.append_body, &mut stdin_cache)?,
+        replacements: string_pairs(&args.replace),
+        replace_all: args.all,
         set_sections: section_pairs(&args.set_section, &mut stdin_cache)?,
         append_sections: section_pairs(&args.append_section, &mut stdin_cache)?,
         remove_sections: args.remove_section.clone(),
+        rename_sections: string_pairs(&args.rename_section),
     };
 
     let r = edit(&root, &args.concept, &spec)?;
@@ -310,6 +314,15 @@ fn section_pairs(
     Ok(out)
 }
 
+/// Chunk flat pairs supplied by repeatable two-value flags.
+fn string_pairs(flat: &[String]) -> Vec<(String, String)> {
+    flat.as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| (pair[0].clone(), pair[1].clone()))
+        .collect()
+}
+
 /// Resolve an optional body-text arg through the content resolver.
 fn resolve_opt(arg: &Option<String>, stdin_cache: &mut Option<String>) -> Result<Option<String>> {
     match arg {
@@ -354,6 +367,9 @@ fn change_json(c: &EditChange) -> serde_json::Value {
         }
         EditChange::SetBody => json!({"op": "set-body"}),
         EditChange::AppendBody => json!({"op": "append-body"}),
+        EditChange::ReplaceText { old, new, count } => {
+            json!({"op": "replace", "old": old, "new": new, "count": count})
+        }
         EditChange::ClearBody => json!({"op": "clear-body"}),
         EditChange::SetSection { heading } => json!({"op": "set-section", "heading": heading}),
         EditChange::AppendSection { heading } => {
@@ -361,6 +377,9 @@ fn change_json(c: &EditChange) -> serde_json::Value {
         }
         EditChange::RemoveSection { heading } => {
             json!({"op": "remove-section", "heading": heading})
+        }
+        EditChange::RenameSection { from, to } => {
+            json!({"op": "rename-section", "from": from, "to": to})
         }
         EditChange::InvalidateVerification { removed } => {
             json!({"op": "invalidate-verification", "removed": removed})

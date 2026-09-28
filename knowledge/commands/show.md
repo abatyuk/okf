@@ -28,6 +28,8 @@ have structured `--json` representations.
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--outline` | bool | no | Show only the Markdown heading outline with 1-based document line numbers (default: `false`) |
 | `--lines <value>` | string | no | Show only an inclusive 1-based document line range, `START:END` (or one line, `N`) |
+| `--numbered` | bool | no | Print document line numbers (including frontmatter); excludes the display header (default: `false`) |
+| `--body` | bool | no | Print only the raw Markdown body, without frontmatter or display headers (default: `false`) |
 
 Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
 

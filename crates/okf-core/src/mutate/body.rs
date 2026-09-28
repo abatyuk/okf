@@ -6,7 +6,7 @@
 //! target) and splice by `\n`-delimited line, which round-trips exactly for both LF and CRLF
 //! bodies. Content is normalized to end with a single trailing newline.
 use crate::error::{OkfError, Result};
-use crate::parse::markdown::find_section;
+use crate::parse::markdown::{find_section, parse_atx, slugify};
 
 /// Replace the entire body with `text` (normalized to a single trailing newline).
 pub fn set_body(text: &str) -> String {
@@ -75,6 +75,49 @@ pub fn remove_section(body: &str, heading: &str) -> Result<String> {
         .collect();
     out.extend(lines[span.end..].iter().map(|s| s.to_string()));
     Ok(normalize(&out.join("\n")))
+}
+
+/// Rename a section heading while preserving its level, indentation, and content. Errors if the
+/// heading cannot be found or the replacement is empty.
+pub fn rename_section(body: &str, heading: &str, new_heading: &str) -> Result<String> {
+    if new_heading.trim().is_empty() || new_heading.contains(['\n', '\r']) {
+        return Err(OkfError::Usage(
+            "edit: replacement section heading must be non-empty and single-line".to_string(),
+        ));
+    }
+    let span = find_section(body, heading)
+        .ok_or_else(|| OkfError::Usage(format!("edit: heading not found: {heading:?}")))?;
+    let mut lines: Vec<&str> = body.split('\n').collect();
+    let old_line = lines[span.heading_line];
+    let wanted = slugify(heading);
+    let mut in_fence = false;
+    let matches = lines
+        .iter()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                in_fence = !in_fence;
+                return false;
+            }
+            !in_fence && parse_atx(line).is_some_and(|(_, text)| slugify(text) == wanted)
+        })
+        .count();
+    if matches > 1 {
+        return Err(OkfError::Usage(format!(
+            "edit: heading is ambiguous: {heading:?} matches {matches} sections"
+        )));
+    }
+    let indent = old_line.len() - old_line.trim_start().len();
+    let prefix = &old_line[..indent];
+    let ending = if old_line.ends_with('\r') { "\r" } else { "" };
+    let level = parse_atx(old_line)
+        .map(|(level, _)| level)
+        .unwrap_or(span.level);
+    lines[span.heading_line] = "";
+    let replacement = format!("{prefix}{} {new_heading}{ending}", "#".repeat(level));
+    let mut owned: Vec<String> = lines.iter().map(|line| line.to_string()).collect();
+    owned[span.heading_line] = replacement;
+    Ok(owned.join("\n"))
 }
 
 /// Ensure a single trailing newline (empty stays empty).
@@ -158,6 +201,21 @@ mod tests {
         assert!(!out.contains("## Rates"));
         assert!(!out.contains("old body"));
         assert!(out.contains("## Next\n\ntail"));
+    }
+
+    #[test]
+    fn rename_section_preserves_level_crlf_and_ignores_fenced_headings() {
+        let doc = "## Rates\r\n\r\nbody\r\n\r\n```md\r\n## Rates\r\n```\r\n";
+        let renamed = rename_section(doc, "Rates", "Pricing").unwrap();
+        assert!(renamed.starts_with("## Pricing\r\n"));
+        assert!(renamed.contains("## Rates\r\n```"));
+    }
+
+    #[test]
+    fn rename_section_rejects_ambiguous_headings_and_multiline_names() {
+        let doc = "## Rates\n\nfirst\n\n## Rates\n\nsecond\n";
+        assert!(rename_section(doc, "Rates", "Pricing").is_err());
+        assert!(rename_section("## Rates\n", "Rates", "New\nHeading").is_err());
     }
 
     #[test]

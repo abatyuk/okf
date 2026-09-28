@@ -32,6 +32,8 @@ use crate::ports::net::Net;
 pub enum DriftKind {
     /// The recomputed fingerprint differs from the recorded one.
     Drifted,
+    /// A source opts into fingerprinting but has no recorded baseline.
+    Unrecorded,
     /// The artifact could not be read / fingerprinted (missing file, git error, unknown kind).
     Missing,
     /// The concept's `stale_after` timestamp has passed.
@@ -42,6 +44,7 @@ impl DriftKind {
     pub fn as_str(self) -> &'static str {
         match self {
             DriftKind::Drifted => "drifted",
+            DriftKind::Unrecorded => "unrecorded",
             DriftKind::Missing => "missing",
             DriftKind::Expired => "expired",
         }
@@ -55,7 +58,7 @@ pub struct SourceDrift {
     pub resource: String,
     /// The source `kind` as written on disk.
     pub kind: String,
-    /// [`DriftKind::Drifted`] or [`DriftKind::Missing`].
+    /// [`DriftKind::Drifted`], [`DriftKind::Unrecorded`], or [`DriftKind::Missing`].
     pub drift: DriftKind,
     /// The fingerprint recorded at last sync.
     pub recorded: Fingerprint,
@@ -73,7 +76,7 @@ pub struct ConceptDrift {
     pub concept: String,
     /// The `stale_after` value that has passed, if the concept expired.
     pub expired: Option<String>,
-    /// Per-source drift (only sources that drifted or went missing).
+    /// Per-source drift (changed, unrecorded, or missing sources).
     pub sources: Vec<SourceDrift>,
 }
 
@@ -172,16 +175,17 @@ impl<'a> StaleChecker<'a> {
         }
     }
 
-    /// Recompute and compare one source. Returns `None` when the source is in sync or has no
-    /// recorded fingerprint to compare against.
+    /// Recompute and compare one source. Returns `None` when the source is in sync or does
+    /// not opt into fingerprinting with a `kind` extension.
     fn check_source(
         &self,
         engine: &Engine,
         source: &Source,
         cache: &mut FingerprintCache,
     ) -> Option<SourceDrift> {
-        // A source with nothing recorded has no baseline to drift from — skip it.
-        if source.fingerprint.is_empty() {
+        // `kind` and `fingerprint` are extensions, so standard kind-less sources do not
+        // promise fingerprint checks. Once a kind is set, absence of a baseline is a finding.
+        if source.kind.as_kind_str().trim().is_empty() && source.fingerprint.is_empty() {
             return None;
         }
 
@@ -201,7 +205,15 @@ impl<'a> StaleChecker<'a> {
 
         match current {
             Ok(current) => {
-                if fingerprints_match(&source.fingerprint, current) {
+                if source.fingerprint.is_empty() {
+                    Some(SourceDrift {
+                        drift: DriftKind::Unrecorded,
+                        message: "no recorded fingerprint; run refresh after reviewing the source"
+                            .to_string(),
+                        current: Some(current.clone()),
+                        ..base
+                    })
+                } else if fingerprints_match(&source.fingerprint, current) {
                     None
                 } else {
                     Some(SourceDrift {
@@ -255,9 +267,6 @@ fn prime_git_cache(bundle: &Bundle, engine: &Engine, cache: &mut FingerprintCach
             continue;
         };
         for source in parse_sources(value) {
-            if source.fingerprint.is_empty() {
-                continue;
-            }
             match source.kind {
                 SourceKind::GitPath => {
                     paths.entry(cache_key(&source)).or_insert(source);
@@ -479,14 +488,18 @@ mod tests {
     }
 
     #[test]
-    fn source_without_recorded_fingerprint_is_skipped() {
+    fn source_without_recorded_fingerprint_is_unrecorded() {
         let c = concept(
             "docs/d",
             "type: Note\nsources:\n- resource: src/x.py\n  kind: git-path\n",
         );
-        // No recorded fingerprint → nothing to compare, even though git has no answer.
-        let report = check(&bundle(vec![c]), &FakeFs::new(), &FakeGit::new());
-        assert!(report.is_empty());
+        let git = FakeGit::new().with_hash_object("src/x.py", "aaa");
+        let report = check(&bundle(vec![c]), &FakeFs::new(), &git);
+        assert_eq!(report.concepts.len(), 1);
+        let drift = &report.concepts[0].sources[0];
+        assert_eq!(drift.drift, DriftKind::Unrecorded);
+        assert!(drift.recorded.is_empty());
+        assert_eq!(drift.current.as_ref().unwrap().get("blob_sha"), Some("aaa"));
     }
 
     #[test]

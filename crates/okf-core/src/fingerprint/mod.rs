@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-type FileCache = HashMap<PathBuf, std::result::Result<Arc<[u8]>, String>>;
+type FileCache = HashMap<PathBuf, Result<Arc<[u8]>>>;
 
 /// Computes the current fingerprint for a source, dispatching on its kind.
 pub trait Fingerprinter {
@@ -60,17 +60,11 @@ impl<'a> Engine<'a> {
 
     fn read(&self, path: PathBuf) -> Result<Arc<[u8]>> {
         if let Some(cached) = self.files.borrow().get(&path) {
-            return cached
-                .clone()
-                .map_err(|message| OkfError::Io(message.to_string()));
+            return cached.clone();
         }
-        let result = self
-            .fs
-            .read(&path)
-            .map(Arc::<[u8]>::from)
-            .map_err(|error| error.to_string());
+        let result = self.fs.read(&path).map(Arc::<[u8]>::from);
         self.files.borrow_mut().insert(path, result.clone());
-        result.map_err(OkfError::Io)
+        result
     }
 
     /// Resolve the containing worktree once for the lifetime of this engine. Bundle-wide
@@ -95,11 +89,7 @@ impl<'a> Engine<'a> {
         let root = match self.git_root() {
             Ok(root) => root,
             Err(error) => {
-                let message = error.to_string();
-                return sources
-                    .iter()
-                    .map(|_| Err(OkfError::Io(message.clone())))
-                    .collect();
+                return sources.iter().map(|_| Err(error.clone())).collect();
             }
         };
         let paths: Vec<PathBuf> = sources
@@ -119,11 +109,7 @@ impl<'a> Engine<'a> {
         let root = match self.git_root() {
             Ok(root) => root,
             Err(error) => {
-                let message = error.to_string();
-                return sources
-                    .iter()
-                    .map(|_| Err(OkfError::Io(message.clone())))
-                    .collect();
+                return sources.iter().map(|_| Err(error.clone())).collect();
             }
         };
         let paths: Vec<PathBuf> = sources
@@ -304,6 +290,20 @@ mod tests {
         assert!(eng
             .fingerprint(&src("x", SourceKind::Other("sql".to_string())))
             .is_err());
+    }
+
+    #[test]
+    fn unreadable_file_error_is_preserved_on_first_and_cached_reads() {
+        let fs = FakeFs::new();
+        let git = FakeGit::new();
+        let eng = Engine::new(Path::new("bundle"), &fs, &git, None);
+        let source = src("missing.json", SourceKind::File);
+        let first = eng.fingerprint(&source).unwrap_err();
+        let cached = eng.fingerprint(&source).unwrap_err();
+        assert_eq!(first.to_string(), cached.to_string());
+        assert!(matches!(first, OkfError::Io(_)));
+        assert!(matches!(cached, OkfError::Io(_)));
+        assert_eq!(first.to_string().matches("I/O error:").count(), 1);
     }
 
     #[test]

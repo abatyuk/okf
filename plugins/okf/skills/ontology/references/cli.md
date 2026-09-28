@@ -1,6 +1,6 @@
 # okf CLI — ontology command reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.2.7, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.2.8, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 This focused reference contains only commands selected for the `ontology` workflow. Consult it when exact arguments or output shapes are needed. If the installed `okf` version differs from the generated tool version above, or rejects documented syntax, use that command's `--help` output as the runtime authority.
 
@@ -32,7 +32,7 @@ Retrieve a bounded local text artifact; binary files return metadata only.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<resource>` | positional | yes | Local artifact path to retrieve |
+| `<resource>` | positional | yes | Artifact path relative to the bundle root, or to --from when provided |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 | `--lines <value>` | string | no | Retrieve only an inclusive, one-based START:END line range |
@@ -76,10 +76,12 @@ Show one concept's content, heading outline, or selected line range.
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--outline` | bool | no | Show only the Markdown heading outline with 1-based document line numbers (default: `false`) |
 | `--lines <value>` | string | no | Show only an inclusive 1-based document line range, `START:END` (or one line, `N`) |
+| `--numbered` | bool | no | Print document line numbers (including frontmatter); excludes the display header (default: `false`) |
+| `--body` | bool | no | Print only the raw Markdown body, without frontmatter or display headers (default: `false`) |
 
 Output stream: `concept`.
 
-Without `--json`, show includes the serialized frontmatter and full Markdown body. Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, `effective_status`, `effective_generated_at`, `latest_verified_at`, and `verification_current`. It does not include the body. `--outline --json` returns `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer to the serialized document, including frontmatter. An outline or selected slice does not establish complete document-review coverage.
+Without `--json`, show includes the serialized frontmatter and full Markdown body. Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, `effective_status`, `effective_generated_at`, `latest_verified_at`, and `verification_current`. It does not include the body. `--outline --json` returns `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer to the serialized document, including frontmatter, excluding the three-line display header. `show -n` (or `--numbered`) prints the full document with these numbers and no header; its JSON uses the same line-range record. `show --body` prints only raw Markdown; with `--json` it returns a body record containing `id` and `body`. An outline or selected slice does not establish complete document-review coverage.
 
 ## check
 
@@ -94,6 +96,8 @@ Advisory checks (broken links, missing fields, orphans, ontology violations).
 | `--fail-on <value>` | string | no | Severity threshold that makes the run fail (exit 1): never|info|warn|error|any (default: `error`) |
 
 Output stream: `finding`.
+
+For sources with a fingerprint kind, `source-unrecorded` warns when no baseline exists. `source-missing` errors when file, line-range, or markdown-heading sources cannot be fingerprinted, even without a baseline. Lint does not fetch URLs or inspect Git sources. Use `--fail-on warn` to fail on warnings as well as errors.
 
 ### `okf validate`
 

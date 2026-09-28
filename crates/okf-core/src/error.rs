@@ -5,7 +5,7 @@ pub type Result<T> = std::result::Result<T, OkfError>;
 
 /// All fallible operations in okf-core return this. Findings-driven exit codes
 /// (0 vs 1) are decided by the CLI, not here.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum OkfError {
     /// Bad usage / arguments (exit 2).
     #[error("usage error: {0}")]

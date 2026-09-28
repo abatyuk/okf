@@ -31,15 +31,16 @@ conformance requirements.
    mapping for links and resumable batches. Choose concept boundaries and exact type strings. An
    ontology may guide local policy, but an unknown type is valid OKF. Preserve source meaning and
    surface large splits for review.
-3. Create each concept, then write its Markdown body with `okf edit <concept-id> <bundle> --set-body
-   @/tmp/migrated-body.md` (body only, no frontmatter). Add grounded sources with `okf edit
+3. Create each concept with `okf add <path> <bundle> --type <Type> --body
+   @/tmp/migrated-body.md` (body only, no frontmatter). Unreadable input leaves no skeleton. Add grounded sources with `okf edit
    <concept-id> <bundle> --add-source "resource=<path>,id=source-1"`; use `--add-source-json
    @/tmp/source.yaml` for a full source mapping. Do not invent metadata. Treat the original as a
    standard source first: every source entry needs `resource`; add a stable `id` when body footnotes
    attribute claims. Add `title`, `author`, `usage_count`, `last_modified`, and `usage_window` only
    when evidence supports them. Footnote labels must join to `sources[].id`.
 4. Add `kind` and `fingerprint` only when local drift tracking is desired; label them extensions.
-   `okf refresh <concept-id> <bundle>` records supported fingerprints only. It does not rewrite
+   `okf refresh <concept-id> <bundle> --fail-on skipped` records supported fingerprints only,
+   after the sources have been checked against the migrated content. Report skipped sources. It does not rewrite
    standard source `last_modified` and cannot cure an expired `stale_after`.
 5. Preserve unknown nested mappings and lists without flattening them into scalar `--set` values.
    Source mappings have `--add-source-json`; other complex legacy data may require a narrow,
@@ -60,6 +61,14 @@ conformance requirements.
    Validate again after generating indexes. Unresolved optional evidence belongs in the report, not
    as a fabricated value.
 
+When local fingerprint tracking is enabled with a source `kind`, review its evidence and run
+`okf refresh <concept-id> <bundle> --fail-on skipped` to record the baseline. `okf stale <bundle>
+--fail-on any` distinguishes `unrecorded` (no baseline), `missing` (cannot fingerprint), and
+`drifted` (changed baseline). Standard kind-less provenance is not fingerprint-checked. Inspect
+findings even when a command succeeds: stale defaults to a successful exit on findings, and
+`lint --fail-on never` is reporting only. Use `okf lint <bundle> --fail-on warn` when source warnings
+must fail a health gate; conformance validation alone does not establish source health.
+
 ## Sources and artifacts
 
 `references/` is optional; its Markdown files are concepts and other files are artifacts. Keep
@@ -68,6 +77,12 @@ original provenance and mirror material only within the requested scope. Use `ok
 or reading external sources, consult the path-namespace and artifact-read guidance in
 `references/cli.md`; a fingerprint path need not be an artifact path. Inspection never authorizes
 execution.
+
+For an authorized artifact copy or authored schema, use `okf artifact put
+contracts/x/references/schema.json @/tmp/schema.json <bundle>`. The destination is bundle-relative;
+the input file is relative to cwd. Creation is the default; use `--replace` only for an intended
+replacement. Writes preserve recorded fingerprints, so review citing concepts before refreshing
+them. This command does not execute artifacts or grant permission to copy external material.
 
 Migration does not establish verification. Report migrated/skipped concepts, source joins, preserved
 extensions, unresolved mappings, and validation. Include lifecycle or artifact details only when

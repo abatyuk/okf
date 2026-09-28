@@ -15,7 +15,7 @@ Lists bundle files with their artifact classification and size, optionally compu
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `<bundle>` | positional | no | Bundle root directory; use --directory to select a directory within the bundle |
 | `--directory <value>` | string | no | Bundle-relative directory to inventory (default: `references`) |
 | `--digest` | bool | no | Compute SHA-256 digests (reads each file) (default: `false`) |
 

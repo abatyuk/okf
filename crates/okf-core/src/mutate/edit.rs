@@ -14,12 +14,12 @@
 //! entries still belong to the dedicated `verify` writer. Every successful edit invalidates
 //! prior verification by removing `verified`; the document must be reviewed again.
 //!
-//! **Body ops.** `--set-body`/`--append-body`/`--clear-body` rewrite the whole body; the
-//! section-aware `--set-section`/`--append-section`/`--remove-section` splice a single heading
-//! (see [`crate::mutate::body`]).
+//! **Body ops.** `--set-body`/`--append-body`/`--clear-body` rewrite the whole body;
+//! `--replace` changes matching text; section-aware set/append/remove/rename operations target
+//! Markdown headings (see [`crate::mutate::body`]).
 //!
-//! Operations apply in a fixed order (unset, set, add, remove, then whole-body, then section
-//! edits), so a single invocation is deterministic regardless of flag order.
+//! Operations apply in a fixed order (frontmatter, whole-body, replacements, then section edits),
+//! so a single invocation is deterministic regardless of flag order.
 use std::path::{Path, PathBuf};
 
 use serde_yaml::Value;
@@ -123,12 +123,18 @@ pub struct EditSpec {
     pub set_body: Option<String>,
     /// `--append-body`: append a block to the body.
     pub append_body: Option<String>,
+    /// `--replace OLD NEW`: replace an in-body text occurrence.
+    pub replacements: Vec<(String, String)>,
+    /// Replace every occurrence instead of requiring exactly one.
+    pub replace_all: bool,
     /// `--set-section (heading, text)`: replace a section's content.
     pub set_sections: Vec<(String, String)>,
     /// `--append-section (heading, text)`: append to a section.
     pub append_sections: Vec<(String, String)>,
     /// `--remove-section heading`: delete a section (heading + content).
     pub remove_sections: Vec<String>,
+    /// `--rename-section OLD NEW`: rename a heading and keep its content.
+    pub rename_sections: Vec<(String, String)>,
 }
 
 impl EditSpec {
@@ -143,9 +149,11 @@ impl EditSpec {
             && !self.clear_body
             && self.set_body.is_none()
             && self.append_body.is_none()
+            && self.replacements.is_empty()
             && self.set_sections.is_empty()
             && self.append_sections.is_empty()
             && self.remove_sections.is_empty()
+            && self.rename_sections.is_empty()
     }
 }
 
@@ -171,6 +179,12 @@ pub enum EditChange {
     SetBody,
     /// A block was appended to the body.
     AppendBody,
+    /// Text was replaced in the body.
+    ReplaceText {
+        old: String,
+        new: String,
+        count: usize,
+    },
     /// The body was cleared.
     ClearBody,
     /// A section's content was replaced.
@@ -179,6 +193,8 @@ pub enum EditChange {
     AppendSection { heading: String },
     /// A section was removed.
     RemoveSection { heading: String },
+    /// A section heading was renamed.
+    RenameSection { from: String, to: String },
     /// Prior verification entries were removed because content or metadata was edited.
     InvalidateVerification { removed: usize },
 }
@@ -376,10 +392,42 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
         changes.push(EditChange::AppendBody);
     }
 
+    for (old, new) in &spec.replacements {
+        if old.is_empty() {
+            return Err(OkfError::Usage(
+                "edit --replace requires a non-empty OLD string".to_string(),
+            ));
+        }
+        let matches = concept.body.match_indices(old).count();
+        if matches == 0 {
+            return Err(OkfError::Usage(format!(
+                "edit --replace: text not found: {old:?}"
+            )));
+        }
+        if !spec.replace_all && matches != 1 {
+            return Err(OkfError::Usage(format!(
+                "edit --replace: found {matches} occurrences of {old:?}; use --all to replace all"
+            )));
+        }
+        concept.body = concept.body.replace(old, new);
+        changes.push(EditChange::ReplaceText {
+            old: old.clone(),
+            new: new.clone(),
+            count: if spec.replace_all { matches } else { 1 },
+        });
+    }
+
     for heading in &spec.remove_sections {
         concept.body = body::remove_section(&concept.body, heading)?;
         changes.push(EditChange::RemoveSection {
             heading: heading.clone(),
+        });
+    }
+    for (old, new) in &spec.rename_sections {
+        concept.body = body::rename_section(&concept.body, old, new)?;
+        changes.push(EditChange::RenameSection {
+            from: old.clone(),
+            to: new.clone(),
         });
     }
     for (heading, text) in &spec.set_sections {

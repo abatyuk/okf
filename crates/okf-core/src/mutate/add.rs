@@ -30,6 +30,8 @@ pub struct AddOptions {
     pub concept_type: Option<String>,
     pub title: Option<String>,
     pub description: Option<String>,
+    /// Replace the scaffolded Markdown body.
+    pub body: Option<String>,
     /// Scaffold the exact OKF `Attested Computation` type.
     pub attested: bool,
     /// Custom scalar values supplied at creation.
@@ -248,7 +250,9 @@ pub fn add(
     } else {
         title.as_str()
     };
-    let body = if attested && opts.computation.is_none() {
+    let body = if let Some(body) = &opts.body {
+        super::body::set_body(body)
+    } else if attested && opts.computation.is_none() {
         let runtime = map.get("runtime").and_then(Value::as_str).unwrap_or("");
         let computation = opts.inline_computation.as_deref().unwrap_or("");
         format!(
