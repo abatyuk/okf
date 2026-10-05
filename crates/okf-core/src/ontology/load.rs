@@ -42,6 +42,8 @@ pub fn validate_ontology(ontology: &Ontology) -> Result<()> {
         ));
     }
     validate_field_types(ontology)?;
+    super::field_types::validate_concept_ancestry(ontology)?;
+    crate::graph::relationships::validate_relationships(ontology)?;
     Ok(())
 }
 
@@ -50,7 +52,7 @@ pub fn validate_ontology(ontology: &Ontology) -> Result<()> {
 pub fn load_ontology(path: &Path) -> Result<Ontology> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| OkfError::Environment(format!("cannot read {}: {e}", path.display())))?;
-    parse_ontology(&text)
+    parse_ontology(&text).map_err(|error| error.at_path(path))
 }
 
 /// Load the ontology for a bundle if one is present. `Ok(None)` when absent (not fatal);

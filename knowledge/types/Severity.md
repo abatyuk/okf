@@ -6,11 +6,11 @@ module: check
 defined_in:
 - /components/check
 sources:
-- resource: ../crates/okf-core/src/check/lint/mod.rs
+- resource: crates/okf-core/src/check/lint/mod.rs
   kind: git-path
   fingerprint:
-    blob_sha: 9a19460fb9ee933ba546e14b00cb6dca2054bab3
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 5f3c08e23d20676ece7e1c824807ad0ae03f4cda
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Severity
 

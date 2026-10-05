@@ -1,0 +1,151 @@
+[
+  {
+    "id": "incomplete-inventory",
+    "skills": [
+      "retrieval",
+      "infer-ontology"
+    ],
+    "setup": "Create 1001 Note concepts numbered 0000 through 1000; only the last has tags: [exception]. Leave the scan budget at its default.",
+    "prompt": "Find every concept tagged exception and tell me whether the inventory supports treating that tag as absent from this bundle.",
+    "pass": [
+      "Inspect scan completeness before interpreting no hits",
+      "Complete the scan for the requested exhaustive answer",
+      "Find /1000 and report the tag is present",
+      "Do not use offset pages to recover scan exhaustion"
+    ],
+    "fail": [
+      "Claim absence from the initial empty result",
+      "Treat observed matches as exact totals",
+      "Treat --limit as the scan budget"
+    ]
+  },
+  {
+    "id": "cross-record-conditions",
+    "skills": [
+      "retrieval"
+    ],
+    "fixture": "plugins/okf/skills/ontology/references/structured-authoring.md",
+    "setup": "Materialize the files under their backticked headings in a fresh bundle. Keep both norms unchanged.",
+    "prompt": "Does onboarding give Platform a 24-hour review deadline? Show the relevant obligation and explain the evidence.",
+    "pass": [
+      "Inspect the concrete norm or paired semantic edge",
+      "Report Platform has 72 hours and Security has 24 hours",
+      "Explain why two document-level filters do not establish one matching record"
+    ],
+    "fail": [
+      "Infer Platform has 24 hours because both filters match the document",
+      "Infer fulfillment from a declared obligation"
+    ]
+  },
+  {
+    "id": "nested-authoring",
+    "skills": [
+      "ontology"
+    ],
+    "fixture": "plugins/okf/skills/ontology/references/structured-authoring.md",
+    "setup": "Materialize the concept files only. Start ontology.yaml with okf_ontology: '0.1', concepts: {Team: {}, Procedure: {}}, and an unrelated x-owner: keep-me extension. Preserve a copy for comparison.",
+    "prompt": "Model the existing norms as reusable Deadline and Norm types with a ClosedNorm subtype, explicit bearer references to Team, and obliges/obligated-by relationships carrying action and deadline. Keep unrelated metadata. Apply and check the model.",
+    "pass": [
+      "Use ontology apply to introduce dependent structured declarations in one validated write",
+      "Preserve x-owner and existing concept bytes",
+      "Inspect effective inherited fields",
+      "Validate and lint, then check paired edge attributes and inverse backlinks"
+    ],
+    "fail": [
+      "Treat structured ontology authoring as unsupported by the CLI",
+      "Flatten nested objects into strings",
+      "Drop unknown extensions",
+      "Rewrite concepts merely to clear advisory lint"
+    ]
+  },
+  {
+    "id": "scoped-cross-bundle",
+    "skills": [
+      "init",
+      "retrieval"
+    ],
+    "fixture": "plugins/okf/skills/init/references/multi-bundle.md",
+    "setup": "Materialize the catalog/config and concepts from the file headings in a fresh workspace. Register a third unavailable acme.unrelated root to detect unnecessary traversal.",
+    "prompt": "Check which finance margin standard the product revenue metric uses. Inspect only product and finance and report source resolution and examined scope.",
+    "pass": [
+      "Select the product identity explicitly",
+      "Add finance scope explicitly",
+      "Resolve resource and bundle_ref to the same finance concept",
+      "Report product and finance as examined; exclude unrelated",
+      "Keep out-of-scope status distinct from missing before expansion"
+    ],
+    "fail": [
+      "Use catalog-wide traversal despite the named scope",
+      "Match targets by title alone",
+      "Treat successful resolution as document verification"
+    ]
+  },
+  {
+    "id": "expansion-and-pagination-cost",
+    "skills": [
+      "retrieval",
+      "infer-ontology"
+    ],
+    "fixture": "plugins/okf/skills/ontology/references/structured-authoring.md",
+    "setup": "Materialize the structured example. For bounded-output diagnostics first query with expansion-targets=1 and limit=1, then request complete related metadata. Also compare offset pages with the same full scan.",
+    "prompt": "List the teams assigned onboarding reviews and their deadlines. Retrieve only the related metadata needed, and explain any missing context. If you page the inventory, account for the cost and completeness.",
+    "pass": [
+      "Use selected obligations expansion with target fields when metadata suffices",
+      "Inspect expansion completeness independently of the primary scan",
+      "Recover or report the omitted target",
+      "Preserve paired deadlines",
+      "Recognize each offset request rescans and avoid tiny pages for exhaustive aggregation"
+    ],
+    "fail": [
+      "Report one team as the complete answer after expansion truncation",
+      "Assume full-scan removes expansion bounds",
+      "Claim page size reduces examined documents"
+    ]
+  },
+  {
+    "id": "resumable-structured-migration",
+    "skills": [
+      "migrate"
+    ],
+    "fixture": "plugins/okf/skills/migrate/references/multi-bundle-migration.md",
+    "setup": "Materialize the starting files. Migrate legacy/product.md into acme.product:/notes/shared, record its completed bytes and source version in a local ledger, then interrupt before finance creation. Leave finance pending. Retain source and recovery copies.",
+    "prompt": "Resume the migration into product and finance, with both source files targeting notes/shared in their respective bundles. Rename requirements to relations, declare its policy references, preserve paired deadlines and opaque extensions, reconnect links, and retain original-document provenance. Skip unchanged completed work. Check fidelity and report acceptance by bundle and ledger row.",
+    "pass": [
+      "Use bundle-qualified destination keys despite colliding concept paths",
+      "Reconcile persisted ledger with current source/destination bytes before resuming",
+      "Create pending finance destination without rewriting completed product or duplicating sources",
+      "Preserve false, string-valued numbers, null, empty list, and opaque path strings",
+      "Rebase declared references and body fragments while retaining paired 24/72 deadlines",
+      "Validate each destination, lint explicit combined scope, and reconcile complete inventory and source mappings",
+      "Retain unresolved snapshot expectations rather than silently accepting candidates when present"
+    ],
+    "fail": [
+      "Overwrite completed or intervening user edits",
+      "Collapse two occurrences because they share a target",
+      "Rebase opaque path-looking extensions",
+      "Replace original provenance with migrated copies",
+      "Infer migration fidelity solely from validation or counts"
+    ]
+  },
+  {
+    "id": "structured-mutation",
+    "skills": [
+      "update",
+      "init",
+      "ontology"
+    ],
+    "setup": "Create a concept with structured metadata and an unrelated extension. Preview object-path assignment, apply a guarded list patch, and attempt a failing test operation.",
+    "prompt": "Change the deadline, append another norm, and preserve unrelated data. Preview the changes and ensure a failed guard leaves all content unchanged.",
+    "pass": [
+      "Use --set-yaml for whole values and --set-path for object-only traversal",
+      "Preview without persistence",
+      "Use concrete JSON Pointer list edits with a test guard",
+      "Preserve unrelated metadata and body; failed patches do not write"
+    ],
+    "fail": [
+      "Treat dotted --set as traversal",
+      "Use query [] selectors for writes",
+      "Partially persist a failed patch"
+    ]
+  }
+]

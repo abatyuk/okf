@@ -4,11 +4,11 @@ title: okf-core crate
 description: The deterministic core library.
 layer: core
 sources:
-- resource: ../crates/okf-core/src/lib.rs
+- resource: crates/okf-core/src/lib.rs
   kind: git-path
   fingerprint:
-    blob_sha: 0bd605e6c2ec6096e61f1c37e2435e21e8bd93ef
-last_modified: 2026-09-07T18:47:09Z
+    blob_sha: 90fbc9075e106be68d4219d62f48d86bbe555e0a
+last_modified: 2026-10-04T20:39:29Z
 ---
 # okf-core crate
 

@@ -34,7 +34,11 @@ Producer rubric:
    inspected evidence. Use an ontology only as advisory classification; unknown types remain valid
    OKF.
 3. Search the target for existing concepts using `okf search <bundle> --text "topic" --limit 10` and
-   inspect plausible matches. Update an existing concept when appropriate; do not duplicate it. Stop
+   inspect plausible matches. Resolve bundle identity/scope before searching; consult each selected
+   bundle's effective ontology when authoring structured fields. Check scan warnings before deciding
+   there is no existing equivalent: an incomplete scan requires a sufficient `--scan-limit`, a
+   deliberate `--full-scan`, or an explicitly unresolved duplicate check. `--limit` does not bound
+   scan work. Update an existing concept when appropriate; do not duplicate it. Stop
    research when the requested concepts and their material claims have adequate evidence; report
    unresolved points rather than expanding to unrelated subsystems. Add new concepts with `okf add
    <path> <bundle> --type <Type> --body @/tmp/concept-body.md` (Markdown body only, no
@@ -47,7 +51,11 @@ Producer rubric:
    matching Markdown footnotes for per-claim attribution. Add credibility or usage fields only from
    evidence. `kind`/`fingerprint` may be added for local drift tracking. Having sources is a
    recommended ingest policy when known, not an OKF conformance rule.
-5. Use direct Markdown links for portable relationships. Ontology reference fields may add a local
+5. For nested metadata, use the ontology skill's
+   [structured authoring example](../ontology/references/structured-authoring.md) and preserve
+   current provenance with `--set-yaml`, object `--set-path`, or concrete `--patch` operations. Cross-bundle
+   source mappings follow the init skill's [catalog example](../init/references/multi-bundle.md).
+   Use direct Markdown links for portable relationships. Ontology reference fields may add a local
    typed view but must not replace standard links or source lineage. Spot-check authored edges with
    `okf links <concept-id> <bundle> --json` so normalized targets and missing concepts are visible
    without traversing the whole graph.
@@ -86,3 +94,19 @@ them. This command does not execute artifacts or grant permission to copy extern
 
 Report created/updated/skipped concepts, source evidence, validation, and any unresolved scope.
 Include optional extensions or copied artifacts only when used.
+
+## Bundle identity and examination scope
+
+Keep bundle paths and catalog IDs distinct. `OKF_BUNDLE` always selects a path; use the
+`--bundle-id <id>` for a registered identity. When a catalog is configured, use `okf catalog` to inspect effective local
+registrations, overrides, availability, and per-bundle settings. Catalog paths are relative to
+`okf.toml`, locations are relative to the catalog, and machine-local overrides change effective
+locations rather than accepting different snapshots. Inspect effective settings before relying on
+a per-bundle ontology or view. Equal or nested registered roots are configuration errors.
+
+Registration alone does not authorize catalog-wide traversal. Start with the selected bundle;
+request additional bundles explicitly with repeatable `--scope-bundle <id>` or deliberate
+`--catalog-scope` when the task requires them. Report requested and examined
+scope and unavailable members. Out-of-scope references remain unknown. Ordinary relative paths
+retain their meaning across registered boundaries; distributing one bundle alone can break them.
+Never infer another bundle from a matching filename or title.

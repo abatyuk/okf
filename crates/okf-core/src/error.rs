@@ -25,6 +25,31 @@ pub enum OkfError {
 }
 
 impl OkfError {
+    /// Add the failing file without changing the error's exit class.
+    pub fn at_path(self, path: &std::path::Path) -> Self {
+        let context = |message| format!("{}: {message}", path.display());
+        match self {
+            Self::Usage(message) => Self::Usage(context(message)),
+            Self::Environment(message) => Self::Environment(context(message)),
+            Self::Io(message) => Self::Io(context(message)),
+            Self::Yaml(message) => Self::Yaml(context(message)),
+            Self::Internal(message) => Self::Internal(context(message)),
+        }
+    }
+
+    /// Combine YAML failures from the files actually examined during a bundle load.
+    pub fn yaml_files(messages: Vec<String>) -> Self {
+        Self::Yaml(if messages.len() == 1 {
+            messages.into_iter().next().unwrap()
+        } else {
+            format!(
+                "{} concept files failed to parse:\n{}",
+                messages.len(),
+                messages.join("\n")
+            )
+        })
+    }
+
     /// Exit class per ARCHITECTURE.md / INTENT.md.
     pub fn exit_code(&self) -> i32 {
         match self {

@@ -12,6 +12,7 @@ use crate::error::{OkfError, Result};
 use crate::graph::backlinks::backlinks_of;
 use crate::model::concept::ConceptId;
 use crate::ontology::load::try_load;
+use crate::ontology::schema::Ontology;
 
 use super::edit::id_to_path;
 
@@ -29,6 +30,17 @@ pub struct RmResult {
 /// Remove the concept `id` from the bundle at `root`. Refuses (error) if backlinks exist and
 /// `force` is false.
 pub fn rm(root: &Path, id: &str, force: bool) -> Result<RmResult> {
+    let ontology = try_load(root)?;
+    rm_with_ontology(root, id, force, ontology.as_ref())
+}
+
+/// Remove with a selected ontology, including an explicitly configured sidecar.
+pub fn rm_with_ontology(
+    root: &Path,
+    id: &str,
+    force: bool,
+    ontology: Option<&Ontology>,
+) -> Result<RmResult> {
     let cid = ConceptId::parse(id)?;
     let path = id_to_path(root, &cid)?;
     if !path.exists() {
@@ -39,8 +51,7 @@ pub fn rm(root: &Path, id: &str, force: bool) -> Result<RmResult> {
     }
 
     let bundle = load_bundle(root)?;
-    let ontology = try_load(root)?;
-    let referrers = backlinks_of(&bundle, ontology.as_ref(), &cid.0);
+    let referrers = backlinks_of(&bundle, ontology, &cid.0);
 
     if !referrers.is_empty() && !force {
         let names: Vec<&str> = referrers.iter().map(|c| c.0.as_str()).collect();

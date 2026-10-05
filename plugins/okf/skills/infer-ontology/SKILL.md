@@ -20,8 +20,15 @@ the reference before choosing other types or cardinalities.
 
 ## Workflow
 
-1. Enumerate with `okf list <bundle> --json` and `okf stats <bundle>`. Aggregate frontmatter
-   occurrence counts from the inventory instead of opening every body. Preserve exact type strings.
+1. Select the bundle and necessary examination scope, inspecting each bundle's own effective
+   ontology/settings. Enumerate with `okf list <bundle> --json` and `okf stats <bundle>`. Check
+   query summaries/warnings before treating list output as an inventory: the default scan budget
+   is 1,000 documents, and `--limit` only limits returned hits. For whole-scope inference, complete
+   the scan with a sufficient `--scan-limit` or deliberate `--full-scan`; otherwise label all counts
+   as sampled/observed. An incomplete scan has no authoritative offset continuation. Aggregate
+   complete metadata streams locally instead of loading every record or repeatedly scanning tiny
+   offset pages. Use facets for candidate scalar vocabularies and projections for relevant nested
+   records; inspect exclusions and truncation independently. Preserve exact type strings.
 2. Open bodies only to clarify field meaning, relationships, or exceptions. For each candidate,
    report the count with the field, the total concepts of that type, and any narrower sample
    inspected; do not report a sample count as whole-bundle support. Separate standard
@@ -38,7 +45,11 @@ the reference before choosing other types or cardinalities.
    establish an intended `required` rule. Use user-supplied domain requirements for that choice;
    otherwise propose it as optional or leave the requirement unresolved. Apply rules already
    authorized by the request; seek confirmation only for remaining consequential semantic choices.
-6. Apply approved rules with `okf ontology add` or `okf ontology update`, then run `okf validate
+6. Apply approved scalar or structured rules with `okf ontology add` or `okf ontology update`. For reusable nested
+   types, selectors, and relationships, follow the ontology skill's
+   [structured authoring example](../ontology/references/structured-authoring.md): preserve current
+   bytes, preview structured CLI changes, inspect effective definitions, and review unknown-key preservation.
+   Then run `okf validate
    <bundle>` and `okf lint <bundle> --fail-on never`. Report portable validation separately from
    ontology fit; loosen unsupported rules instead of rewriting the bundle automatically.
 
@@ -49,3 +60,27 @@ needed. Reading a resource never authorizes execution.
 
 Report exact types, built-in fields/contracts excluded from inference, custom rules with evidence,
 user decisions, and remaining advisory findings.
+
+## Bundle identity and examination scope
+
+Keep bundle paths and catalog IDs distinct. `OKF_BUNDLE` always selects a path; use the
+`--bundle-id <id>` for a registered identity. When a catalog is configured, use `okf catalog` to inspect effective local
+registrations, overrides, availability, and per-bundle settings. Catalog paths are relative to
+`okf.toml`, locations are relative to the catalog, and machine-local overrides change effective
+locations rather than accepting different snapshots. Inspect effective settings before relying on
+a per-bundle ontology or view. Equal or nested registered roots are configuration errors.
+
+Registration alone does not authorize catalog-wide traversal. Start with the selected bundle;
+request additional bundles explicitly with repeatable `--scope-bundle <id>` or deliberate
+`--catalog-scope` when the task requires them. Report requested and examined
+scope and unavailable members. Out-of-scope references remain unknown. Ordinary relative paths
+retain their meaning across registered boundaries; distributing one bundle alone can break them.
+Never infer another bundle from a matching filename or title.
+
+## Structured evidence
+
+Inspect recurring nested objects and lists before proposing reusable field types. Declare reference
+selectors only where source meaning establishes a concept relationship; path-like values alone do
+not suffice. Pair target, kind, and attributes within the same record. Report observed occurrence
+counts and candidate vocabularies; absence from a page or truncated facets does not establish a
+closed vocabulary. Inferred inverse names describe incoming assertions rather than target consent.

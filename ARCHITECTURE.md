@@ -39,8 +39,10 @@ okf-core/src/
 
   bundle/
     loader.rs         # walk dir → Vec<Concept>; reserved filenames (index.md/log.md)
-    resolve.rs        # bundle location: arg → config → env → cwd
-    config.rs         # okf config model
+    resolve.rs        # explicit path/ID → env path → containing registration → default → sole/cwd
+    config.rs         # typed defaults and per-bundle tool settings
+    catalog.rs        # namespaced IDs, local locations and overrides, overlap checks
+    context.rs        # selected bundle + catalog/config context; scope remains explicit
 
   parse/
     markdown.rs       # split frontmatter/body; heading tree; section extraction
@@ -78,7 +80,8 @@ okf-core/src/
     browse.rs         # index.md traversal; synthesize a directory view when absent
     artifact.rs       # references/ + general path resolution and bounded retrieval
     computation.rs    # Attested Computation contract inspection (never execution)
-    search.rs         # search + list (list = search, no filter)
+    search.rs         # text search + list, preserving existing literal-key filters
+    selector.rs       # YAML selectors with explicit list traversal and occurrence paths
     show.rs
     resolve.rs        # link/id → path
     stats.rs
@@ -173,3 +176,32 @@ okf-cli/src/
 - **Git: CLI, not a library.** No `gix` / `git2` dependency; shell out to the `git` CLI via
   `ports::git`, runtime-optional (git-based source kinds and `okf diff` only). See
   Dependencies above.
+
+## Catalog and structured interpretation
+
+Catalog identity and examination scope are tool context above ordinary OKF directories. A primary
+bundle is selected independently from the registered bundles examined by a graph or check.
+Available local roots are canonicalized and overlap is rejected; unavailable material is reported.
+Ordinary references retain path semantics. Resolution evidence, snapshot satisfaction, and current
+candidate content remain separate; none creates a verification event or accepts source drift.
+
+Structured metadata uses a small shared YAML selector parser and walker rather than an executable
+query engine. Occurrence paths keep reference targets, semantic kinds, and relationship attributes
+paired within the same list record. Each examined bundle uses its own effective ontology/settings.
+Recursive ontology lint remains advisory and reports unsupported constraints or incomplete checks.
+Views and projections are computed output surfaces; authored unknown metadata remains preserved.
+Facets and pages retain scan completeness, and expansion is bounded by edges, targets, and bytes.
+Index coverage reads resolved navigation links without rewriting indexes.
+
+Structured mutation inputs share a strict single-document YAML reader, including JSON syntax,
+with duplicate/non-string keys, tags, aliases, and multiple stdin consumers rejected. Object-path
+sets create intermediate maps; RFC 6902 patches address concrete frontmatter values and preflight
+all operations before writing. Meaningful edits retain existing lifecycle invalidation behavior.
+Ontology structured inputs replace named declarations and retain omitted declarations. Bulk apply
+validates the complete prospective sidecar before one write; reusable field-type updates replace
+a whole definition. Dry-run previews use the same preflight without persistence. Presentation can
+normalize, so preserving unrelated meaning is distinct from exact YAML byte preservation.
+
+Moves must not silently strand declared nested references. General structured-reference rewriting
+and cross-bundle move transactions remain deferred. Artifact containment and inspect-only computation
+semantics remain independent from cross-bundle concept traversal.

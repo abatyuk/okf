@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 
 use serde_yaml::Value;
 
+use super::structured::StructuredEdits;
 use crate::check::validate::validate_document;
 use crate::error::{OkfError, Result};
 use crate::model::concept::{Concept, ConceptId};
@@ -68,16 +69,26 @@ pub(crate) fn load_concept(root: &Path, id: &ConceptId) -> Result<Concept> {
     let path = id_to_path(root, id)?;
     let content = std::fs::read_to_string(&path)
         .map_err(|e| OkfError::Environment(format!("cannot read {}: {e}", path.display())))?;
-    parse_concept(id.clone(), &content)
+    parse_concept(id.clone(), &content).map_err(|error| error.at_path(&path))
 }
 
 /// Serialize `concept` semantically and atomically write its validated id-derived path.
 pub(crate) fn save_concept(root: &Path, concept: &Concept) -> Result<PathBuf> {
     let path = id_to_path(root, &concept.id)?;
+    let text = render_validated(root, concept)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| OkfError::Io(format!("{}: {e}", parent.display())))?;
     }
+    let temp = path.with_extension("md.okf-tmp");
+    std::fs::write(&temp, text).map_err(|e| OkfError::Io(format!("{}: {e}", temp.display())))?;
+    std::fs::rename(&temp, &path).map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
+    Ok(path)
+}
+
+/// Render through the exact validation used by normal and preview writes.
+pub(crate) fn render_validated(root: &Path, concept: &Concept) -> Result<String> {
+    let path = id_to_path(root, &concept.id)?;
     let text = write_concept(concept)?;
     let rel = path
         .strip_prefix(root)
@@ -95,16 +106,17 @@ pub(crate) fn save_concept(root: &Path, concept: &Concept) -> Result<PathBuf> {
                 .join(", ")
         )));
     }
-    let temp = path.with_extension("md.okf-tmp");
-    std::fs::write(&temp, text).map_err(|e| OkfError::Io(format!("{}: {e}", temp.display())))?;
-    std::fs::rename(&temp, &path).map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
-    Ok(path)
+    Ok(text)
 }
 
 /// A batch of edits to apply to one concept in a single, deterministic pass. Empty by default;
 /// callers fill the fields for the operations they want.
 #[derive(Debug, Default, Clone)]
 pub struct EditSpec {
+    /// Typed YAML assignments, object paths, and JSON Patch operations.
+    pub structured: StructuredEdits,
+    /// Validate and render without writing.
+    pub dry_run: bool,
     /// `--set key=value`: set/update a scalar field.
     pub sets: Vec<(String, String)>,
     /// `--unset key`: remove a field.
@@ -140,7 +152,8 @@ pub struct EditSpec {
 impl EditSpec {
     /// True when no operation is requested.
     pub fn is_empty(&self) -> bool {
-        self.sets.is_empty()
+        self.structured.is_empty()
+            && self.sets.is_empty()
             && self.unsets.is_empty()
             && self.adds.is_empty()
             && self.removes.is_empty()
@@ -167,6 +180,8 @@ pub struct SourceSelector {
 /// One applied change, for reporting (text summary + `--json` detail).
 #[derive(Debug, Clone, PartialEq)]
 pub enum EditChange {
+    /// Structured metadata assignments or patch operations were requested.
+    Structured,
     /// A scalar field set; `existed` is whether it was updated in place vs. appended.
     Set { key: String, existed: bool },
     /// A field removed; `existed` is whether it was present.
@@ -205,6 +220,10 @@ pub struct EditResult {
     pub id: ConceptId,
     pub path: PathBuf,
     pub changes: Vec<EditChange>,
+    /// Original bytes and validated output, suitable for a preview diff.
+    pub before: String,
+    pub after: String,
+    pub dry_run: bool,
 }
 
 /// Parse a scalar `key=value` string into a YAML value, conservatively: bool, canonical
@@ -320,7 +339,21 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
     if spec.is_empty() {
         return Err(OkfError::Usage("edit: no operations specified".to_string()));
     }
+    let mut legacy_keys: Vec<String> = spec
+        .sets
+        .iter()
+        .chain(&spec.adds)
+        .chain(&spec.removes)
+        .map(|(key, _)| key.clone())
+        .chain(spec.unsets.iter().cloned())
+        .collect();
+    if !spec.add_sources.is_empty() || !spec.remove_sources.is_empty() {
+        legacy_keys.push("sources".into());
+    }
+    spec.structured.validate_conflicts(&legacy_keys)?;
     let cid = ConceptId::parse(id)?;
+    let before = std::fs::read_to_string(id_to_path(root, &cid)?)
+        .map_err(|e| OkfError::Environment(format!("cannot read concept: {e}")))?;
     let mut concept = load_concept(root, &cid)?;
     let original_frontmatter = concept.frontmatter.clone();
     let original_body = concept.body.clone();
@@ -377,6 +410,11 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
             key: "sources".to_string(),
             removed,
         });
+    }
+
+    if !spec.structured.is_empty() {
+        spec.structured.apply(&mut concept.frontmatter)?;
+        changes.push(EditChange::Structured);
     }
 
     if spec.clear_body {
@@ -460,11 +498,19 @@ pub fn edit(root: &Path, id: &str, spec: &EditSpec) -> Result<EditResult> {
         }
     }
 
-    let path = save_concept(root, &concept)?;
+    let after = render_validated(root, &concept)?;
+    let path = if spec.dry_run {
+        id_to_path(root, &cid)?
+    } else {
+        save_concept(root, &concept)?
+    };
     Ok(EditResult {
         id: cid,
         path,
         changes,
+        before,
+        after,
+        dry_run: spec.dry_run,
     })
 }
 

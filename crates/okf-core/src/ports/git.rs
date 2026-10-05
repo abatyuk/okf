@@ -70,6 +70,13 @@ pub trait Git {
 pub struct RealGit;
 
 impl RealGit {
+    /// All Git reads use locally available objects, even in a partial clone.
+    fn local_command() -> Command {
+        let mut command = Command::new("git");
+        command.env("GIT_NO_LAZY_FETCH", "1");
+        command
+    }
+
     fn run(cmd: &mut Command) -> Result<std::process::Output> {
         match cmd.output() {
             Ok(out) if out.status.success() => Ok(out),
@@ -87,7 +94,7 @@ impl RealGit {
     fn repo_path(path: &Path) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
         let anchor = path.parent().unwrap_or_else(|| Path::new("."));
         let out = Self::run(
-            Command::new("git")
+            Self::local_command()
                 .arg("-C")
                 .arg(anchor)
                 .args(["rev-parse", "--show-toplevel"]),
@@ -129,7 +136,7 @@ impl RealGit {
 impl Git for RealGit {
     fn worktree_root(&self, anchor: &Path) -> Result<std::path::PathBuf> {
         let out = Self::run(
-            Command::new("git")
+            Self::local_command()
                 .arg("-C")
                 .arg(anchor)
                 .args(["rev-parse", "--show-toplevel"]),
@@ -146,7 +153,7 @@ impl Git for RealGit {
     fn hash_object_in(&self, root: &Path, path: &Path) -> Result<String> {
         let relative = Self::relative_to(root, path)?;
         let out = Self::run(
-            Command::new("git")
+            Self::local_command()
                 .arg("-C")
                 .arg(root)
                 .arg("hash-object")
@@ -183,7 +190,7 @@ impl Git for RealGit {
         if relative.is_empty() {
             return results.into_iter().map(Option::unwrap).collect();
         }
-        let mut child = match Command::new("git")
+        let mut child = match Self::local_command()
             .arg("-C")
             .arg(root)
             .args(["hash-object", "--stdin-paths"])
@@ -273,7 +280,7 @@ impl Git for RealGit {
     fn last_commit_in(&self, root: &Path, path: &Path) -> Result<String> {
         let relative = Self::relative_to(root, path)?;
         let out = Self::run(
-            Command::new("git")
+            Self::local_command()
                 .arg("-C")
                 .arg(root)
                 .args(["log", "-1", "--format=%H", "--"])
@@ -305,7 +312,7 @@ impl Git for RealGit {
             return results.into_iter().map(Option::unwrap).collect();
         }
         let output = Self::run(
-            Command::new("git")
+            Self::local_command()
                 .arg("-C")
                 .arg(root)
                 .args([
@@ -360,7 +367,7 @@ impl Git for RealGit {
 
     fn show(&self, rev: &str, path: &Path) -> Result<Vec<u8>> {
         let spec = format!("{rev}:{}", path.display());
-        let out = Self::run(Command::new("git").arg("show").arg(&spec))?;
+        let out = Self::run(Self::local_command().arg("show").arg(&spec))?;
         Ok(out.stdout)
     }
 
@@ -368,7 +375,7 @@ impl Git for RealGit {
         if paths.is_empty() {
             return Ok(Vec::new());
         }
-        let mut child = Command::new("git")
+        let mut child = Self::local_command()
             .arg("-C")
             .arg(root)
             .args(["cat-file", "--batch"])
@@ -440,7 +447,7 @@ impl Git for RealGit {
     }
 
     fn ls_tree(&self, rev: &str) -> Result<Vec<String>> {
-        let out = Self::run(Command::new("git").args(["ls-tree", "-r", "--name-only", rev]))?;
+        let out = Self::run(Self::local_command().args(["ls-tree", "-r", "--name-only", rev]))?;
         Ok(String::from_utf8_lossy(&out.stdout)
             .lines()
             .map(str::to_string)
@@ -448,7 +455,7 @@ impl Git for RealGit {
     }
 
     fn ls_tree_in(&self, root: &Path, rev: &str, prefix: &Path) -> Result<Vec<String>> {
-        let mut command = Command::new("git");
+        let mut command = Self::local_command();
         command
             .arg("-C")
             .arg(root)

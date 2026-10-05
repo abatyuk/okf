@@ -10,7 +10,7 @@
 //! [`ontology::check_concept`]: crate::ontology::field_types::check_concept
 use crate::check::lint::{Finding, RuleContext};
 use crate::model::link::resolve_link;
-use crate::ontology::field_types::check_concept;
+use crate::ontology::field_types::check_concept_with_budget;
 
 /// Rule identifier.
 pub const RULE: &str = "ontology-violation";
@@ -31,8 +31,25 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
                 .and_then(|c| c.concept_type().map(str::to_string))
         };
 
-        for violation in check_concept(ontology, &concept.frontmatter, resolve_link_type) {
+        for violation in check_concept_with_budget(
+            ontology,
+            &concept.frontmatter,
+            resolve_link_type,
+            ctx.config.finding_budget,
+        ) {
             out.push(Finding {
+                code: match &violation.kind {
+                    crate::ontology::field_types::ViolationKind::Metadata { code, .. } => {
+                        Some(code.clone())
+                    }
+                    _ => None,
+                },
+                field_path: match &violation.kind {
+                    crate::ontology::field_types::ViolationKind::Metadata { path, .. } => {
+                        Some(path.clone())
+                    }
+                    _ => None,
+                },
                 rule: RULE.to_string(),
                 severity: ctx.config.ontology_violation,
                 concept: Some(concept.id.0.clone()),

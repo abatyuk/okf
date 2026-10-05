@@ -1,9 +1,9 @@
 # Component
 
-* [bundle module](bundle.md) - Bundle loading and location.
+* [bundle module](bundle.md) - Bundle loading, catalog identity, explicit selection and per-bundle interpretation settings.
 * [check module](check.md) - Conformance, optional-family, lifecycle, drift, and compatibility diagnostics.
 * [fingerprint module](fingerprint.md) - Source fingerprinting, dispatched on SourceKind: git-commit and git-path via the git CLI, line-range and markdown-heading over canonicalized text, and optional url fingerprints behind a feature flag.
-* [graph module](graph.md) - Forward and reverse adjacency built from concept links.
+* [graph module](graph.md) - Scoped forward and reverse adjacency from portable and declared structured references.
 * [model module](model.md) - In-memory domain types with no I/O: Concept, ConceptId, the order-preserving Frontmatter, trust types, source types, and Link parsing.
 * [mutate module](mutate.md) - Atomic, self-validating concept writes that preserve unknown YAML meaning and body text while applying bundle mutations.
 * [okf-cli crate](okf-cli.md) - The thin binary named okf.

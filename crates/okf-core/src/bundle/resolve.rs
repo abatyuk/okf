@@ -30,16 +30,31 @@ pub(crate) fn resolve_with(arg: Option<&str>, env: Option<&str>, cwd: &Path) -> 
 }
 
 fn resolve_target_with(arg: Option<&str>, env: Option<&str>, cwd: &Path) -> Result<PathBuf> {
+    // Preserve explicit/env path spelling for compatibility; catalog and typed defaults
+    // use the shared selection rules.
     if let Some(a) = arg {
         return Ok(PathBuf::from(a));
     }
     if let Some(e) = env {
         return Ok(PathBuf::from(e));
     }
-    if let Some(bundle) = config::config_bundle(cwd)? {
-        return Ok(bundle);
+    if let Some(path) = config::find_config(cwd) {
+        let cfg = config::load_config(&path)?;
+        if cfg.catalog.is_none() {
+            if let Some(bundle) = config::config_bundle(cwd)? {
+                return Ok(bundle);
+            }
+            if cfg.default_bundle.as_ref().is_some_and(|s| s.id.is_some()) {
+                return Err(OkfError::Usage("bundle ID requires a catalog".into()));
+            }
+            return Ok(cwd.to_path_buf());
+        }
+    } else {
+        return Ok(cwd.to_path_buf());
     }
-    Ok(cwd.to_path_buf())
+    Ok(super::context::resolve_context(None, None, None, cwd)?
+        .primary
+        .root)
 }
 
 fn validated(path: PathBuf) -> Result<PathBuf> {

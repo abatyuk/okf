@@ -3,10 +3,12 @@
 * [okf add](add.md) - Adds a new concept document, scaffolded from the ontology so required fields and reference keys start present.
 * [okf affected](affected.md) - Impact query: given a set of changed links, computes the blast radius of concepts that may need review via a reverse walk, direct by default or --transitive.
 * [okf artifact list](artifact-list.md) - Inventories concepts, reserved files, and opaque artifacts under a bundle directory such as references/.
+* [okf artifact put](artifact-put.md) - Creates or deliberately replaces an opaque local artifact without refreshing citing concepts.
 * [okf artifact resolve](artifact-resolve.md) - Resolves an OKF path-valued resource with declaring-concept context and containment checks.
 * [okf artifact show](artifact-show.md) - Retrieves a bounded local or explicitly authorized remote artifact without executing it.
 * [okf backlinks](backlinks.md) - Lists the concepts that link to a given concept, using the reverse adjacency from the graph.
 * [okf browse](browse.md) - Reads a directory's index.md for progressive disclosure, synthesizing it when absent.
+* [okf catalog](catalog.md) - Inspects configured and effective catalog locations, availability and bundle settings.
 * [okf computation check](computation-check.md) - Inspects an Attested Computation contract and its artifacts without executing the computation.
 * [okf diff](diff.md) - Concept-level diff of the working tree against a git ref: which concepts were added, removed, or changed.
 * [okf docs](docs.md) - Generates documentation from a bundle: progressive-disclosure index.md files, or html, md, pdf, graphml, or obsidian output via --format.
@@ -14,8 +16,8 @@
 * [okf edit](edit.md) - Losslessly edits a concept's frontmatter or body and invalidates its prior verification.
 * [okf graph](graph.md) - Renders the entire link graph or a direction- and depth-bounded neighborhood as mermaid, dot, or graphml.
 * [okf init](init.md) - Creates a new empty OKF bundle: base structure plus a starter ontology.yaml.
-* [okf lint](lint.md) - Advisory checks where the opinions live: broken links, missing descriptions, orphans, and ontology violations, at error/warn/info severities with a --fail-on threshold.
 * [okf links](links.md) - Lists the normalized direct concept links defined by one concept and reports whether each target exists.
+* [okf lint](lint.md) - Advisory checks where the opinions live: broken links, missing descriptions, orphans, and ontology violations, at error/warn/info severities with a --fail-on threshold.
 * [okf list](list.md) - Lists all concepts (search with no filter).
 * [okf mv](mv.md) - Moves or renames a concept and rewrites every inbound link.
 * [okf ontology add](ontology-add.md) - Defines a new concept type with its typed fields and reference rules, written to ontology.yaml through the lossless ontology editor.
@@ -36,3 +38,8 @@
 * [okf validate](validate.md) - Conformance validation: the spec's three hard rules only (parseable frontmatter, non-empty type, reserved-filename structure).
 * [okf verify](verify.md) - Appends a verified entry, the write side of trust, raising a concept's derived tier (unverified to machine-confirmed to human-reviewed).
 * [okf version](version.md) - Prints the CLI version and the OKF spec version(s) it supports.
+
+* [okf ontology apply](ontology-apply.md) - Applies dependent ontology declarations and explicit removals in one validated write.
+* [okf ontology field-type add](ontology-field-type-add.md) - Adds a reusable structured field type to the ontology.
+* [okf ontology field-type update](ontology-field-type-update.md) - Replaces an existing reusable structured field type definition.
+* [okf ontology field-type remove](ontology-field-type-remove.md) - Removes a reusable structured field type from the ontology.

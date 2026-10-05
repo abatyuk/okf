@@ -6,11 +6,11 @@ module: output
 defined_in:
 - /components/output
 sources:
-- resource: ../crates/okf-core/src/output/record.rs
+- resource: crates/okf-core/src/output/record.rs
   kind: git-path
   fingerprint:
-    blob_sha: 73e1e2469e27696da6e4919619917a6709cafbcf
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 3cb0820f0e1eaa08070e42adc897c4cf527988bc
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Concept record (NDJSON)
 
@@ -30,3 +30,7 @@ The machine representation of a [Concept](Concept.md): [Frontmatter](Frontmatter
   "verification_current": null
 }
 ```
+
+Multi-bundle query output emits a separate `concept-identity` record before legacy concept/search
+records. Qualified identity never overwrites authored `bundle` or `version` fields. Explicit
+projections are separate versioned records with authored null distinguished from missing values.

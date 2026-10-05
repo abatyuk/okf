@@ -15,7 +15,6 @@ use okf_core::check::validate::validate_bundle;
 use okf_core::error::{OkfError, Result};
 use okf_core::graph::affected::{affected, AffectedOptions};
 use okf_core::graph::build::build_graph;
-use okf_core::ontology::load::try_load;
 use okf_core::ports::git::RealGit;
 use okf_core::query::diff::diff;
 use okf_core::query::stats::stats;
@@ -102,9 +101,17 @@ pub fn run_validate(args: &BundleArgs, json: bool) -> Result<i32> {
 pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
-    let ontology = try_load(&root)?;
-    let config = LintConfig::default();
+    let (effective, ontology) = okf_core::bundle::settings::load_for(&root)?;
+    let config = lint_config(&effective.settings)?;
     let findings = lint_bundle(&bundle, ontology.as_ref(), &config);
+    let index_findings = okf_core::check::lint::rules::index_coverage::check_indexes(
+        &bundle,
+        &effective.settings.lint.index_exclude,
+    )?;
+    let index_severity = lint_severity(
+        effective.settings.lint.index_coverage.as_deref(),
+        okf_core::check::lint::Severity::Warn,
+    )?;
 
     if json {
         for f in &findings {
@@ -114,6 +121,9 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
                 "severity": f.severity.as_str(),
                 "concept": f.concept,
                 "message": f.message,
+                "code": f.code,
+                "field_path": f.field_path,
+                "bundle": effective.bundle,
             }))?;
         }
     } else {
@@ -131,6 +141,25 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
         }
     }
 
+    for finding in &index_findings {
+        if json {
+            let mut record =
+                serde_json::to_value(finding).map_err(|e| OkfError::Internal(e.to_string()))?;
+            record["kind"] = json!("finding");
+            record["rule"] = json!("index-coverage");
+            record["severity"] = json!(index_severity.as_str());
+            record["bundle"] = json!(effective.bundle);
+            output::print_line(&record)?;
+        } else {
+            output::print_text_line(format_args!(
+                "{}\tindex-coverage\t{}\t{}",
+                index_severity.as_str(),
+                finding.directory,
+                finding.message
+            ))?;
+        }
+    }
+
     // `--fix` is a documented v1 no-op: no lint rule is auto-fixable yet (core has no fixer).
     if args.fix && !json {
         eprintln!("--fix: 0 findings auto-fixable in v1 (no fixer implemented)");
@@ -140,11 +169,16 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
         Some(s) => FailOn::from_str(s)?,
         None => FailOn::default(), // error
     };
-    Ok(if meets_threshold(&findings, fail_on) {
-        1
-    } else {
-        0
-    })
+    Ok(
+        if meets_threshold(&findings, fail_on)
+            || (!index_findings.is_empty()
+                && fail_on.min_severity().is_some_and(|s| index_severity >= s))
+        {
+            1
+        } else {
+            0
+        },
+    )
 }
 
 /// `okf stale [bundle] [--fail-on <sev>]` — informational unless `--fail-on` is set.
@@ -195,7 +229,7 @@ pub fn run_stale(args: &FailOnArgs, json: bool) -> Result<i32> {
 pub fn run_affected(args: &AffectedArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
-    let ontology = try_load(&root)?;
+    let (_, ontology) = okf_core::bundle::settings::load_for(&root)?;
 
     let mut changed = args.changed.clone();
     // Also accept changed links piped on stdin (one per line), combined with `--changed`.
@@ -273,7 +307,7 @@ pub fn run_diff(args: &DiffArgs, json: bool) -> Result<i32> {
 pub fn run_stats(args: &FailOnArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
-    let ontology = try_load(&root)?;
+    let (_, ontology) = okf_core::bundle::settings::load_for(&root)?;
     let s = stats(&bundle, ontology.as_ref());
 
     if json {
@@ -377,4 +411,27 @@ pub fn run_doctor(args: &DoctorArgs, json_output: bool) -> Result<i32> {
         }
     }
     Ok(if report.ready() { 0 } else { 1 })
+}
+
+pub fn lint_severity(
+    value: Option<&str>,
+    fallback: okf_core::check::lint::Severity,
+) -> Result<okf_core::check::lint::Severity> {
+    use okf_core::check::lint::Severity;
+    match value {
+        None => Ok(fallback),
+        Some("info") => Ok(Severity::Info),
+        Some("warn") => Ok(Severity::Warn),
+        Some("error") => Ok(Severity::Error),
+        Some(value) => Err(OkfError::Usage(format!("invalid lint severity {value:?}"))),
+    }
+}
+pub fn lint_config(settings: &okf_core::bundle::settings::BundleSettings) -> Result<LintConfig> {
+    let mut config = LintConfig::default();
+    config.ontology_violation = lint_severity(
+        settings.lint.ontology_violation.as_deref(),
+        config.ontology_violation,
+    )?;
+    config.finding_budget = settings.lint.finding_budget.unwrap_or(1000);
+    Ok(config)
 }

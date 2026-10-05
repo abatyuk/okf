@@ -6,11 +6,11 @@ module: ontology
 defined_in:
 - /components/ontology
 sources:
-- resource: ../crates/okf-core/src/ontology/schema.rs
+- resource: crates/okf-core/src/ontology/schema.rs
   kind: git-path
   fingerprint:
-    blob_sha: 878335dafa46f950612887e5a0aad823f8a573a3
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 0b71d797088eff17079d10e830f2150a820f3bc5
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Cardinality
 

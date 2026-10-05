@@ -17,7 +17,11 @@ or rejects documented syntax, use that command's `--help` output as the runtime 
 ## Workflow
 
 1. Establish a recoverable baseline and record existing validation/lint findings. Inventory the
-   affected concepts with `okf list <bundle> --json` and direct links/backlinks. Use a rooted graph
+   affected concepts with `okf list <bundle> --json` and direct links/backlinks. Select necessary
+   cross-bundle scope before impact analysis. Check scan completeness before treating an inventory
+   as exhaustive; raise `--scan-limit` or deliberately use `--full-scan` when needed. Inspect detailed
+   semantic occurrences and cross-bundle consumers before applying the mapping; the CLI does not
+   rewrite nested references or orchestrate cross-bundle moves. Use a rooted graph
    only when relationships need explanation; avoid a full graph for a local move. Inventory
    supporting files with `okf artifact list <bundle>` only if affected.
 2. Design and review an explicit old-id → new-id mapping. Include inbound bare relative, `./`/`../`,
@@ -56,3 +60,27 @@ effects, index handling, and before/after validation.
 Artifact inventory defaults to `references/`. Use `okf artifact list <bundle> --directory
 <directory>` for another bundle-relative directory. The positional argument selects the bundle, not
 that directory.
+
+## Bundle identity and examination scope
+
+Keep bundle paths and catalog IDs distinct. `OKF_BUNDLE` always selects a path; use the
+`--bundle-id <id>` for a registered identity. When a catalog is configured, use `okf catalog` to inspect effective local
+registrations, overrides, availability, and per-bundle settings. Catalog paths are relative to
+`okf.toml`, locations are relative to the catalog, and machine-local overrides change effective
+locations rather than accepting different snapshots. Inspect effective settings before relying on
+a per-bundle ontology or view. Equal or nested registered roots are configuration errors.
+
+Registration alone does not authorize catalog-wide traversal. Start with the selected bundle;
+request additional bundles explicitly with repeatable `--scope-bundle <id>` or deliberate
+`--catalog-scope` when the task requires them. Report requested and examined
+scope and unavailable members. Out-of-scope references remain unknown. Ordinary relative paths
+retain their meaning across registered boundaries; distributing one bundle alone can break them.
+Never infer another bundle from a matching filename or title.
+
+## Structured and cross-bundle references
+
+Declared nested-reference rewriting and automatic cross-bundle move orchestration are deferred.
+Inspect relationship occurrence paths and all requested-scope backlinks before moving. If a move
+would leave a declared structured reference or another bundle's ordinary path stale, repair the
+reviewed references explicitly and inspect the combined diff. Do not imply that a single-bundle
+move repaired unexamined consumers. Index-coverage lint is read-only; preserve curated index prose.

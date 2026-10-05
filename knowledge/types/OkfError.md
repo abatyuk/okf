@@ -6,11 +6,11 @@ module: okf-core
 defined_in:
 - /components/okf-core
 sources:
-- resource: ../crates/okf-core/src/error.rs
+- resource: crates/okf-core/src/error.rs
   kind: git-path
   fingerprint:
-    blob_sha: c6d529332af5c9204af5fc744ee0b693297fb9fd
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 51f2175ca838cad34df206f4d7dcaed07e396938
+last_modified: 2026-10-04T20:39:29Z
 ---
 # OkfError
 
@@ -31,3 +31,5 @@ pub enum OkfError {
 ```
 
 Defined in `okf-core`.
+
+`at_path` prefixes diagnostics with the failing file while preserving the variant and exit code. `yaml_files` combines the malformed concept files examined in a bundle load into one YAML error; conformance validation continues to report separate per-file findings.

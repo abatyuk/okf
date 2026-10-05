@@ -136,7 +136,11 @@ deterministic foundation of the "update docs" skill.
 - `okf add <path>` — add a new concept document (scaffolded from the ontology).
   - `okf add policies/travel_expenses --type Policy --title "Travel and expense policy" --description "Rules and reimbursement rates for business travel."`
   - `okf add computations/mileage_calc --attested --runtime python --computation references/computations/mileage.py --title "Mileage reimbursement calculator"`
-- `okf edit <concept-id> --set <key>=<value>...` — set/update frontmatter fields losslessly.
+- `okf edit <concept-id> --set <key>=<value>...` — set/update literal scalar frontmatter fields.
+  `add/edit --set-yaml` assigns structured values and `--set-path` updates object properties.
+  `edit --unset-path` removes object properties; `--patch` applies RFC 6902 operations using
+  concrete JSON Pointer paths. Structured edits preserve unrelated meaning and body text;
+  YAML presentation may normalize. `--dry-run` previews the complete resulting change.
 - `okf mv <old-id> <new-id>` — move/rename a concept **and rewrite every inbound link**
   (concept ID = file path, so a naive rename silently breaks references).
 - `okf rm <concept-id>` — remove a concept; refuse (or warn) if backlinks would dangle unless `--force`.
@@ -147,7 +151,11 @@ deterministic foundation of the "update docs" skill.
 - `okf lint <bundle> --fix` — apply auto-fixable lint findings.
 - `okf ontology add <name> [--field ...] [--ref ...]` — define a new concept type with its
   fields and typed reference rules.
-- `okf ontology update <name> ...` — modify fields/references of an existing concept type.
+- `okf ontology update <name> ...` — modify fields, references, and semantic relationships;
+  structured YAML flags replace named declarations, and `--from` merges supplied declarations.
+- `okf ontology field-type add/update/remove <name>` — manage reusable nested definitions.
+- `okf ontology apply --from changes.yaml` — apply dependent definitions and explicit removals
+  together after validating the final sidecar; `--dry-run` previews without writes.
 - `okf ontology remove <name>` — remove a concept type.
 
 ### RENDER (derive output artifacts)
@@ -359,7 +367,7 @@ subsequent line describes one command. Every line is a standalone JSON object so
 stream and filter without a JSON-array parser.
 
 ```jsonl
-{"kind":"schema","tool":"okf","tool_version":"0.2.8","okf_spec":["0.2"],"ndjson_schema":"2","global_args":[{"name":"json","type":"bool","default":false}],"bundle_resolution":["explicit","env:OKF_BUNDLE","config:okf.toml","cwd"]}
+{"kind":"schema","tool":"okf","tool_version":"0.3.1","okf_spec":["0.2"],"ndjson_schema":"2","global_args":[{"name":"json","type":"bool","default":false}],"bundle_resolution":["explicit","env:OKF_BUNDLE","config:okf.toml","cwd"]}
 {"kind":"command","name":"list","group":"query","mutates":false,"mutates_when":null,"summary":"List all concepts (search with no filter)","args":[{"name":"bundle","kind":"positional","type":"path","required":false,"repeatable":false,"default":null,"resolution":["explicit","env:OKF_BUNDLE","config:okf.toml","cwd"]}],"output":{"stream":"concept"}}
 ```
 
@@ -377,11 +385,32 @@ stream and filter without a JSON-array parser.
 
 ---
 
+Structured value authoring is settled: `add/edit --set-yaml` assigns YAML/JSON values,
+`--set-path` updates object properties, and `edit --patch` handles concrete nested/list edits.
+Existing `--set` retains literal scalar keys. `verify` remains the workflow for appending a real
+review event; structured value support does not justify fabricating verification.
+
 ## Open decisions (naming / contract — not yet settled)
 
 - **`--fail-on` severity vocabulary.** Confirm the accepted values (`never`/`info`/`warn`/
   `error`/`any`) and each check command's default threshold.
-- **`edit --set` typed values.** How do `--set key=value` args express non-scalars (lists,
-  the `verified`/`sources` structured families) on the CLI, or is that add-only via `verify`?
 - **`docs` external formats.** Which of html/pdf/graphml/obsidian are v1 vs later, and what
   renders them (pandoc dependency vs. pure-Rust)?
+
+
+## Local catalog and structured metadata capabilities
+
+The [multi-bundle capability](docs/multi-bundle-capability.md) and
+[structured metadata capability](docs/structured-metadata-capability.md) extend deterministic
+coordination and inspection while retaining the hands/brain boundary. Catalog IDs qualify paths,
+not claims of publisher authenticity. Explicit examination scope keeps result coverage honest.
+Ordinary resources retain their meaning; snapshot matches and current candidates are separate
+resolution evidence. Agents decide whether evidence justifies reconciliation, source refresh or
+review, using the packaged skills and their generated CLI references.
+
+Nested schemas and declared semantic relationships are optional local interpretation. YAML type
+checks do not establish truth, obligations do not establish compliance, and inverse backlinks do
+not author consent. Unknown metadata survives; conformance remains separate from advisory lint.
+Queries, facets, projections, expansion and index coverage are read-only. New CLI arguments remain
+machine-discoverable through `okf schema`, and the xtask generation workflow keeps command knowledge
+and focused skill references aligned with the implementation.

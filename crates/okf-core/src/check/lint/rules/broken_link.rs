@@ -10,8 +10,34 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
     let mut out = Vec::new();
     for concept in &ctx.bundle.concepts {
         for target in ctx.graph.outbound(&concept.id.0) {
-            if !ctx.graph.exists(&target.0) {
+            let explicit_nested = ctx
+                .ontology
+                .and_then(|o| concept.concept_type().and_then(|t| o.concepts.get(t)))
+                .is_some_and(|ct| {
+                    ct.references
+                        .iter()
+                        .filter_map(|(_, r)| r.selector.as_ref())
+                        .any(|raw| {
+                            let root =
+                                serde_yaml::to_value(&concept.frontmatter.map).unwrap_or_default();
+                            crate::query::selector::Selector::parse(raw)
+                                .ok()
+                                .is_some_and(|s| {
+                                    s.select(&root)
+                                        .leaves
+                                        .iter()
+                                        .filter_map(|o| o.value.as_str())
+                                        .any(|raw| {
+                                            crate::model::link::resolve_link(&concept.id, raw)
+                                                == *target
+                                        })
+                                })
+                        })
+                });
+            if !ctx.graph.exists(&target.0) && !explicit_nested {
                 out.push(Finding {
+                    code: None,
+                    field_path: None,
                     rule: RULE.to_string(),
                     severity: ctx.config.broken_link,
                     concept: Some(concept.id.0.clone()),

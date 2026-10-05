@@ -29,7 +29,8 @@ actual concept-content change. A concept may have more than one.
 
 ## Reconcile
 
-1. Inspect the concept with targeted `okf show` reads and the changed evidence. For a path-valued
+1. Resolve bundle identity and the requested consumer scope before affected analysis; use detailed
+   semantic occurrences for nested relationships and retain unknown consumers outside scope. Inspect the concept with targeted `okf show` reads and the changed evidence. For a path-valued
    source, use `okf artifact resolve <resource> <bundle> --from <concept-id>` and bounded `okf
    artifact show`; use `okf show` when it resolves to a concept. Use `okf links <concept-id>
    <bundle> --json` when the concept's direct outbound relationships may have changed.
@@ -39,7 +40,11 @@ actual concept-content change. A concept may have more than one.
    --set-section "Heading" @/tmp/section.md` for a section. Section edits take two values;
    body/section files contain prose, not frontmatter. A bare edit supplies no content change. The
    CLI updates existing `generated.at` and invalidates verification for meaningful edits; report the
-   need for `review-verify`.
+   need for `review-verify`. For nested data use `okf edit <concept-id> <bundle> --set-yaml
+   "details=@/tmp/details.yaml"`, `okf edit <concept-id> <bundle> --set-path "deadline.within=72"`,
+   or `okf edit <concept-id> <bundle> --patch @/tmp/changes.yaml --dry-run`. Follow the ontology
+   skill's [structured authoring example](../ontology/references/structured-authoring.md); review
+   replacement versus nested-edit semantics and preserve provenance.
 3. After checking changed sources against the final content, run `okf refresh <concept-id> <bundle>
    --fail-on skipped` if local fingerprints are in use. This applies after a substantive rewrite as
    well as after confirming unchanged content. Never refresh an unreviewed source merely to clear
@@ -80,3 +85,32 @@ them. This command does not execute artifacts or grant permission to copy extern
 
 Report changes, validation, and remaining evidence gaps. Include fingerprint-only refreshes,
 unchanged expiry, and verification consequences when relevant to this update.
+
+## Bundle identity and examination scope
+
+Keep bundle paths and catalog IDs distinct. `OKF_BUNDLE` always selects a path; use the
+`--bundle-id <id>` for a registered identity. When a catalog is configured, use `okf catalog` to inspect effective local
+registrations, overrides, availability, and per-bundle settings. Catalog paths are relative to
+`okf.toml`, locations are relative to the catalog, and machine-local overrides change effective
+locations rather than accepting different snapshots. Inspect effective settings before relying on
+a per-bundle ontology or view. Equal or nested registered roots are configuration errors.
+
+Registration alone does not authorize catalog-wide traversal. Start with the selected bundle;
+request additional bundles explicitly with repeatable `--scope-bundle <id>` or deliberate
+`--catalog-scope` when the task requires them. Report requested and examined
+scope and unavailable members. Out-of-scope references remain unknown. Ordinary relative paths
+retain their meaning across registered boundaries; distributing one bundle alone can break them.
+Never infer another bundle from a matching filename or title.
+
+## Scoped reconciliation
+
+Use explicit examination scope for cross-bundle affected analysis. Record which consumers remain
+outside scope; a clean result is not a global backlink inventory. Check both ordinary source
+resources and optional `bundle_ref` metadata, retaining known mismatches rather than redirecting
+resources. Review a labeled current candidate before intentionally changing an expectation;
+retrieval alone never accepts it. Snapshot resolution and fingerprint drift are separate findings.
+
+Re-run nested metadata and index-coverage lint after metadata or layout changes. Lint and query
+operations do not rewrite curated indexes. Use the declared selectors to locate affected records;
+use object paths or concrete JSON Pointer patches for writes, rather than list query selectors. Review the combined repository
+diff when changes span bundles; there is no automatic cross-bundle rename transaction.

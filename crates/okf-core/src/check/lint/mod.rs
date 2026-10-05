@@ -38,6 +38,8 @@ impl Severity {
 #[derive(Debug, Clone)]
 pub struct Finding {
     pub rule: String,
+    pub code: Option<String>,
+    pub field_path: Option<String>,
     pub severity: Severity,
     pub concept: Option<String>,
     pub message: String,
@@ -118,6 +120,7 @@ pub struct LintConfig {
     pub missing_description: Severity,
     pub orphan: Severity,
     pub ontology_violation: Severity,
+    pub finding_budget: usize,
     pub spec_v02: Severity,
     pub source_unrecorded: Severity,
     pub source_missing: Severity,
@@ -131,6 +134,7 @@ impl Default for LintConfig {
             missing_description: Severity::Info,
             orphan: Severity::Info,
             ontology_violation: Severity::Warn,
+            finding_budget: 1000,
             spec_v02: Severity::Warn,
             source_unrecorded: Severity::Warn,
             source_missing: Severity::Error,
@@ -180,6 +184,8 @@ mod tests {
 
     fn finding(sev: Severity) -> Finding {
         Finding {
+            code: None,
+            field_path: None,
             rule: "x".to_string(),
             severity: sev,
             concept: None,

@@ -3,7 +3,7 @@
 //! Tasks:
 //!   docs            Regenerate the schema-derived docs (writes files).
 //!   docs --check    Verify they are up to date; exit 1 if regeneration would change anything.
-//!   skills          Validate authored skills against the current CLI schema and generated docs.
+//!   skills          Validate skills/docs and execute example workflow scenarios.
 //!   build [args…]   `cargo build [args…]`, then regenerate the docs.
 //!   install         `cargo install --path crates/okf-cli --force`, then regenerate the docs.
 //!
@@ -35,6 +35,18 @@ fn main() {
         Some("skills") => {
             run_skill_checks();
             run_docs(true);
+            cargo(
+                &root,
+                &[
+                    "test",
+                    "-p",
+                    "okf-cli",
+                    "--test",
+                    "skill_workflows",
+                    "--",
+                    "--nocapture",
+                ],
+            );
         }
         Some("build") => {
             let mut cargo_args = vec!["build"];
@@ -112,8 +124,9 @@ fn run_docs(check: bool) {
         let invocation_note = if cmd["name"] == "schema" {
             "This command is always NDJSON; `--json` is accepted but unnecessary."
         } else if has_bundle {
-            "Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves \
-             as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd."
+            "Global `--json` requests NDJSON. The optional trailing `bundle` positional is a path; \
+             `--bundle-id` selects a catalog identity. Selection uses explicit path or ID, `$OKF_BUNDLE` (path), registered containing bundle, configured \
+             default, sole catalog entry, then uncataloged cwd. Selection and examination scope are separate."
         } else {
             "Global `--json` requests NDJSON."
         };
@@ -354,14 +367,52 @@ fn cli_reference(header: &Value, commands: &[&Value], skill: Option<&str>) -> St
     }
     out.push_str(
         "Commands with a human form accept global `--json` for NDJSON; `schema` is always \
-         NDJSON. Bundle-aware commands take an optional trailing `bundle` positional resolved as \
-         explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd. Meta commands have no \
-         bundle, and `source-scan` takes an explicit arbitrary directory.\n\n\
+         NDJSON. Bundle-aware commands take an optional trailing `bundle` path or a separate \
+         `--bundle-id` selector. Selection uses explicit path or ID, `$OKF_BUNDLE` (path), registered containing bundle, configured \
+         default, sole catalog entry, then uncataloged cwd. Catalog registration alone does not \
+         extend examination scope. Meta commands have no bundle, and `source-scan` takes an \
+         explicit arbitrary directory.\n\n\
          Exit codes: 0 means success under the selected failure threshold, not necessarily no \
          findings; 1 means findings or an unsuccessful resolution; 2 means usage errors; \
          3 means environment/I/O/YAML errors; 4 means an internal error. Inspect findings even with \
          `--fail-on never`. NDJSON is one record per line, not a JSON array.\n\n",
     );
+
+    out.push_str("## Global arguments\n\n");
+    out.push_str(&args_table(
+        &serde_json::json!({"args": header["global_args"]}),
+    ));
+    out.push_str("\n\nScope defaults to the selected bundle. Use scope options only for graph, links, backlinks, \
+        resolve, affected, lint, search, and list; other commands reject additional scope. \
+        `--revision` supports graph, links, backlinks, resolve, affected, search, and list. Scope and \
+        effective settings are interpretation context, not authored concept metadata.\n\n");
+    if let Some(contracts) = header["output_records"].as_object() {
+        let streams: std::collections::BTreeSet<&str> = commands
+            .iter()
+            .filter_map(|command| command["output"]["stream"].as_str())
+            .flat_map(|stream| stream.split(','))
+            .collect();
+        let selected: serde_json::Map<String, Value> = contracts
+            .iter()
+            .filter(|(name, _)| {
+                skill.is_none()
+                    || streams.contains(name.as_str())
+                    || matches!(
+                        name.as_str(),
+                        "qualified_identity" | "scope" | "effective-settings"
+                    )
+            })
+            .map(|(name, shape)| (name.clone(), shape.clone()))
+            .collect();
+        if !selected.is_empty() {
+            out.push_str("## Extension record contracts\n\nAuthored concept metadata remains open. These computed records describe scope, identity, \
+                interpretation, and explicit query extensions. Missing and null remain distinct.\n\n```json\n");
+            out.push_str(
+                &serde_json::to_string_pretty(&selected).expect("record contracts serialize"),
+            );
+            out.push_str("\n```\n\n");
+        }
+    }
 
     let mut groups: Vec<&str> = GROUP_ORDER.to_vec();
     for c in commands {
@@ -425,14 +476,22 @@ fn command_guidance(name: &str) -> &'static str {
             with `--json` it returns a body record containing `id` and `body`. An outline or selected slice \
             does not establish complete document-review coverage.",
         "list" => "JSON records contain frontmatter and computed lifecycle/trust metadata, not bodies. \
-            Aggregate field occurrence counts from these records before opening prose. Inventory \
-            is unbounded; scope or filter the output before loading a large result into context.",
+            Aggregate field occurrence counts only after checking scan completeness and output warnings. \
+            The default scan budget is 1,000 eligible documents across scope; --limit bounds output, \
+            not scan work. For exhaustive inventory use a sufficient --scan-limit or deliberate \
+            --full-scan, and aggregate metadata locally rather than loading all records into context. \
+            Each offset invocation rescans; an incomplete scan has no authoritative continuation.",
         "search" => "The positional argument is the bundle, never query text. Text requires `--text`; \
             structured filters work without it. No filters means inventory. Text-search JSON \
             adds `search.score` and bounded `search.matches` to metadata records, not full bodies. \
             Structured-only search has no text-match evidence. `--in title,description` narrows \
             the default fields; adding `frontmatter` broadens them. Empty results exit successfully \
-            and establish only that this query found no matches.",
+            and establish only that this query found no matches. Check query-summary and warning records: \
+            incomplete scans cannot establish absence, exact totals, or globally ordered pages. \
+            --limit does not reduce scan work; offset requests rescan without shared query caches. \
+            Separate nested filters may match different list records; inspect concrete occurrences \
+            before attributing their combined conditions to one relationship. Expansion completeness \
+            and facet truncation are independent of primary scan completeness.",
         "artifact list" => "The positional path selects a bundle root relative to the current directory. \
             To filter within the selected bundle, use `--directory contracts/x`; printed paths remain \
             relative to the bundle root.",
@@ -488,21 +547,38 @@ fn command_guidance(name: &str) -> &'static str {
             `1..1` (exactly one), `0..n` (optional many), and `1..n` (at least one). For example, \
             `--field \"stage:enum:draft|active\"` declares choices and \
             `--ref \"depends_on:Service:0..n\"` permits zero or more Service links. Observed \
-            presence alone does not justify a required rule. These flags describe advisory local \
-            rules, not portable OKF conformance requirements.",
+            presence alone does not justify a required rule. Structured `--field-yaml`, `--ref-yaml`, \
+            and `--relationship-yaml` inputs replace complete named declarations. `--from` merges \
+            supplied declarations, retaining omitted ones; overlaps with flags fail. `--remove-relationship` \
+            deletes a named rule. YAML inputs accept inline values, `@file`, or `-`; JSON syntax works. \
+            Preview with `--dry-run`. These are advisory local rules, not conformance requirements.",
+        "ontology field-type add" | "ontology field-type update" | "ontology field-type remove" =>
+            "Reusable field types are ontology-wide definitions. Add/update `--from` accepts a whole \
+            definition; update replaces it completely. Inspect consumers before removal or tightening. \
+            `--dry-run` validates the proposed ontology without writing.",
+        "ontology apply" => "`--from` accepts `field_types` and `concepts` maps, merging named \
+            declarations and preserving omitted ones. Top-level `remove` has `field_types` and \
+            `concepts` lists; per-concept `remove` has `fields`, `references`, and `relationships` \
+            lists. Conflicting operations fail. The complete result validates before a single write. \
+            Use `--dry-run` for a preview; null and omission do not request deletion.",
         "add" => "Creation scaffolds a concept; `--body @file` supplies Markdown in the same write \
-            (literal text and `-` for stdin also work). Input failures leave no skeleton concept. \
+            (literal text and `-` for stdin also work). `--set-yaml key=value` sets structured YAML/JSON \
+            values, with `@file` or `-` input; `--set-path path=value` sets an object property and creates \
+            missing maps. Existing `--set` remains literal/scalar. `--dry-run` previews without writes. \
+            Input failures leave no skeleton concept. \
             `--generated-by` records the supplied actor and the CLI's current timestamp. Do not \
             invent a historical generation time or actor. For a requested computation only, \
             `--attested --runtime <runtime>` selects exact `Attested Computation`; declare actual \
             parameters with repeatable `--parameter name:type:required` (omit `:required` when optional). \
             Choose `--computation <resource>` or `--inline-computation @file`, then add reviewed \
             executor/receipt/attester fields as needed. These describe a contract and authorize no execution.",
-        "edit" => "`--set` accepts scalar values, not arbitrary YAML objects; a dotted key is not a \
-            nested-field update. Use `--add-source-json @file` for a complete source mapping. For \
-            unsupported complex metadata preservation, inspect the existing representation and \
-            use a narrow lossless file edit within scope, then validate. Do not flatten mappings \
-            or fabricate verification. Meaningful edits remove active `verified` events and update \
+        "edit" => "`--set` keeps literal scalar keys; a dotted key is not traversal. `--set-yaml` \
+            replaces a complete named value. `--set-path` parses YAML and creates intermediate maps \
+            for object-only paths; `--unset-path` removes an object property. `--patch` accepts an \
+            RFC 6902 array with concrete JSON Pointer paths, including list edits and `test` guards. \
+            Inputs accept inline YAML/JSON, `@file`, or `-`; only one stdin consumer is permitted. \
+            Duplicate/non-string keys, tags, anchors, aliases, merge keys, nonfinite numbers and multiple documents fail. `--dry-run` previews \
+            without writes. Use `--add-source-json @file` for source mappings. Do not fabricate verification. Meaningful edits remove active `verified` events and update \
             existing `generated.at`; preserve needed historical evidence separately. Body files \
             contain Markdown only, without frontmatter. Section flags take heading and text as \
             separate values. `--replace OLD NEW` replaces exactly one literal body match; `--all` \
@@ -540,7 +616,25 @@ fn replace_section(body: &str, heading: &str, new_block: &str) -> String {
 /// This deliberately checks executable snippets rather than prose wording.
 fn run_skill_checks() {
     let root = repo_root();
-    let records = schema_records(&root);
+    let mut records = schema_records(&root);
+    let globals = records
+        .iter()
+        .find(|record| record["kind"] == "schema")
+        .and_then(|header| header["global_args"].as_array())
+        .cloned()
+        .unwrap_or_default();
+    for record in records
+        .iter_mut()
+        .filter(|record| record["kind"] == "command")
+    {
+        if let Some(args) = record["args"].as_array_mut() {
+            for arg in &globals {
+                if !args.iter().any(|existing| existing["name"] == arg["name"]) {
+                    args.push(arg.clone());
+                }
+            }
+        }
+    }
     let commands: Vec<&Value> = records.iter().filter(|r| r["kind"] == "command").collect();
     let scenarios = skill_scenarios();
     let mut errors = Vec::new();
@@ -1092,7 +1186,7 @@ mod tests {
         }]);
         let commands = [&show, &add];
         let selected = commands_for_skill("retrieval", &scenarios, &commands).unwrap();
-        let header = json!({"tool_version": "0.2.8", "okf_spec": ["0.2"]});
+        let header = json!({"tool_version": "0.3.1", "okf_spec": ["0.2"]});
         let reference = cli_reference(&header, &selected, Some("retrieval"));
 
         assert!(reference.contains("# okf CLI — retrieval command reference"));

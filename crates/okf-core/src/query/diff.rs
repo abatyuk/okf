@@ -51,9 +51,10 @@ pub fn diff(bundle: &Bundle, git: &dyn Git, rev: &str) -> Result<DiffResult> {
         .collect();
     let paths: Vec<PathBuf> = candidates.iter().map(|(path, _)| path.clone()).collect();
     let blobs = git.show_many_in(&git_root, rev, &paths)?;
-    for ((_, id), bytes) in candidates.into_iter().zip(blobs) {
+    for ((path, id), bytes) in candidates.into_iter().zip(blobs) {
         let content = String::from_utf8_lossy(&bytes);
-        let concept = parse_concept(id.clone(), &content)?;
+        let concept = parse_concept(id.clone(), &content)
+            .map_err(|error| error.at_path(&git_root.join(path)))?;
         at_ref.insert(id.0, concept);
     }
 

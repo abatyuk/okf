@@ -6,11 +6,11 @@ module: ontology
 defined_in:
 - /components/ontology
 sources:
-- resource: ../crates/okf-core/src/ontology/schema.rs
+- resource: crates/okf-core/src/ontology/schema.rs
   kind: git-path
   fingerprint:
-    blob_sha: 878335dafa46f950612887e5a0aad823f8a573a3
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 0b71d797088eff17079d10e830f2150a820f3bc5
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Field
 
@@ -30,3 +30,9 @@ pub struct Field {
 ```
 
 Defined in `okf-core`.
+
+Recursive checking resolves named types for object children and list items. Type checks do not
+coerce YAML values. Inclusive `min`/`max`, regex `pattern`, `unique_items`, and explicit
+`additional_properties: false` constrain custom values. The root metadata stays open. Missing
+optional parents are skipped; required fields reject missing/null, blank strings, and empty lists.
+Unknown constraints are preserved and reported as unenforced rather than silently checked.

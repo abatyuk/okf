@@ -6,11 +6,11 @@ module: output
 defined_in:
 - /components/output
 sources:
-- resource: ../crates/okf-cli/src/commands/mutate.rs
+- resource: crates/okf-cli/src/commands/mutate.rs
   kind: git-path
   fingerprint:
-    blob_sha: 799c28f74bab65fc1376854ee1d486505f1a1ba5
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 6805fef5102d8746ad060d24254e2e4423e69d38
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Change record
 

@@ -8,11 +8,11 @@ depends_on:
 - /components/parse
 - /components/ports
 sources:
-- resource: ../crates/okf-core/src/fingerprint/mod.rs
+- resource: crates/okf-core/src/fingerprint/mod.rs
   kind: git-path
   fingerprint:
-    blob_sha: b68e0a3cde62ee7cf8d68292512ecf7ffea5f954
-last_modified: 2026-09-07T18:47:09Z
+    blob_sha: 73122fdeb462398fc9d3daaab7ef43d3acfc57a1
+last_modified: 2026-10-04T20:39:29Z
 ---
 # fingerprint module
 

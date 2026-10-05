@@ -7,3 +7,7 @@ pub mod resolve;
 pub mod search;
 pub mod show;
 pub mod stats;
+
+pub mod selector;
+
+pub mod metadata;

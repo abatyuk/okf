@@ -12,6 +12,8 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
         let id = &concept.id.0;
         if ctx.graph.inbound(id).is_empty() && ctx.graph.outbound(id).is_empty() {
             out.push(Finding {
+                code: None,
+                field_path: None,
                 rule: RULE.to_string(),
                 severity: ctx.config.orphan,
                 concept: Some(id.clone()),

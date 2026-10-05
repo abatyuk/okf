@@ -11,6 +11,8 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
     for concept in &ctx.bundle.concepts {
         if concept.title().is_none_or(|t| t.trim().is_empty()) {
             out.push(Finding {
+                code: None,
+                field_path: None,
                 rule: RULE.to_string(),
                 severity: ctx.config.missing_title,
                 concept: Some(concept.id.0.clone()),

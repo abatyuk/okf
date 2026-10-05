@@ -9,6 +9,18 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub json: bool,
 
+    /// Select an explicitly registered bundle identity (paths keep separate meanings).
+    #[arg(long, global = true)]
+    pub bundle_id: Option<String>,
+    /// Add a registered bundle to the examination scope (repeatable).
+    #[arg(long = "scope-bundle", global = true)]
+    pub scope_bundle: Vec<String>,
+    /// Examine every locally available registered bundle.
+    #[arg(long, global = true, conflicts_with = "scope_bundle")]
+    pub catalog_scope: bool,
+    /// Inspect a locally available Git revision; never fetches missing objects.
+    #[arg(long, global = true)]
+    pub revision: Option<String>,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -18,12 +30,14 @@ pub enum Command {
     // ---- META ----
     /// Print machine-readable CLI metadata (all commands, args, output shapes) as NDJSON.
     Schema,
+    /// List effective catalog registrations, locations, and availability.
+    Catalog,
     /// Print the CLI version and the OKF spec version(s) it supports.
     Version,
 
     // ---- QUERY ----
     /// List all concepts (search with no filter).
-    List(BundleArgs),
+    List(SearchArgs),
     /// Search concepts by type, tag, text, and/or frontmatter field.
     Search(SearchArgs),
     /// Show one concept's content, heading outline, or selected line range.
@@ -97,11 +111,26 @@ pub enum OntologyCmd {
     List(BundleArgs),
     /// Show one concept type and its rules.
     Show(OntShowArgs),
-    /// Define a new concept type with its fields and reference rules.
+    /// Define a new concept type with structured fields, references, and relationships.
     Add(OntEditArgs),
-    /// Modify fields/references of an existing concept type.
+    /// Modify an existing concept type and its named declarations.
     Update(OntEditArgs),
     /// Remove a concept type.
+    Remove(OntRemoveArgs),
+    /// Add, replace, or remove reusable field-type definitions.
+    #[command(subcommand)]
+    FieldType(OntFieldTypeCmd),
+    /// Apply coordinated concept and reusable field-type changes atomically.
+    Apply(OntApplyArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum OntFieldTypeCmd {
+    /// Define a new reusable field type.
+    Add(OntFieldTypeEditArgs),
+    /// Replace an existing reusable field type completely.
+    Update(OntFieldTypeEditArgs),
+    /// Remove a reusable field type if the resulting ontology remains valid.
     Remove(OntRemoveArgs),
 }
 
@@ -169,6 +198,51 @@ pub struct SearchArgs {
     /// Filter by a frontmatter field, `key=value` (repeatable; AND).
     #[arg(long = "field")]
     pub field: Vec<String>,
+    /// Typed nested selector condition (repeatable; AND).
+    #[arg(long)]
+    pub facet_filter: Vec<String>,
+    /// Emit JSON facets over all matches, before pagination.
+    #[arg(long)]
+    pub facets: bool,
+    /// Facet selector (repeatable); does not bypass high cardinality guard.
+    #[arg(long)]
+    pub facet: Vec<String>,
+    /// Start page at this nonnegative offset; requires a positive limit.
+    #[arg(long, requires = "limit")]
+    pub offset: Option<usize>,
+    /// Maximum examined documents across scope (positive).
+    #[arg(long, conflicts_with = "full_scan")]
+    pub scan_limit: Option<usize>,
+    /// Examine the entire selected scope without a document scan budget.
+    #[arg(long, conflicts_with = "scan_limit")]
+    pub full_scan: bool,
+    /// Explicit metadata projection selector (repeatable).
+    #[arg(long)]
+    pub project: Vec<String>,
+    /// Human output column selector (repeatable).
+    #[arg(long = "columns", alias = "column", value_delimiter = ',')]
+    pub column: Vec<String>,
+    /// Named bundle display view.
+    #[arg(long)]
+    pub view: Option<String>,
+    /// Expand selected outbound relationship rule (repeatable).
+    #[arg(long, conflicts_with = "no_expand")]
+    pub expand: Vec<String>,
+    /// Disable configured human view expansion.
+    #[arg(long)]
+    pub no_expand: bool,
+    /// Metadata selector for related targets (repeatable).
+    #[arg(long)]
+    pub target_field: Vec<String>,
+    /// Maximum edge occurrences per primary hit (1..100).
+    #[arg(long, default_value_t = 10)]
+    pub expansion_edges: usize,
+    /// Maximum distinct target payloads per query (1..1000).
+    #[arg(long, default_value_t = 100)]
+    pub expansion_targets: usize,
+    /// Maximum serialized expansion bytes (1..1048576).
+    #[arg(long, default_value_t = 262144)]
+    pub expansion_bytes: usize,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -200,6 +274,9 @@ pub struct IdArgs {
     pub concept: String,
     /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
+    /// Show individual semantic incoming occurrences and configured inverse labels.
+    #[arg(long)]
+    pub details: bool,
 }
 
 #[derive(Debug, Args)]
@@ -220,6 +297,9 @@ pub struct ShowArgs {
     /// Print only the raw Markdown body, without frontmatter or display headers.
     #[arg(long, conflicts_with_all = ["outline", "lines", "numbered"])]
     pub body: bool,
+    /// Explicit metadata projection selector (repeatable).
+    #[arg(long, conflicts_with_all = ["body", "outline", "lines", "numbered"])]
+    pub project: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -447,6 +527,15 @@ pub struct AddArgs {
     /// Set a custom scalar field at creation, `key=value` (repeatable).
     #[arg(long = "set")]
     pub set: Vec<String>,
+    /// Replace a field with YAML: `key=value`, `key=@file`, or `key=-` (repeatable).
+    #[arg(long = "set-yaml")]
+    pub set_yaml: Vec<String>,
+    /// Set an object path with a YAML value, e.g. `deadline.within=72` (repeatable).
+    #[arg(long = "set-path")]
+    pub set_path: Vec<String>,
+    /// Validate and show the resulting diff without writing.
+    #[arg(long)]
+    pub dry_run: bool,
     /// Set a declared reference at creation, `key=link` (repeatable).
     #[arg(long = "ref")]
     pub reference: Vec<String>,
@@ -491,9 +580,24 @@ pub struct EditArgs {
     /// Set/update a scalar field, `key=value` (repeatable).
     #[arg(long = "set")]
     pub set: Vec<String>,
+    /// Replace a field with YAML: `key=value`, `key=@file`, or `key=-` (repeatable).
+    #[arg(long = "set-yaml")]
+    pub set_yaml: Vec<String>,
+    /// Set an object path with a YAML value, e.g. `deadline.within=72` (repeatable).
+    #[arg(long = "set-path")]
+    pub set_path: Vec<String>,
+    /// Validate and show the resulting diff without writing.
+    #[arg(long)]
+    pub dry_run: bool,
     /// Remove a field entirely, `key` (repeatable).
     #[arg(long = "unset")]
     pub unset: Vec<String>,
+    /// Delete an object path (repeatable); absent keys are a no-op.
+    #[arg(long = "unset-path")]
+    pub unset_path: Vec<String>,
+    /// Apply an RFC 6902 JSON Patch to frontmatter, supplied as YAML, `@file`, or `-`.
+    #[arg(long, allow_hyphen_values = true)]
+    pub patch: Option<String>,
     /// Append an item to a list field, `key=value` (repeatable, idempotent).
     #[arg(long = "add")]
     pub add: Vec<String>,
@@ -613,6 +717,9 @@ pub struct OntRemoveArgs {
     pub name: String,
     /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
+    /// Validate and preview the change without writing.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, Args)]
@@ -636,7 +743,51 @@ pub struct OntEditArgs {
     /// Remove a reference rule (update only; repeatable).
     #[arg(long = "remove-ref")]
     pub remove_reference: Vec<String>,
+    /// A complete field declaration, key=YAML|@file|- (repeatable).
+    #[arg(long)]
+    pub field_yaml: Vec<String>,
+    /// A complete reference declaration, key=YAML|@file|- (repeatable).
+    #[arg(long)]
+    pub ref_yaml: Vec<String>,
+    /// A complete relationship declaration, key=YAML|@file|- (repeatable).
+    #[arg(long)]
+    pub relationship_yaml: Vec<String>,
+    /// Remove a relationship (update only; repeatable).
+    #[arg(long)]
+    pub remove_relationship: Vec<String>,
+    /// Merge a concept-type definition from inline YAML, @file, a file path, or stdin (-).
+    #[arg(long, allow_hyphen_values = true)]
+    pub from: Option<String>,
+    /// Validate and preview the change without writing.
+    #[arg(long)]
+    pub dry_run: bool,
     /// Mark the exact `Attested Computation` type as standard attested.
     #[arg(long)]
     pub attested: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct OntFieldTypeEditArgs {
+    /// Reusable field-type name.
+    pub name: String,
+    /// Bundle directory.
+    pub bundle: Option<String>,
+    /// Complete field-type definition: inline YAML, @file, a file path, or stdin (-).
+    #[arg(long, allow_hyphen_values = true)]
+    pub from: String,
+    /// Validate and preview the change without writing.
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct OntApplyArgs {
+    /// Bundle directory.
+    pub bundle: Option<String>,
+    /// Coordinated change document: inline YAML, @file, a file path, or stdin (-).
+    #[arg(long, allow_hyphen_values = true)]
+    pub from: String,
+    /// Validate and preview the change without writing.
+    #[arg(long)]
+    pub dry_run: bool,
 }

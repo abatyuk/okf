@@ -25,6 +25,8 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
             }
             if source.fingerprint.is_empty() {
                 findings.push(Finding {
+                code: None,
+                field_path: None,
                     rule: UNRECORDED_RULE.to_string(),
                     severity: ctx.config.source_unrecorded,
                     concept: Some(concept.id.0.clone()),
@@ -40,6 +42,8 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
             ) {
                 if let Err(error) = engine.fingerprint(&source) {
                     findings.push(Finding {
+                        code: None,
+                        field_path: None,
                         rule: MISSING_RULE.to_string(),
                         severity: ctx.config.source_missing,
                         concept: Some(concept.id.0.clone()),

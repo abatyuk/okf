@@ -6,11 +6,11 @@ module: ontology
 defined_in:
 - /components/ontology
 sources:
-- resource: ../crates/okf-core/src/ontology/schema.rs
+- resource: crates/okf-core/src/ontology/schema.rs
   kind: git-path
   fingerprint:
-    blob_sha: 878335dafa46f950612887e5a0aad823f8a573a3
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 0b71d797088eff17079d10e830f2150a820f3bc5
+last_modified: 2026-10-04T20:39:29Z
 ---
 # ConceptType
 
@@ -26,8 +26,14 @@ pub struct ConceptType {
     pub attested: bool,                        // scaffold as Attested Computation
     pub trust: Option<TrustExpectation>,       // advisory min tier
     pub references: IndexMap<String, ReferenceRule>,
+    pub relationships: IndexMap<String, RelationshipRule>,
     pub extra: IndexMap<String, serde_yaml::Value>,  // unknown keys preserved
 }
 ```
 
 Defined in `okf-core`.
+
+Relationship rules refer to declared reference selectors, pair kinds/attributes with concrete
+occurrences, and expose named inverse views. Concept-type ancestry is declared through the
+preserved `extends` extension (string or list); it supports narrowing relationship targets
+without changing exact standard computation semantics.

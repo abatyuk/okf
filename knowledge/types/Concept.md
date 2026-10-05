@@ -6,11 +6,11 @@ module: model
 defined_in:
 - /components/model
 sources:
-- resource: ../crates/okf-core/src/model/concept.rs
+- resource: crates/okf-core/src/model/concept.rs
   kind: git-path
   fingerprint:
-    blob_sha: 5e0498b30ce9721871a1e668c0bbf2f5de0080af
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 411ef200d561435377d75be8845962f577cffdf4
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Concept
 

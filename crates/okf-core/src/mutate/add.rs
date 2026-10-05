@@ -21,11 +21,16 @@ use crate::model::standard::valid_actor;
 use crate::ontology::field_types::resolve_field;
 use crate::ontology::schema::{ConceptType, FieldType, Ontology};
 
-use super::edit::{id_to_path, save_concept};
+use super::edit::{id_to_path, render_validated, save_concept};
+use super::structured::StructuredEdits;
 
 /// Inputs to `add` beyond the target path.
 #[derive(Debug, Clone, Default)]
 pub struct AddOptions {
+    /// Typed YAML assignments and object paths at creation.
+    pub structured: StructuredEdits,
+    /// Validate and render without creating the concept or its parent directory.
+    pub dry_run: bool,
     /// The concept `type` string (an ontology concept-type key). Optional when `attested`.
     pub concept_type: Option<String>,
     pub title: Option<String>,
@@ -58,6 +63,8 @@ pub struct AddResult {
     pub path: PathBuf,
     pub concept_type: String,
     pub attested: bool,
+    pub after: String,
+    pub dry_run: bool,
 }
 
 /// Add a concept at bundle-relative `rel_path` (with or without a trailing `.md`), scaffolded
@@ -68,6 +75,43 @@ pub fn add(
     ontology: Option<&Ontology>,
     opts: &AddOptions,
 ) -> Result<AddResult> {
+    let mut legacy_keys: Vec<String> = opts
+        .sets
+        .iter()
+        .map(|(k, _)| k.clone())
+        .chain(opts.references.iter().map(|(k, _)| k.clone()))
+        .collect();
+    if opts.concept_type.is_some() || opts.attested {
+        legacy_keys.push("type".into());
+    }
+    if opts.title.is_some() {
+        legacy_keys.push("title".into());
+    }
+    if opts.description.is_some() {
+        legacy_keys.push("description".into());
+    }
+    if !opts.sources.is_empty() {
+        legacy_keys.push("sources".into());
+    }
+    if opts.runtime.is_some() {
+        legacy_keys.push("runtime".into());
+    }
+    if !opts.parameters.is_empty() {
+        legacy_keys.push("parameters".into());
+    }
+    if opts.computation.is_some() {
+        legacy_keys.push("computation".into());
+    }
+    if opts.executor_resource.is_some() || !opts.receipt.is_empty() {
+        legacy_keys.push("executor".into());
+    }
+    if opts.attester_resource.is_some() {
+        legacy_keys.push("attester".into());
+    }
+    if opts.generated_by.is_some() {
+        legacy_keys.push("generated".into());
+    }
+    opts.structured.validate_conflicts(&legacy_keys)?;
     let stem = rel_path.strip_suffix(".md").unwrap_or(rel_path);
     let id = ConceptId::parse(rel_path)?;
     let path = id_to_path(root, &id)?;
@@ -164,6 +208,10 @@ pub fn add(
         );
     }
 
+    let mut frontmatter = Frontmatter::from_map(map);
+    opts.structured.apply(&mut frontmatter)?;
+    let mut map = frontmatter.map;
+
     if attested {
         let runtime = opts
             .runtime
@@ -178,7 +226,13 @@ pub fn add(
                 OkfError::Usage("add --attested requires --runtime <name>".to_string())
             })?;
         map.insert("runtime".to_string(), Value::String(runtime.clone()));
-        if opts.computation.is_none() && opts.inline_computation.is_none() {
+        if opts.computation.is_none()
+            && opts.inline_computation.is_none()
+            && !map
+                .get("computation")
+                .and_then(Value::as_str)
+                .is_some_and(|s| !s.trim().is_empty())
+        {
             return Err(OkfError::Usage(
                 "Attested Computation requires --computation <path> or --inline-computation <text>"
                     .to_string(),
@@ -252,7 +306,7 @@ pub fn add(
     };
     let body = if let Some(body) = &opts.body {
         super::body::set_body(body)
-    } else if attested && opts.computation.is_none() {
+    } else if attested && !map.contains_key("computation") {
         let runtime = map.get("runtime").and_then(Value::as_str).unwrap_or("");
         let computation = opts.inline_computation.as_deref().unwrap_or("");
         format!(
@@ -268,13 +322,20 @@ pub fn add(
         frontmatter: Frontmatter::from_map(map),
         body,
     };
-    let path = save_concept(root, &concept)?;
+    let after = render_validated(root, &concept)?;
+    let path = if opts.dry_run {
+        path
+    } else {
+        save_concept(root, &concept)?
+    };
 
     Ok(AddResult {
         id,
         path,
         concept_type,
         attested,
+        after,
+        dry_run: opts.dry_run,
     })
 }
 

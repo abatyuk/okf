@@ -17,6 +17,8 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
         let fm = &concept.frontmatter;
         let mut add = |message: String| {
             out.push(Finding {
+                code: None,
+                field_path: None,
                 rule: RULE.to_string(),
                 severity: ctx.config.spec_v02,
                 concept: Some(concept.id.0.clone()),

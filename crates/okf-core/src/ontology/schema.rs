@@ -66,6 +66,9 @@ pub struct ConceptType {
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub references: IndexMap<String, ReferenceRule>,
 
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub relationships: IndexMap<String, RelationshipRule>,
+
     /// Unknown per-concept keys preserved verbatim.
     #[serde(flatten)]
     pub extra: IndexMap<String, Value>,
@@ -202,6 +205,9 @@ impl fmt::Display for FieldType {
 /// certain target type(s) with a cardinality.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReferenceRule {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+
     /// The allowed target type(s). A single string or a list (union of targets).
     pub target: Target,
 
@@ -318,4 +324,30 @@ impl<'de> Deserialize<'de> for Cardinality {
 
 fn is_false(b: &bool) -> bool {
     !*b
+}
+
+/// Semantic edge mapping over a declared reference, paired within each list occurrence.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RelationshipRule {
+    pub reference: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inverse: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind_selector: Option<String>,
+    #[serde(default)]
+    pub kinds: IndexMap<String, RelationshipKind>,
+    #[serde(default)]
+    pub attributes: IndexMap<String, String>,
+    #[serde(flatten)]
+    pub extra: IndexMap<String, Value>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RelationshipKind {
+    pub inverse: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<Target>,
+    #[serde(flatten)]
+    pub extra: IndexMap<String, Value>,
 }

@@ -1,7 +1,16 @@
 [
   {
     "skill": "init",
-    "expected_commands": ["okf init", "okf validate", "okf computation check", "okf artifact resolve", "okf artifact put", "okf add <path> <bundle> --type <Type> --body @/tmp/concept-body.md", "okf stale <bundle> --fail-on any"],
+    "expected_commands": [
+      "okf init",
+      "okf validate",
+      "okf computation check",
+      "okf artifact resolve",
+      "okf artifact put",
+      "okf add <path> <bundle> --type <Type> --body @/tmp/concept-body.md",
+      "okf stale <bundle> --fail-on any",
+      "okf catalog"
+    ],
     "reference_commands": [
       "artifact list",
       "artifact resolve",
@@ -21,15 +30,44 @@
       "docs",
       "edit",
       "refresh",
-      "stale"
+      "stale",
+      "catalog",
+      "links",
+      "resolve",
+      "backlinks",
+      "ontology apply",
+      "ontology field-type add",
+      "ontology field-type update",
+      "ontology field-type remove"
     ],
-    "prohibited_claims": ["ontology is required by OKF", "arbitrary attested type", "successful stale exit proves every source is checked"],
+    "prohibited_claims": [
+      "ontology is required by OKF",
+      "arbitrary attested type",
+      "successful stale exit proves every source is checked",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch"
+    ],
     "mutation_boundary": "Use supplied type decisions; clarify unresolved semantics and never execute computation artifacts.",
-    "report_contains": ["concepts created", "validation", "advisory lint", "unrecorded or missing source findings"]
+    "report_contains": [
+      "concepts created",
+      "validation",
+      "advisory lint",
+      "unrecorded or missing source findings",
+      "selected bundle identity and examined scope"
+    ]
   },
   {
     "skill": "migrate",
-    "expected_commands": ["okf source-scan", "okf add", "okf refresh", "okf artifact resolve", "okf artifact put", "okf add <path> <bundle> --type <Type> --body @/tmp/migrated-body.md", "okf stale <bundle> --fail-on any"],
+    "expected_commands": [
+      "okf source-scan",
+      "okf add",
+      "okf refresh",
+      "okf artifact resolve",
+      "okf artifact put",
+      "okf add <path> <bundle> --type <Type> --body @/tmp/migrated-body.md",
+      "okf stale <bundle> --fail-on any",
+      "okf catalog"
+    ],
     "reference_commands": [
       "artifact resolve",
       "artifact show",
@@ -46,15 +84,41 @@
       "show",
       "browse",
       "search",
-      "stale"
+      "stale",
+      "catalog",
+      "list",
+      "backlinks"
     ],
-    "prohibited_claims": ["every source requires kind", "migration establishes verification", "successful stale exit proves every source is checked"],
+    "prohibited_claims": [
+      "every source requires kind",
+      "migration establishes verification",
+      "successful stale exit proves every source is checked",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch"
+    ],
     "mutation_boundary": "Preserve legacy values and require review before assigning unknown semantics.",
-    "report_contains": ["source joins", "preserved extensions", "validation", "unrecorded or missing source findings"]
+    "report_contains": [
+      "source joins",
+      "preserved extensions",
+      "validation",
+      "unrecorded or missing source findings",
+      "selected bundle identity and examined scope",
+      "bundle-qualified migration ledger and restart state",
+      "scoped migration fidelity and unresolved rows"
+    ]
   },
   {
     "skill": "ingest",
-    "expected_commands": ["okf source-scan", "okf add", "okf computation check", "okf artifact show", "okf artifact put", "okf add <path> <bundle> --type <Type> --body @/tmp/concept-body.md", "okf stale <bundle> --fail-on any"],
+    "expected_commands": [
+      "okf source-scan",
+      "okf add",
+      "okf computation check",
+      "okf artifact show",
+      "okf artifact put",
+      "okf add <path> <bundle> --type <Type> --body @/tmp/concept-body.md",
+      "okf stale <bundle> --fail-on any",
+      "okf catalog"
+    ],
     "reference_commands": [
       "artifact resolve",
       "artifact show",
@@ -71,15 +135,37 @@
       "browse",
       "search",
       "refresh",
-      "stale"
+      "stale",
+      "catalog"
     ],
-    "prohibited_claims": ["every concept must have a source", "inspection authorizes execution", "successful stale exit proves every source is checked"],
+    "prohibited_claims": [
+      "every concept must have a source",
+      "inspection authorizes execution",
+      "successful stale exit proves every source is checked",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch"
+    ],
     "mutation_boundary": "Do not store unauthorized material, secrets, or unsanctioned executable computations.",
-    "report_contains": ["created concepts", "sources", "skipped areas", "unrecorded or missing source findings"]
+    "report_contains": [
+      "created concepts",
+      "sources",
+      "skipped areas",
+      "unrecorded or missing source findings",
+      "selected bundle identity and examined scope"
+    ]
   },
   {
     "skill": "retrieval",
-    "expected_commands": ["okf browse", "okf show", "okf artifact resolve", "okf computation check", "okf show <concept-id> <bundle> --body", "okf show <concept-id> <bundle> --numbered"],
+    "expected_commands": [
+      "okf browse",
+      "okf show",
+      "okf artifact resolve",
+      "okf computation check",
+      "okf show <concept-id> <bundle> --body",
+      "okf show <concept-id> <bundle> --numbered",
+      "okf catalog",
+      "okf search <bundle> --project"
+    ],
     "reference_commands": [
       "artifact resolve",
       "artifact show",
@@ -91,15 +177,38 @@
       "search",
       "show",
       "computation check",
-      "list"
+      "list",
+      "catalog",
+      "validate",
+      "ontology list",
+      "ontology show"
     ],
-    "prohibited_claims": ["verification proves this run", "computation check executes"],
+    "prohibited_claims": [
+      "verification proves this run",
+      "computation check executes",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch",
+      "inverse backlink proves target consent",
+      "metadata checks establish policy compliance"
+    ],
     "mutation_boundary": "Read-only; remote fetch and execution require separate authorization.",
-    "report_contains": ["concept citations", "source or artifact citations", "trust and lifecycle caveats"]
+    "report_contains": [
+      "concept citations",
+      "source or artifact citations",
+      "trust and lifecycle caveats",
+      "selected bundle identity and examined scope",
+      "incomplete or unenforced checks when present"
+    ]
   },
   {
     "skill": "review-verify",
-    "expected_commands": ["okf verify", "okf stale", "okf artifact resolve", "okf computation check"],
+    "expected_commands": [
+      "okf verify",
+      "okf stale",
+      "okf artifact resolve",
+      "okf computation check",
+      "okf catalog"
+    ],
     "reference_commands": [
       "artifact resolve",
       "artifact show",
@@ -108,15 +217,38 @@
       "computation check",
       "stale",
       "stats",
-      "verify"
+      "verify",
+      "catalog"
     ],
-    "prohibited_claims": ["okf verify attests a computation", "fabricate human verification", "successful stale exit proves every source is checked"],
+    "prohibited_claims": [
+      "okf verify attests a computation",
+      "fabricate human verification",
+      "successful stale exit proves every source is checked",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch"
+    ],
     "mutation_boundary": "Append verification only after a real source-backed review by the named actor.",
-    "report_contains": ["exact verification event", "derived tier", "declined reviews"]
+    "report_contains": [
+      "exact verification event",
+      "derived tier",
+      "declined reviews",
+      "selected bundle identity and examined scope"
+    ]
   },
   {
     "skill": "update",
-    "expected_commands": ["okf stale", "okf affected", "okf diff", "okf refresh", "okf artifact put", "okf edit <concept-id> <bundle> --replace \"Old phrase\" \"New phrase\"", "okf edit <concept-id> <bundle> --rename-section \"Old heading\" \"New heading\""],
+    "expected_commands": [
+      "okf stale",
+      "okf affected",
+      "okf diff",
+      "okf refresh",
+      "okf artifact put",
+      "okf edit <concept-id> <bundle> --replace \"Old phrase\" \"New phrase\"",
+      "okf edit <concept-id> <bundle> --rename-section \"Old heading\" \"New heading\"",
+      "okf catalog",
+      "okf edit <concept-id> <bundle> --set-path \"deadline.within=72\"",
+      "okf edit <concept-id> <bundle> --patch @/tmp/changes.yaml --dry-run"
+    ],
     "reference_commands": [
       "artifact resolve",
       "artifact show",
@@ -131,15 +263,38 @@
       "edit",
       "mv",
       "refresh",
-      "docs"
+      "docs",
+      "catalog"
     ],
-    "prohibited_claims": ["refresh clears stale_after", "refresh updates source last_modified", "artifact put refreshes citing concepts automatically", "successful stale exit proves every source is checked"],
+    "prohibited_claims": [
+      "refresh clears stale_after",
+      "refresh updates source last_modified",
+      "artifact put refreshes citing concepts automatically",
+      "successful stale exit proves every source is checked",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch",
+      "inverse backlink proves target consent",
+      "metadata checks establish policy compliance"
+    ],
     "mutation_boundary": "Reconcile meaning before refresh and route meaningful rewrites to re-verification.",
-    "report_contains": ["trigger category", "fingerprint-only refreshes", "verification consequences"]
+    "report_contains": [
+      "trigger category",
+      "fingerprint-only refreshes",
+      "verification consequences",
+      "selected bundle identity and examined scope"
+    ]
   },
   {
     "skill": "ontology",
-    "expected_commands": ["okf ontology add", "okf ontology update", "okf validate", "okf lint"],
+    "expected_commands": [
+      "okf ontology add",
+      "okf ontology update",
+      "okf validate",
+      "okf lint",
+      "okf catalog",
+      "okf ontology apply <bundle> --from changes.yaml --dry-run",
+      "okf ontology field-type add Deadline <bundle> --from deadline.yaml"
+    ],
     "reference_commands": [
       "artifact resolve",
       "ontology list",
@@ -150,15 +305,42 @@
       "ontology remove",
       "ontology update",
       "show",
-      "artifact show"
+      "artifact show",
+      "catalog",
+      "links",
+      "search",
+      "backlinks",
+      "ontology apply",
+      "ontology field-type add",
+      "ontology field-type update",
+      "ontology field-type remove"
     ],
-    "prohibited_claims": ["ontology controls conformance", "aliases are Attested Computations"],
+    "prohibited_claims": [
+      "ontology controls conformance",
+      "aliases are Attested Computations",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch",
+      "inverse backlink proves target consent",
+      "metadata checks establish policy compliance"
+    ],
     "mutation_boundary": "Confirm subjective local rules before applying them or cascading concept changes.",
-    "report_contains": ["portable fields", "custom fields", "advisory impact"]
+    "report_contains": [
+      "portable fields",
+      "custom fields",
+      "advisory impact",
+      "selected bundle identity and examined scope",
+      "incomplete or unenforced checks when present"
+    ]
   },
   {
     "skill": "infer-ontology",
-    "expected_commands": ["okf list", "okf backlinks", "okf computation check", "okf ontology add"],
+    "expected_commands": [
+      "okf list",
+      "okf backlinks",
+      "okf computation check",
+      "okf ontology add",
+      "okf catalog"
+    ],
     "reference_commands": [
       "artifact resolve",
       "backlinks",
@@ -173,15 +355,40 @@
       "ontology add",
       "ontology update",
       "ontology remove",
-      "artifact show"
+      "artifact show",
+      "catalog",
+      "ontology list",
+      "ontology show",
+      "ontology apply",
+      "ontology field-type add",
+      "ontology field-type update",
+      "ontology field-type remove"
     ],
-    "prohibited_claims": ["observed once means required", "unknown types are invalid"],
+    "prohibited_claims": [
+      "observed once means required",
+      "unknown types are invalid",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch",
+      "inverse backlink proves target consent",
+      "metadata checks establish policy compliance"
+    ],
     "mutation_boundary": "Present evidence; apply rules already authorized and clarify unresolved consequential semantics.",
-    "report_contains": ["support counts", "confidence", "built-ins excluded"]
+    "report_contains": [
+      "support counts",
+      "confidence",
+      "built-ins excluded",
+      "selected bundle identity and examined scope"
+    ]
   },
   {
     "skill": "reorganize",
-    "expected_commands": ["okf artifact list", "okf mv", "okf backlinks", "okf diff"],
+    "expected_commands": [
+      "okf artifact list",
+      "okf mv",
+      "okf backlinks",
+      "okf diff",
+      "okf catalog"
+    ],
     "reference_commands": [
       "artifact list",
       "backlinks",
@@ -196,15 +403,35 @@
       "artifact resolve",
       "artifact show",
       "show",
-      "edit"
+      "edit",
+      "catalog"
     ],
-    "prohibited_claims": ["moves never edit referrers", "opaque artifacts are concepts"],
+    "prohibited_claims": [
+      "moves never edit referrers",
+      "opaque artifacts are concepts",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch"
+    ],
     "mutation_boundary": "Review the mapping, use okf mv for concepts, and separately authorize artifact moves.",
-    "report_contains": ["moves", "rewritten links", "preserved artifacts"]
+    "report_contains": [
+      "moves",
+      "rewritten links",
+      "preserved artifacts",
+      "selected bundle identity and examined scope"
+    ]
   },
   {
     "skill": "repair",
-    "expected_commands": ["okf doctor", "okf artifact list", "okf validate", "okf lint", "okf artifact put", "okf edit <concept-id> <bundle> --replace \"Old phrase\" \"New phrase\"", "okf edit <concept-id> <bundle> --rename-section \"Old heading\" \"New heading\""],
+    "expected_commands": [
+      "okf doctor",
+      "okf artifact list",
+      "okf validate",
+      "okf lint",
+      "okf artifact put",
+      "okf edit <concept-id> <bundle> --replace \"Old phrase\" \"New phrase\"",
+      "okf edit <concept-id> <bundle> --rename-section \"Old heading\" \"New heading\"",
+      "okf catalog"
+    ],
     "reference_commands": [
       "artifact list",
       "artifact resolve",
@@ -219,10 +446,23 @@
       "verify",
       "docs",
       "edit",
-      "show"
+      "show",
+      "catalog"
     ],
-    "prohibited_claims": ["doctor fixes semantic findings automatically", "doctor creates a backup", "artifact put refreshes citing concepts automatically"],
+    "prohibited_claims": [
+      "doctor fixes semantic findings automatically",
+      "doctor creates a backup",
+      "artifact put refreshes citing concepts automatically",
+      "catalog registration authorizes traversal",
+      "current candidate satisfies a known snapshot mismatch"
+    ],
     "mutation_boundary": "Diagnose read-only first; preserve recovery for writes, preview safe fixes, honor existing authorization, and stop affected writes for unresolved semantics.",
-    "report_contains": ["stable finding IDs", "preserved extensions", "remaining decisions"]
+    "report_contains": [
+      "stable finding IDs",
+      "preserved extensions",
+      "remaining decisions",
+      "selected bundle identity and examined scope",
+      "incomplete or unenforced checks when present"
+    ]
   }
 ]

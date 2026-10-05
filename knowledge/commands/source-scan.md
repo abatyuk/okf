@@ -6,6 +6,12 @@ group: check
 mutates: false
 implemented_by:
 - /components/check
+sources:
+- resource: crates/okf-cli/src/commands/schema.rs
+  kind: git-path
+  fingerprint:
+    blob_sha: bab34f363d28125adac33f33fefc2c9e04329d73
+last_modified: 2026-10-04T20:39:29Z
 ---
 # okf source-scan
 

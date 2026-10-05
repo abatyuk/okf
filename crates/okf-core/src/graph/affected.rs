@@ -25,7 +25,9 @@ pub struct AffectedOptions {
 pub fn affected(graph: &LinkGraph, changed: &[String], opts: &AffectedOptions) -> Vec<ConceptId> {
     let seeds: Vec<String> = changed
         .iter()
-        .map(|c| ConceptId::from_relative(c).0)
+        // Inputs may be concept IDs or ordinary bundle-relative links, including .md,
+        // fragments and query suffixes. Normalize them like the graph's target edges.
+        .map(|c| crate::model::link::resolve_link(&ConceptId("/".into()), c).0)
         .collect();
 
     let max_hops = if opts.transitive {

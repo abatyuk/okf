@@ -2,7 +2,7 @@
 use crate::error::{OkfError, Result};
 use crate::model::concept::{Concept, ConceptId};
 use crate::model::frontmatter::Frontmatter;
-use crate::parse::{parse_concept, yaml::parse_frontmatter};
+use crate::parse::{parse_concept_file, yaml::parse_frontmatter};
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
@@ -41,7 +41,7 @@ pub fn load_concept(root: &Path, id: &str) -> Result<Option<Concept>> {
     }
     let content = std::fs::read_to_string(&path)
         .map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
-    parse_concept(id, &content).map(Some)
+    parse_concept_file(id, &content, &path).map(Some)
 }
 
 /// Whether an id maps to a regular, non-reserved concept document.
@@ -78,6 +78,7 @@ fn load_bundle_with(root: &Path, include_body: bool) -> Result<Bundle> {
     }
 
     let mut concepts = Vec::new();
+    let mut failures = Vec::new();
     for rel in walk_markdown(root)? {
         let path = root.join(&rel);
         let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -94,11 +95,19 @@ fn load_bundle_with(root: &Path, include_body: bool) -> Result<Bundle> {
         let concept = if include_body {
             let content = std::fs::read_to_string(&path)
                 .map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
-            parse_concept(id, &content)?
+            parse_concept_file(id, &content, &path)
         } else {
-            load_metadata(id, &path)?
+            load_metadata(id, &path)
         };
-        concepts.push(concept);
+        match concept {
+            Ok(concept) => concepts.push(concept),
+            Err(OkfError::Yaml(message)) => failures.push(message),
+            Err(error) => return Err(error),
+        }
+    }
+
+    if !failures.is_empty() {
+        return Err(OkfError::yaml_files(failures));
     }
 
     // Filesystem path ordering is not always concept-id ordering. For example,
@@ -118,7 +127,11 @@ fn load_metadata(id: ConceptId, path: &Path) -> Result<Concept> {
     let file =
         std::fs::File::open(path).map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
     let mut lines = std::io::BufReader::new(file).lines();
-    let Some(first) = lines.next().transpose().map_err(OkfError::from)? else {
+    let Some(first) = lines
+        .next()
+        .transpose()
+        .map_err(|error| OkfError::from(error).at_path(path))?
+    else {
         return Ok(Concept {
             id,
             frontmatter: Frontmatter::new(),
@@ -136,7 +149,7 @@ fn load_metadata(id: ConceptId, path: &Path) -> Result<Concept> {
     let mut yaml = String::new();
     let mut closed = false;
     for line in lines {
-        let line = line.map_err(OkfError::from)?;
+        let line = line.map_err(|error| OkfError::from(error).at_path(path))?;
         if line.trim_end_matches('\r') == "---" {
             closed = true;
             break;
@@ -145,7 +158,7 @@ fn load_metadata(id: ConceptId, path: &Path) -> Result<Concept> {
         yaml.push('\n');
     }
     let frontmatter = if closed {
-        Frontmatter::from_map(parse_frontmatter(&yaml)?)
+        Frontmatter::from_map(parse_frontmatter(&yaml).map_err(|error| error.at_path(path))?)
     } else {
         Frontmatter::new()
     };

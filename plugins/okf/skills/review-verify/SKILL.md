@@ -16,7 +16,10 @@ version differs or rejects documented syntax, use that command's `--help` output
 authority.
 
 1. Open a named concept directly. When the review scope is not already specified, select concepts
-   using `okf list <bundle> --json`, `okf stats <bundle>`, and change context. Check `okf stale
+   using `okf list <bundle> --json`, `okf stats <bundle>`, and change context. Establish the requested
+   bundle scope first. Check scan completeness before claiming the selection covers every concept;
+   use a sufficient `--scan-limit` or deliberate `--full-scan` for an exhaustive inventory, otherwise
+   report the observed selection. Page limits do not reduce scan work. Check `okf stale
    <bundle>` but keep lifecycle expiry, source credibility/modification, and fingerprint drift as
    separate review facts. `unrecorded` means no fingerprint baseline, `missing` means fingerprinting
    failed, and `drifted` means the baseline changed. Stale findings exit successfully by default;
@@ -57,3 +60,27 @@ run verdict.
 opaque artifacts. Cite both the declaring concept and inspected source/artifact. Report verified
 concepts and events, or the incomplete review scope and outstanding claims/sources. Include
 lifecycle limitations and computation boundaries only when relevant.
+
+## Bundle identity and examination scope
+
+Keep bundle paths and catalog IDs distinct. `OKF_BUNDLE` always selects a path; use the
+`--bundle-id <id>` for a registered identity. When a catalog is configured, use `okf catalog` to inspect effective local
+registrations, overrides, availability, and per-bundle settings. Catalog paths are relative to
+`okf.toml`, locations are relative to the catalog, and machine-local overrides change effective
+locations rather than accepting different snapshots. Inspect effective settings before relying on
+a per-bundle ontology or view. Equal or nested registered roots are configuration errors.
+
+Registration alone does not authorize catalog-wide traversal. Start with the selected bundle;
+request additional bundles explicitly with repeatable `--scope-bundle <id>` or deliberate
+`--catalog-scope` when the task requires them. Report requested and examined
+scope and unavailable members. Out-of-scope references remain unknown. Ordinary relative paths
+retain their meaning across registered boundaries; distributing one bundle alone can break them.
+Never infer another bundle from a matching filename or title.
+
+## Resolution is separate from review
+
+Catalog identity, relationship resolution, file digests, and requested-snapshot matches establish
+reference evidence only. Inspect the source actually used and label unresolved expectations or
+current candidates. Never manufacture a verification event from a successful resolver or lint
+result. Review the relevant nested relationship conditions and each bundle's interpretation
+settings before making a source-backed sign-off.

@@ -161,6 +161,17 @@ pub fn raw_links(concept: &Concept, ontology: Option<&Ontology>) -> Vec<String> 
     // tool-local ontology. Scope descriptors and opaque artifacts are not concept graph edges.
     if let Some(Value::Sequence(sources)) = concept.frontmatter.get("sources") {
         for source in sources {
+            // These producer-defined kinds address repository-relative resources. This
+            // pure concept resolver has no worktree/root context, so interpreting them
+            // as document-relative links would invent broken concept edges. The
+            // catalog graph resolves Git provenance explicitly with its registered roots.
+            if source
+                .get("kind")
+                .and_then(Value::as_str)
+                .is_some_and(|kind| matches!(kind, "git-path" | "git-commit"))
+            {
+                continue;
+            }
             if let Some(resource) = source.get("resource").and_then(Value::as_str) {
                 if resource
                     .split(['#', '?'])
@@ -176,8 +187,18 @@ pub fn raw_links(concept: &Concept, ontology: Option<&Ontology>) -> Vec<String> 
         .concept_type()
         .and_then(|name| ontology.and_then(|o| o.concepts.get(name)))
     {
-        for key in ct.references.keys() {
-            if let Some(value) = concept.frontmatter.get(key) {
+        for (key, rule) in &ct.references {
+            if let Some(selector) = &rule.selector {
+                let root = serde_yaml::to_value(&concept.frontmatter.map).unwrap_or_default();
+                if let Ok(selector) = crate::query::selector::Selector::parse(selector) {
+                    raw.extend(selector.select(&root).leaves.into_iter().filter_map(|o| {
+                        o.value
+                            .as_str()
+                            .filter(|s| !s.trim().is_empty())
+                            .map(str::to_owned)
+                    }));
+                }
+            } else if let Some(value) = concept.frontmatter.get(key) {
                 collect_from_value(value, &mut raw);
             }
         }

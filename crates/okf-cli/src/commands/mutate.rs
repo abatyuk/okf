@@ -1,18 +1,20 @@
 //! init, add, edit, mv, rm, verify, refresh. Each emits a `change` record under `--json`.
 use crate::cli::{AddArgs, EditArgs, InitArgs, MvArgs, RefreshArgs, RmArgs, VerifyArgs};
 use crate::output;
+use crate::structured::{parse_yaml, InputReader};
 use okf_core::bundle::resolve::{resolve_bundle, resolve_bundle_target};
+use okf_core::bundle::settings::load_for;
 use okf_core::error::Result;
 use okf_core::fingerprint::Engine;
 use okf_core::model::source::{Fingerprint, Source, SourceKind};
 use okf_core::mutate::add::{add, AddOptions};
 use okf_core::mutate::edit::{edit, parse_kv, EditChange, EditSpec, SourceSelector};
 use okf_core::mutate::init::{init, InitOptions};
-use okf_core::mutate::mv::mv;
+use okf_core::mutate::mv::mv_with_ontology;
 use okf_core::mutate::refresh::refresh;
-use okf_core::mutate::rm::rm;
+use okf_core::mutate::rm::rm_with_ontology;
+use okf_core::mutate::structured::StructuredEdits;
 use okf_core::mutate::verify::verify;
-use okf_core::ontology::load::try_load;
 use okf_core::ports::clock::Clock;
 use okf_core::ports::clock::SystemClock;
 use okf_core::ports::fs::RealFs;
@@ -52,10 +54,23 @@ pub fn run_init(args: &InitArgs, json: bool) -> Result<i32> {
 /// `okf add <path> [bundle] [--type] [--title] [--description] [--attested]`.
 pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
-    let ontology = try_load(&root)?;
+    let (_, ontology) = load_for(&root)?;
+    check_stdin_consumers(
+        args.body
+            .iter()
+            .chain(args.inline_computation.iter())
+            .chain(args.add_source_json.iter()),
+        &args.set_yaml,
+        &args.set_path,
+        None,
+    )?;
     let clock = SystemClock;
     let mut stdin_cache = None;
+    let mut reader = InputReader::default();
+    let structured = parse_structured(&args.set_yaml, &args.set_path, &[], None, &mut reader)?;
     let opts = AddOptions {
+        structured,
+        dry_run: args.dry_run,
         concept_type: args.type_.clone(),
         title: args.title.clone(),
         description: args.description.clone(),
@@ -66,7 +81,7 @@ pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
             .map(|(k, v)| (k, okf_core::mutate::edit::parse_scalar(&v)))
             .collect(),
         references: parse_pairs("--ref", &args.reference)?,
-        sources: combined_sources(&args.add_source, &args.add_source_json)?,
+        sources: combined_sources(&args.add_source, &args.add_source_json, &mut reader)?,
         runtime: args.runtime.clone(),
         parameters: parse_parameters(&args.parameter)?,
         computation: args.computation.clone(),
@@ -78,7 +93,9 @@ pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
         generated_at: args.generated_by.as_ref().map(|_| clock.now_rfc3339()),
     };
     let r = add(&root, &args.path, ontology.as_ref(), &opts)?;
-    if json {
+    if args.dry_run {
+        print_preview("add", &r.id.0, &r.path, "", &r.after, json)?;
+    } else if json {
         output::print_line(&json!({
             "kind": "change",
             "op": "add",
@@ -96,6 +113,90 @@ pub fn run_add(args: &AddArgs, json: bool) -> Result<i32> {
         );
     }
     Ok(0)
+}
+
+/// Split typed values using the existing literal key syntax; path keys may include quoted `=`.
+fn parse_structured(
+    sets: &[String],
+    paths: &[String],
+    unsets: &[String],
+    patch: Option<&str>,
+    reader: &mut InputReader,
+) -> Result<StructuredEdits> {
+    let sets = sets
+        .iter()
+        .map(|arg| {
+            let (key, raw) = parse_kv("--set-yaml", arg)?;
+            Ok((key, parse_yaml(&reader.read(&raw)?)?))
+        })
+        .collect::<Result<_>>()?;
+    let set_paths = paths
+        .iter()
+        .map(|arg| {
+            let (key, raw) = okf_core::mutate::structured::parse_path_assignment(arg)?;
+            Ok((key, parse_yaml(&reader.read(&raw)?)?))
+        })
+        .collect::<Result<_>>()?;
+    let patch = match patch {
+        Some(raw) => serde_yaml::from_value(parse_yaml(&reader.read(raw)?)?)
+            .map_err(|e| okf_core::error::OkfError::Usage(format!("invalid --patch: {e}")))?,
+        None => Vec::new(),
+    };
+    Ok(StructuredEdits {
+        sets,
+        set_paths,
+        unset_paths: unsets.to_vec(),
+        patch,
+    })
+}
+
+fn check_stdin_consumers<'a>(
+    texts: impl Iterator<Item = &'a String>,
+    sets: &[String],
+    paths: &[String],
+    patch: Option<&str>,
+) -> Result<()> {
+    let mut count = texts.filter(|raw| raw.as_str() == "-").count();
+    for arg in sets {
+        if parse_kv("--set-yaml", arg)?.1 == "-" {
+            count += 1;
+        }
+    }
+    for arg in paths {
+        if okf_core::mutate::structured::parse_path_assignment(arg)?.1 == "-" {
+            count += 1;
+        }
+    }
+    if patch == Some("-") {
+        count += 1;
+    }
+    if count > 1 {
+        return Err(okf_core::error::OkfError::Usage(
+            "only one input may consume stdin per invocation".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn print_preview(
+    op: &str,
+    id: &str,
+    path: &std::path::Path,
+    before: &str,
+    after: &str,
+    json: bool,
+) -> Result<()> {
+    let diff = crate::structured::preview_diff(path, before, after);
+    if json {
+        output::print_line(
+            &json!({"kind": "change", "op": op, "id": id, "path": path.to_string_lossy(), "dry_run": true, "before": before, "after": after, "diff": diff}),
+        )?;
+    } else if diff.is_empty() {
+        println!("no changes to {id}");
+    } else {
+        print!("{diff}");
+    }
+    Ok(())
 }
 
 fn parse_parameters(args: &[String]) -> Result<Vec<(String, String, bool)>> {
@@ -121,14 +222,35 @@ fn parse_parameters(args: &[String]) -> Result<Vec<(String, String, bool)>> {
 /// (`--set-body/--append-body/--clear-body`, `--*-section`) operations.
 pub fn run_edit(args: &EditArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
+    check_stdin_consumers(
+        args.set_body
+            .iter()
+            .chain(args.append_body.iter())
+            .chain(args.set_section.chunks(2).map(|pair| &pair[1]))
+            .chain(args.append_section.chunks(2).map(|pair| &pair[1]))
+            .chain(args.add_source_json.iter()),
+        &args.set_yaml,
+        &args.set_path,
+        args.patch.as_deref(),
+    )?;
     let mut stdin_cache: Option<String> = None;
+    let mut reader = InputReader::default();
+    let structured = parse_structured(
+        &args.set_yaml,
+        &args.set_path,
+        &args.unset_path,
+        args.patch.as_deref(),
+        &mut reader,
+    )?;
 
     let spec = EditSpec {
+        structured,
+        dry_run: args.dry_run,
         sets: parse_pairs("--set", &args.set)?,
         unsets: args.unset.clone(),
         adds: parse_pairs("--add", &args.add)?,
         removes: parse_pairs("--remove", &args.remove)?,
-        add_sources: combined_sources(&args.add_source, &args.add_source_json)?,
+        add_sources: combined_sources(&args.add_source, &args.add_source_json, &mut reader)?,
         remove_sources: parse_source_selector_args(&args.remove_source)?,
         clear_body: args.clear_body,
         set_body: resolve_opt(&args.set_body, &mut stdin_cache)?,
@@ -142,7 +264,9 @@ pub fn run_edit(args: &EditArgs, json: bool) -> Result<i32> {
     };
 
     let r = edit(&root, &args.concept, &spec)?;
-    if json {
+    if args.dry_run {
+        print_preview("edit", &r.id.0, &r.path, &r.before, &r.after, json)?;
+    } else if json {
         let changes: Vec<_> = r.changes.iter().map(change_json).collect();
         output::print_line(&json!({
             "kind": "change",
@@ -217,22 +341,21 @@ fn parse_source_args(args: &[String]) -> Result<Vec<Source>> {
         .collect()
 }
 
-fn combined_sources(compact: &[String], structured: &[String]) -> Result<Vec<Source>> {
+fn combined_sources(
+    compact: &[String],
+    structured: &[String],
+    reader: &mut InputReader,
+) -> Result<Vec<Source>> {
     let mut sources = parse_source_args(compact)?;
-    sources.extend(parse_source_json_args(structured)?);
+    sources.extend(parse_source_json_args(structured, reader)?);
     Ok(sources)
 }
 
-fn parse_source_json_args(args: &[String]) -> Result<Vec<Source>> {
+fn parse_source_json_args(args: &[String], reader: &mut InputReader) -> Result<Vec<Source>> {
     use okf_core::error::OkfError;
     args.iter()
         .map(|raw| {
-            let content = if let Some(path) = raw.strip_prefix('@') {
-                std::fs::read_to_string(path)
-                    .map_err(|e| OkfError::Environment(format!("cannot read {path}: {e}")))?
-            } else {
-                raw.clone()
-            };
+            let content = reader.read(raw)?;
             let value: serde_yaml::Value = serde_yaml::from_str(&content)
                 .map_err(|e| OkfError::Usage(format!("invalid --add-source-json: {e}")))?;
             let source = Source::from_value(&value).ok_or_else(|| {
@@ -357,6 +480,7 @@ fn resolve_text(raw: &str, stdin_cache: &mut Option<String>) -> Result<String> {
 /// Render one applied change as a `--json` object.
 fn change_json(c: &EditChange) -> serde_json::Value {
     match c {
+        EditChange::Structured => json!({"op": "structured"}),
         EditChange::Set { key, existed } => json!({"op": "set", "key": key, "existed": existed}),
         EditChange::Unset { key, existed } => {
             json!({"op": "unset", "key": key, "existed": existed})
@@ -390,7 +514,8 @@ fn change_json(c: &EditChange) -> serde_json::Value {
 /// `okf mv <old> <new> [bundle]`.
 pub fn run_mv(args: &MvArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
-    let r = mv(&root, &args.old, &args.new)?;
+    let (_, ontology) = load_for(&root)?;
+    let r = mv_with_ontology(&root, &args.old, &args.new, ontology.as_ref())?;
     if json {
         let rewritten: Vec<_> = r.rewritten.iter().map(|c| c.0.clone()).collect();
         output::print_line(&json!({
@@ -414,7 +539,8 @@ pub fn run_mv(args: &MvArgs, json: bool) -> Result<i32> {
 /// `okf rm <concept> [bundle] [--force]`.
 pub fn run_rm(args: &RmArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
-    let r = rm(&root, &args.concept, args.force)?;
+    let (_, ontology) = load_for(&root)?;
+    let r = rm_with_ontology(&root, &args.concept, args.force, ontology.as_ref())?;
     if json {
         let dangling: Vec<_> = r.dangling_referrers.iter().map(|c| c.0.clone()).collect();
         output::print_line(&json!({

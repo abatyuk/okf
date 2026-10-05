@@ -6,11 +6,11 @@ module: model
 defined_in:
 - /components/model
 sources:
-- resource: ../crates/okf-core/src/model/frontmatter.rs
+- resource: crates/okf-core/src/model/frontmatter.rs
   kind: git-path
   fingerprint:
-    blob_sha: adf7ff4edacef5d7b0a10e8bb8eadadafb85debb
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 1784f3a4984155164ffc0332d7abadfce0d08d77
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Frontmatter
 

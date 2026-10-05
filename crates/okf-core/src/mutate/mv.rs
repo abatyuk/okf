@@ -21,13 +21,14 @@ use std::path::{Path, PathBuf};
 use pulldown_cmark::{Event, Parser, Tag};
 use serde_yaml::Value;
 
-use crate::bundle::loader::load_bundle;
+use crate::bundle::loader::{load_bundle, Bundle};
 use crate::error::{OkfError, Result};
 use crate::graph::backlinks::backlinks_of;
 use crate::model::concept::{Concept, ConceptId};
 use crate::model::link::{classify, resolve_link, LinkKind};
 use crate::ontology::load::try_load;
 use crate::ontology::schema::Ontology;
+use crate::query::selector::Selector;
 
 use super::edit::{id_to_path, save_concept};
 
@@ -45,6 +46,17 @@ pub struct MvResult {
 /// Move/rename the concept `old_id` to `new_id` in the bundle at `root`, rewriting every
 /// inbound link and rebasing the moved file's own relative links.
 pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
+    let ontology = try_load(root)?;
+    mv_with_ontology(root, old_id, new_id, ontology.as_ref())
+}
+
+/// Move with an explicitly selected ontology, including a configured sidecar.
+pub fn mv_with_ontology(
+    root: &Path,
+    old_id: &str,
+    new_id: &str,
+    ontology: Option<&Ontology>,
+) -> Result<MvResult> {
     let old = ConceptId::parse(old_id)?;
     let new = ConceptId::parse(new_id)?;
     if old == new {
@@ -63,8 +75,8 @@ pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
     }
 
     let bundle = load_bundle(root)?;
-    let ontology = try_load(root)?;
-    let referrers = backlinks_of(&bundle, ontology.as_ref(), &old.0);
+    check_structured_move(&bundle, ontology, &old, &new)?;
+    let referrers = backlinks_of(&bundle, ontology, &old.0);
 
     // 1. Rewrite inbound links in each referrer, staging changed concepts.
     let mut staged: Vec<Concept> = Vec::new();
@@ -77,7 +89,7 @@ pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
         let from = concept.id.clone();
         let old_t = old.clone();
         let new_t = new.clone();
-        let changed = apply_rewrite(&mut concept, ontology.as_ref(), &move |raw: &str| {
+        let changed = apply_rewrite(&mut concept, ontology, &move |raw: &str| {
             if classify(raw) == LinkKind::External {
                 return None;
             }
@@ -101,7 +113,7 @@ pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
     {
         let old_from = old.clone();
         let new_from = new.clone();
-        apply_rewrite(&mut moved, ontology.as_ref(), &move |raw: &str| {
+        apply_rewrite(&mut moved, ontology, &move |raw: &str| {
             if classify(raw) == LinkKind::External {
                 return None;
             }
@@ -130,6 +142,59 @@ pub fn mv(root: &Path, old_id: &str, new_id: &str) -> Result<MvResult> {
     })
 }
 
+/// Structured references are readable but their occurrence rewriting is deferred. Refuse
+/// before staging or writing whenever an authored selected occurrence would need to change.
+fn check_structured_move(
+    bundle: &Bundle,
+    ontology: Option<&Ontology>,
+    old: &ConceptId,
+    new: &ConceptId,
+) -> Result<()> {
+    let Some(ontology) = ontology else {
+        return Ok(());
+    };
+    for concept in &bundle.concepts {
+        let Some(definition) = concept
+            .concept_type()
+            .and_then(|name| ontology.concepts.get(name))
+        else {
+            continue;
+        };
+        let metadata = serde_yaml::to_value(&concept.frontmatter.map)
+            .map_err(|error| OkfError::Yaml(error.to_string()))?;
+        for (rule_name, rule) in &definition.references {
+            let Some(selector) = &rule.selector else {
+                continue;
+            };
+            for occurrence in Selector::parse(selector)?.select(&metadata).leaves {
+                let Some(raw) = occurrence
+                    .value
+                    .as_str()
+                    .filter(|raw| !raw.trim().is_empty())
+                else {
+                    continue;
+                };
+                if classify(raw) == LinkKind::External {
+                    continue;
+                }
+                let target = resolve_link(&concept.id, raw);
+                let inbound_changes =
+                    target == *old && rewrite_link_string(&concept.id, raw, new) != raw;
+                let outbound_changes = concept.id == *old
+                    && matches!(classify(raw), LinkKind::Relative | LinkKind::Bare)
+                    && parent_dir(&old.0) != parent_dir(&new.0);
+                if inbound_changes || outbound_changes {
+                    return Err(OkfError::Usage(format!(
+                        "mv: structured reference {}:{} (rule {rule_name}) requires rewriting; structured-reference moves are unsupported; no files changed",
+                        concept.id, occurrence.path,
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Apply a link-string rewrite closure over a concept's frontmatter reference fields and body
 /// markdown links. Returns whether anything changed.
 fn apply_rewrite<F>(concept: &mut Concept, ontology: Option<&Ontology>, rewrite: &F) -> bool
@@ -140,7 +205,13 @@ where
     let keys: Vec<String> = concept
         .concept_type()
         .and_then(|name| ontology.and_then(|o| o.concepts.get(name)))
-        .map(|ct| ct.references.keys().cloned().collect())
+        .map(|ct| {
+            ct.references
+                .iter()
+                .filter(|(_, rule)| rule.selector.is_none())
+                .map(|(key, _)| key.clone())
+                .collect()
+        })
         .unwrap_or_default();
     for key in keys {
         if let Some(value) = concept.frontmatter.map.get_mut(&key) {

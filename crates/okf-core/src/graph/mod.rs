@@ -3,3 +3,6 @@ pub mod affected;
 pub mod backlinks;
 pub mod build;
 pub mod render;
+
+pub mod catalog;
+pub mod relationships;

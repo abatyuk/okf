@@ -4,7 +4,6 @@ use crate::output;
 use okf_core::bundle::loader::load_bundle;
 use okf_core::bundle::resolve::resolve_bundle;
 use okf_core::error::{OkfError, Result};
-use okf_core::ontology::load::try_load;
 use okf_core::render::docs::{render_docs, DocsFormat};
 use okf_core::render::index::write_indexes;
 use serde_json::json;
@@ -14,7 +13,7 @@ use serde_json::json;
 pub fn run_docs(args: &DocsArgs, json: bool) -> Result<i32> {
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
-    let ontology = try_load(&root)?;
+    let (_, ontology) = okf_core::bundle::settings::load_for(&root)?;
     let format = DocsFormat::parse(&args.format).ok_or_else(|| {
         OkfError::Usage(format!(
             "unknown docs format {:?}: expected md, html, pdf, graphml, obsidian, or index",

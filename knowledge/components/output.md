@@ -6,11 +6,11 @@ layer: core
 depends_on:
 - /components/model
 sources:
-- resource: ../crates/okf-core/src/output/mod.rs
+- resource: crates/okf-core/src/output/mod.rs
   kind: git-path
   fingerprint:
-    blob_sha: c9dadff8f9444ccfcbec587eba7767b6020e778e
-last_modified: 2026-09-07T18:47:09Z
+    blob_sha: 85506dc0f17397f6d7e3841c47eb10ec16f92561
+last_modified: 2026-10-04T20:39:29Z
 ---
 # output module
 

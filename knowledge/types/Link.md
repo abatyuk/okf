@@ -6,11 +6,11 @@ module: model
 defined_in:
 - /components/model
 sources:
-- resource: ../crates/okf-core/src/model/link.rs
+- resource: crates/okf-core/src/model/link.rs
   kind: git-path
   fingerprint:
-    blob_sha: ca34554f8fcd422c30315e5650116de9776996a7
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 26329c9080146c41e206bfacbb7e6dfb93bcedde
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Link
 
@@ -30,3 +30,13 @@ pub enum LinkKind {
 ```
 
 Defined in `okf-core`.
+
+Declared ontology selectors can extract links from nested list/object metadata while retaining
+concrete occurrence paths. Ordinary path-looking values remain opaque without declarations.
+Catalog resolution qualifies registered cross-bundle targets, retaining original resources
+and out-of-scope/missing statuses without matching names heuristically.
+
+Repository-relative Git fingerprint sources retain their Git-root namespace; a Markdown artifact
+resource is not reinterpreted as a document-relative concept ID. Standard kind-less Markdown
+source lineage retains ordinary document-relative semantics. Catalog source resolution keeps
+those namespaces explicit.

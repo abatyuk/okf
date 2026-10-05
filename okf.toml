@@ -1,0 +1,1 @@
+default_bundle = { path = "knowledge" }

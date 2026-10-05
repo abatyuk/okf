@@ -12,11 +12,13 @@ use std::path::Path;
 use crate::error::{OkfError, Result};
 
 use super::load::{parse_ontology, validate_ontology};
-use super::schema::{ConceptType, Field, Ontology, ReferenceRule};
+use super::schema::{ConceptType, Field, FieldType, Ontology, ReferenceRule, RelationshipRule};
+use serde_yaml::{Mapping, Value};
 
 /// Add a new concept type. Errors if a type with `name` already exists (use
 /// [`update_concept_type`] / [`upsert_concept_type`] to modify).
 pub fn add_concept_type(ontology: &mut Ontology, name: &str, ct: ConceptType) -> Result<()> {
+    declaration_name(&Value::String(name.into()))?;
     if ontology.concepts.contains_key(name) {
         return Err(OkfError::Usage(format!(
             "concept type {name:?} already exists"
@@ -95,6 +97,205 @@ pub fn remove_reference(
     })
 }
 
+/// Set a complete semantic relationship declaration.
+pub fn set_relationship(
+    ontology: &mut Ontology,
+    concept: &str,
+    key: &str,
+    rule: RelationshipRule,
+) -> Result<()> {
+    concept_mut(ontology, concept)?
+        .relationships
+        .insert(key.to_owned(), rule);
+    Ok(())
+}
+
+/// Remove an existing semantic relationship declaration.
+pub fn remove_relationship(
+    ontology: &mut Ontology,
+    concept: &str,
+    key: &str,
+) -> Result<RelationshipRule> {
+    concept_mut(ontology, concept)?
+        .relationships
+        .shift_remove(key)
+        .ok_or_else(|| OkfError::Usage(format!("concept {concept:?} has no relationship {key:?}")))
+}
+
+/// Overlay a partial concept definition. Named declarations replace completely, omitted
+/// declarations remain, and other supplied properties replace their complete value.
+pub fn merge_concept_type(existing: &ConceptType, definition: &Value) -> Result<ConceptType> {
+    let supplied = mapping(definition, "concept definition")?;
+    let mut result = serde_yaml::to_value(existing).map_err(|e| OkfError::Yaml(e.to_string()))?;
+    let out = result.as_mapping_mut().unwrap();
+    for (key, value) in supplied {
+        let name = key
+            .as_str()
+            .ok_or_else(|| OkfError::Usage("concept keys must be strings".into()))?;
+        if matches!(name, "fields" | "references" | "relationships") {
+            let declarations = mapping(value, name)?;
+            let destination = out
+                .entry(key.clone())
+                .or_insert_with(|| Value::Mapping(Mapping::new()));
+            let destination = destination
+                .as_mapping_mut()
+                .ok_or_else(|| OkfError::Usage(format!("{name} must be a mapping")))?;
+            for (name, declaration) in declarations {
+                declaration_name(name)?;
+                destination.insert(name.clone(), declaration.clone());
+            }
+        } else {
+            out.insert(key.clone(), value.clone());
+        }
+    }
+    serde_yaml::from_value(result)
+        .map_err(|e| OkfError::Usage(format!("invalid concept definition: {e}")))
+}
+
+/// Apply a coordinated change document transactionally in memory. No intermediate
+/// ontology needs to validate: dependent definitions are checked together at the end.
+pub fn apply_changes(ontology: &mut Ontology, changes: &Value) -> Result<()> {
+    let plan = mapping(changes, "ontology changes")?;
+    check_keys(
+        plan,
+        &["field_types", "concepts", "remove"],
+        "ontology changes",
+    )?;
+    let mut candidate = ontology.clone();
+    let empty = Mapping::new();
+    let types = optional_mapping(plan, "field_types")?.unwrap_or(&empty);
+    let concepts = optional_mapping(plan, "concepts")?.unwrap_or(&empty);
+    if let Some(removals) = optional_mapping(plan, "remove")? {
+        check_keys(removals, &["field_types", "concepts"], "remove")?;
+        for name in removal_names(removals, "field_types")? {
+            reject_conflict(types, &name, "field type")?;
+            candidate
+                .field_types
+                .shift_remove(&name)
+                .ok_or_else(|| OkfError::Usage(format!("field type {name:?} does not exist")))?;
+        }
+        for name in removal_names(removals, "concepts")? {
+            reject_conflict(concepts, &name, "concept")?;
+            remove_concept_type(&mut candidate, &name)?;
+        }
+    }
+    for (name, definition) in types {
+        let name = declaration_name(name)?;
+        validate_field_type_name(&name)?;
+        mapping(definition, "field-type definition")?;
+        let parsed = serde_yaml::from_value(definition.clone())
+            .map_err(|e| OkfError::Usage(format!("invalid field-type definition: {e}")))?;
+        candidate.field_types.insert(name, parsed);
+    }
+    for (name, definition) in concepts {
+        let name = declaration_name(name)?;
+        let mut supplied = mapping(definition, "concept definition")?.clone();
+        let removals = supplied.remove(Value::String("remove".into()));
+        let existing = candidate.concepts.get(&name).cloned().unwrap_or_default();
+        let merged = merge_concept_type(&existing, &Value::Mapping(supplied.clone()))?;
+        if merged.attested && name != "Attested Computation" {
+            return Err(OkfError::Usage(
+                "attested is reserved for the exact OKF type `Attested Computation`".into(),
+            ));
+        }
+        candidate.concepts.insert(name.clone(), merged);
+        if let Some(removals) = removals {
+            let removals = mapping(&removals, "concept remove")?;
+            check_keys(
+                removals,
+                &["fields", "references", "relationships"],
+                "concept remove",
+            )?;
+            for section in ["fields", "references", "relationships"] {
+                for key in removal_names(removals, section)? {
+                    if let Some(declarations) = optional_mapping(&supplied, section)? {
+                        reject_conflict(declarations, &key, section)?;
+                    }
+                    match section {
+                        "fields" => {
+                            remove_field(&mut candidate, &name, &key)?;
+                        }
+                        "references" => {
+                            remove_reference(&mut candidate, &name, &key)?;
+                        }
+                        _ => {
+                            remove_relationship(&mut candidate, &name, &key)?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    validate_ontology(&candidate)?;
+    *ontology = candidate;
+    Ok(())
+}
+
+/// Reusable definitions cannot shadow primitive names, which resolve before definitions.
+pub fn validate_field_type_name(name: &str) -> Result<()> {
+    declaration_name(&Value::String(name.into()))?;
+    if FieldType::from_keyword(name).is_some() {
+        return Err(OkfError::Usage(format!(
+            "field type {name:?} is a reserved primitive name"
+        )));
+    }
+    Ok(())
+}
+
+fn mapping<'a>(value: &'a Value, context: &str) -> Result<&'a Mapping> {
+    value
+        .as_mapping()
+        .ok_or_else(|| OkfError::Usage(format!("{context} must be a mapping")))
+}
+fn optional_mapping<'a>(map: &'a Mapping, key: &str) -> Result<Option<&'a Mapping>> {
+    map.get(Value::String(key.into()))
+        .map(|value| mapping(value, key))
+        .transpose()
+}
+fn declaration_name(value: &Value) -> Result<String> {
+    value
+        .as_str()
+        .filter(|name| !name.trim().is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| OkfError::Usage("declaration names must be nonempty strings".into()))
+}
+fn check_keys(map: &Mapping, allowed: &[&str], context: &str) -> Result<()> {
+    for key in map.keys() {
+        let name = declaration_name(key)?;
+        if !allowed.contains(&name.as_str()) {
+            return Err(OkfError::Usage(format!("unknown {context} key {name:?}")));
+        }
+    }
+    Ok(())
+}
+fn reject_conflict(map: &Mapping, name: &str, section: &str) -> Result<()> {
+    if map.contains_key(Value::String(name.into())) {
+        return Err(OkfError::Usage(format!(
+            "conflicting set and remove for {section} {name:?}"
+        )));
+    }
+    Ok(())
+}
+fn removal_names(map: &Mapping, section: &str) -> Result<Vec<String>> {
+    let Some(value) = map.get(Value::String(section.into())) else {
+        return Ok(Vec::new());
+    };
+    let values = value
+        .as_sequence()
+        .ok_or_else(|| OkfError::Usage(format!("remove.{section} must be a sequence of names")))?;
+    let mut names = Vec::new();
+    for value in values {
+        let name = declaration_name(value)?;
+        if names.contains(&name) {
+            return Err(OkfError::Usage(format!(
+                "duplicate remove.{section} name {name:?}"
+            )));
+        }
+        names.push(name);
+    }
+    Ok(names)
+}
+
 fn concept_mut<'a>(ontology: &'a mut Ontology, name: &str) -> Result<&'a mut ConceptType> {
     ontology
         .concepts
@@ -115,15 +316,59 @@ pub fn to_yaml(ontology: &Ontology) -> Result<String> {
 
 /// Validate then write an ontology back to `path`. The file is only touched once the
 /// serialized result validates, so a bad edit cannot corrupt an existing file.
-pub fn save_ontology(path: &Path, ontology: &Ontology) -> Result<()> {
+pub fn render_ontology(path: &Path, ontology: &Ontology) -> Result<String> {
     let mut text = to_yaml(ontology)?;
-    if let Ok(original) = std::fs::read_to_string(path) {
-        text = preserve_comments(&original, &text);
-        parse_ontology(&text)?;
+    match std::fs::read_to_string(path) {
+        Ok(original) => {
+            text = preserve_comments(&original, &text);
+            parse_ontology(&text)?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(OkfError::Environment(format!(
+                "cannot read {}: {error}",
+                path.display()
+            )))
+        }
     }
-    std::fs::write(path, text)
-        .map_err(|e| OkfError::Environment(format!("cannot write {}: {e}", path.display())))?;
-    Ok(())
+    Ok(text)
+}
+
+/// Render, validate, then publish an ontology with one atomic rename.
+pub fn save_ontology(path: &Path, ontology: &Ontology) -> Result<()> {
+    let text = render_ontology(path, ontology)?;
+    use std::io::Write;
+    // Stage alongside the destination so publishing uses one atomic rename.
+    static NEXT_TEMP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT_TEMP.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let destination = if path.is_symlink() {
+        std::fs::canonicalize(path)
+            .map_err(|e| OkfError::Environment(format!("cannot resolve {}: {e}", path.display())))?
+    } else {
+        path.to_path_buf()
+    };
+    let temp = destination.with_file_name(format!(
+        ".okf-ontology-{}-{sequence}.tmp",
+        std::process::id()
+    ));
+    let mut created = false;
+    let result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        created = true;
+        if let Ok(metadata) = std::fs::metadata(&destination) {
+            file.set_permissions(metadata.permissions())?;
+        }
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+        std::fs::rename(&temp, &destination)
+    })();
+    if created && result.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    result.map_err(|e| OkfError::Environment(format!("cannot write {}: {e}", path.display())))
 }
 
 /// Reattach comments to the same YAML mapping key after serde's structural rewrite. This keeps

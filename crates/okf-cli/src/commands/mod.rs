@@ -4,6 +4,7 @@
 //! at/above a command's threshold. Errors bubble as [`OkfError`] and are mapped to 2/3/4 by
 //! [`crate::exit`]. Core never calls `process::exit`.
 pub mod artifact;
+pub mod catalog;
 pub mod check;
 pub mod mutate;
 pub mod ontology;
@@ -15,11 +16,15 @@ use crate::cli::{ArtifactCmd, Cli, Command, ComputationCmd, OntologyCmd};
 use okf_core::error::Result;
 
 /// Dispatch a parsed CLI invocation to its command handler, returning an exit code.
-pub fn run(cli: Cli) -> Result<i32> {
+pub fn run(mut cli: Cli) -> Result<i32> {
+    if let Some(code) = catalog::prepare(&mut cli)? {
+        return Ok(code);
+    }
     let json = cli.json;
     match &cli.command {
         // META
         Command::Schema => schema::run_schema(json),
+        Command::Catalog => catalog::run_catalog(json),
         Command::Version => schema::run_version(json),
         // QUERY
         Command::List(a) => query::run_list(a, json),
@@ -64,6 +69,8 @@ pub fn run(cli: Cli) -> Result<i32> {
             OntologyCmd::Add(a) => ontology::run_add(a, json),
             OntologyCmd::Update(a) => ontology::run_update(a, json),
             OntologyCmd::Remove(a) => ontology::run_remove(a, json),
+            OntologyCmd::FieldType(cmd) => ontology::run_field_type(cmd, json),
+            OntologyCmd::Apply(a) => ontology::run_apply(a, json),
         },
         // RENDER
         Command::Docs(a) => render::run_docs(a, json),

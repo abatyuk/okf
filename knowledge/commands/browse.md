@@ -7,15 +7,19 @@ mutates: false
 implemented_by:
 - /components/query
 sources:
+- resource: crates/okf-cli/src/commands/schema.rs
+  kind: git-path
+  fingerprint:
+    blob_sha: 126dddfab3fb8caa78cfd61396db89dbcc324a33
 - resource: crates/okf-cli/src/cli.rs
   kind: git-path
   fingerprint:
-    blob_sha: 2e9e16e4bfa3271ab135d7f1ca406374da1a1407
+    blob_sha: 28db6285f18a0400ab4b08c79c46322e58c2d833
 - resource: crates/okf-cli/src/commands/query.rs
   kind: git-path
   fingerprint:
-    blob_sha: 079709086641c8a57a21c3da0c2f2e027af390f3
-last_modified: 2026-09-09T13:13:42Z
+    blob_sha: c9b643257e90f1e3e225cb4613be98f08f6abd02
+last_modified: 2026-10-04T20:39:29Z
 ---
 # okf browse
 
@@ -30,6 +34,6 @@ Use the root view first, then pass `--directory <path>` to descend into a promis
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--directory <value>` | string | no | Bundle-relative directory to browse (default: root `/`) (default: `/`) |
 
-Global `--json` requests NDJSON. The optional trailing `bundle` positional resolves as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd.
+Global `--json` requests NDJSON. The optional trailing `bundle` positional is a path; `--bundle-id` selects a catalog identity. Selection uses explicit path or ID, `$OKF_BUNDLE` (path), registered containing bundle, configured default, sole catalog entry, then uncataloged cwd. Selection and examination scope are separate.
 
 Output stream: `index`.

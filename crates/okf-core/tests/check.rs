@@ -22,6 +22,29 @@ fn count(findings: &[Finding], rule: &str) -> usize {
     findings.iter().filter(|f| f.rule == rule).count()
 }
 
+#[test]
+fn git_markdown_artifact_provenance_does_not_invent_document_relative_concept_edges() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("docs")).unwrap();
+    std::fs::create_dir(root.path().join("knowledge")).unwrap();
+    std::fs::write(root.path().join("docs/SKILL.md"), "# Skill artifact\n").unwrap();
+    std::fs::write(
+        root.path().join("knowledge/note.md"),
+        "---\ntype: Note\ntitle: Note\ndescription: Test\nsources:\n- resource: docs/SKILL.md\n  kind: git-path\n- resource: docs/SKILL.md\n  kind: git-commit\n---\n[Missing concept](/missing.md)\n",
+    )
+    .unwrap();
+    let bundle = load_bundle(&root.path().join("knowledge")).unwrap();
+    let findings = lint_bundle(&bundle, None, &LintConfig::default());
+    let broken = findings
+        .iter()
+        .filter(|finding| finding.rule == "broken-link")
+        .collect::<Vec<_>>();
+    assert_eq!(broken.len(), 1, "{findings:?}");
+    assert_eq!(broken[0].severity, Severity::Error);
+    assert!(broken[0].message.contains("/missing"));
+    assert!(!broken[0].message.contains("SKILL"));
+}
+
 // --- validate (conformance only) -------------------------------------------
 
 #[test]

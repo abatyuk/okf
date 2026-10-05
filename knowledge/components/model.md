@@ -6,11 +6,11 @@ layer: core
 depends_on:
 - /components/ontology
 sources:
-- resource: ../crates/okf-core/src/model/mod.rs
+- resource: crates/okf-core/src/model/mod.rs
   kind: git-path
   fingerprint:
-    blob_sha: af4e0dd88aa5f035d93f3a7c926622517f9b7e03
-last_modified: 2026-09-07T18:47:09Z
+    blob_sha: db5f3d22c9c74b2c999806321af0cc3d88929511
+last_modified: 2026-10-04T20:39:29Z
 ---
 # model module
 

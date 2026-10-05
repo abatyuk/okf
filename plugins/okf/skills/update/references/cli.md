@@ -1,12 +1,97 @@
 # okf CLI — update command reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.2.8, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.3.1, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 This focused reference contains only commands selected for the `update` workflow. Consult it when exact arguments or output shapes are needed. If the installed `okf` version differs from the generated tool version above, or rejects documented syntax, use that command's `--help` output as the runtime authority.
 
-Commands with a human form accept global `--json` for NDJSON; `schema` is always NDJSON. Bundle-aware commands take an optional trailing `bundle` positional resolved as explicit argument, `$OKF_BUNDLE`, nearest `okf.toml`, then cwd. Meta commands have no bundle, and `source-scan` takes an explicit arbitrary directory.
+Commands with a human form accept global `--json` for NDJSON; `schema` is always NDJSON. Bundle-aware commands take an optional trailing `bundle` path or a separate `--bundle-id` selector. Selection uses explicit path or ID, `$OKF_BUNDLE` (path), registered containing bundle, configured default, sole catalog entry, then uncataloged cwd. Catalog registration alone does not extend examination scope. Meta commands have no bundle, and `source-scan` takes an explicit arbitrary directory.
 
 Exit codes: 0 means success under the selected failure threshold, not necessarily no findings; 1 means findings or an unsuccessful resolution; 2 means usage errors; 3 means environment/I/O/YAML errors; 4 means an internal error. Inspect findings even with `--fail-on never`. NDJSON is one record per line, not a JSON array.
+
+## Global arguments
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `--json` | bool | no | Emit NDJSON instead of human text or a bare artifact; schema is always NDJSON (default: `false`) |
+| `--bundle-id <value>` | string | no | Select an explicitly registered bundle identity (paths keep separate meanings) |
+| `--scope-bundle <value>` | list<string> | no | Add a registered bundle to the examination scope (repeatable) |
+| `--catalog-scope` | bool | no | Examine every locally available registered bundle (default: `false`) |
+| `--revision <value>` | string | no | Inspect a locally available Git revision; never fetches missing objects |
+
+Scope defaults to the selected bundle. Use scope options only for graph, links, backlinks, resolve, affected, lint, search, and list; other commands reject additional scope. `--revision` supports graph, links, backlinks, resolve, affected, search, and list. Scope and effective settings are interpretation context, not authored concept metadata.
+
+## Extension record contracts
+
+Authored concept metadata remains open. These computed records describe scope, identity, interpretation, and explicit query extensions. Missing and null remain distinct.
+
+```json
+{
+  "bundle-affected": {
+    "bundle": "string",
+    "id": "string",
+    "version": "string"
+  },
+  "bundle-edge": {
+    "evidence": "string",
+    "fingerprint_status": "string|null",
+    "location": "string",
+    "relationship": "{source:string,rule:string,field_path:string,raw_reference:string,target:string,authored_kind:string|null,inverse:string|null,attributes:object,status:string}|null",
+    "resource": "string",
+    "snapshot": "{requested:object,status:string,evidence:string,resolved:qualified_identity|null,candidate:qualified_identity|null}|null",
+    "source": "qualified_identity",
+    "status": "string",
+    "target": "qualified_identity|null"
+  },
+  "bundle-registration": {
+    "available": "boolean",
+    "configured_root": "path",
+    "id": "string",
+    "overridden": "boolean",
+    "root": "path"
+  },
+  "effective-settings": {
+    "bundle": "string",
+    "settings": "interpretation-settings"
+  },
+  "projection": {
+    "bundle": "string|null",
+    "fields": "array<{field:string,present:boolean,value?:any,occurrences?:array<{path:string,value:any}>,empty_lists?:integer}>",
+    "id": "string",
+    "schema_version": 1,
+    "version": "string"
+  },
+  "qualified_identity": {
+    "bundle": "string",
+    "id": "string",
+    "version": "string"
+  },
+  "relationship": {
+    "bundle": "string",
+    "edge": "object",
+    "primary": "string",
+    "schema_version": 1,
+    "target_identity": "string|null",
+    "target_payload_status": "string (optional)",
+    "version": "string"
+  },
+  "scope": {
+    "examined": "array<{id:string,root:path,version:string,interpretation:interpretation-settings}>",
+    "requested": "array<string>",
+    "snapshot_examined": "array<qualified_identity> (optional)",
+    "unavailable": "array<string>"
+  }
+}
+```
+
+## meta
+
+### `okf catalog`
+
+List effective catalog registrations, locations, and availability.
+
+_No arguments._
+
+Output stream: `bundle-registration,effective-settings`.
 
 ## query
 
@@ -53,8 +138,9 @@ List the direct concept links defined by one concept.
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+| `--details` | bool | no | Show individual semantic incoming occurrences and configured inverse labels (default: `false`) |
 
-Output stream: `link`.
+Output stream: `link,relationship,scope,bundle-edge`.
 
 ### `okf show`
 
@@ -68,8 +154,9 @@ Show one concept's content, heading outline, or selected line range.
 | `--lines <value>` | string | no | Show only an inclusive 1-based document line range, `START:END` (or one line, `N`) |
 | `--numbered` | bool | no | Print document line numbers (including frontmatter); excludes the display header (default: `false`) |
 | `--body` | bool | no | Print only the raw Markdown body, without frontmatter or display headers (default: `false`) |
+| `--project <value>` | list<string> | no | Explicit metadata projection selector (repeatable) |
 
-Output stream: `concept`.
+Output stream: `concept,projection`.
 
 Without `--json`, show includes the serialized frontmatter and full Markdown body. Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, `effective_status`, `effective_generated_at`, `latest_verified_at`, and `verification_current`. It does not include the body. `--outline --json` returns `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer to the serialized document, including frontmatter, excluding the three-line display header. `show -n` (or `--numbered`) prints the full document with these numbers and no header; its JSON uses the same line-range record. `show --body` prints only raw Markdown; with `--json` it returns a body record containing `id` and `body`. An outline or selected slice does not establish complete document-review coverage.
 
@@ -87,7 +174,7 @@ Impact query: concepts needing review given a set of changed links.
 | `--depth <value>` | int | no | Cap the number of hops when `--transitive` |
 | `--fail-on <value>` | string | no | Fail (exit 1) on any affected concept: never (default) | info | warn | error | any (default: `never`) |
 
-Output stream: `affected`.
+Output stream: `affected,scope,bundle-affected`.
 
 ### `okf diff`
 
@@ -111,7 +198,7 @@ Advisory checks (broken links, missing fields, orphans, ontology violations).
 | `--fix` | bool | no | Apply auto-fixable findings (v1: none are auto-fixable — reports what it would do) (default: `false`) |
 | `--fail-on <value>` | string | no | Severity threshold that makes the run fail (exit 1): never|info|warn|error|any (default: `error`) |
 
-Output stream: `finding`.
+Output stream: `finding,scope`.
 
 For sources with a fingerprint kind, `source-unrecorded` warns when no baseline exists. `source-missing` errors when file, line-range, or markdown-heading sources cannot be fingerprinted, even without a baseline. Lint does not fetch URLs or inspect Git sources. Use `--fail-on warn` to fail on warnings as well as errors.
 
@@ -156,7 +243,7 @@ Output stream: `artifact-write`.
 
 Write bytes from `@file` to a bundle-relative opaque or reserved artifact. The default (and `--create-only`) refuses an existing destination; `--replace` permits replacement. Parent directories are created as needed. Concept and configuration files are protected, and paths must remain inside the bundle. Recorded source fingerprints are preserved so `stale` detects changes; review citing concepts before `refresh`.
 
-### `okf edit` · _mutates_
+### `okf edit` · _conditionally mutates_
 
 Edit a concept losslessly and invalidate its prior verification.
 
@@ -165,7 +252,12 @@ Edit a concept losslessly and invalidate its prior verification.
 | `<concept>` | positional | yes | Concept id to edit |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--set <value>` | list<string> | no | Set/update a scalar field, `key=value` (repeatable) |
+| `--set-yaml <value>` | list<string> | no | Replace a field with YAML: `key=value`, `key=@file`, or `key=-` (repeatable) |
+| `--set-path <value>` | list<string> | no | Set an object path with a YAML value, e.g. `deadline.within=72` (repeatable) |
+| `--dry-run` | bool | no | Validate and show the resulting diff without writing (default: `false`) |
 | `--unset <value>` | list<string> | no | Remove a field entirely, `key` (repeatable) |
+| `--unset-path <value>` | list<string> | no | Delete an object path (repeatable); absent keys are a no-op |
+| `--patch <value>` | string | no | Apply an RFC 6902 JSON Patch to frontmatter, supplied as YAML, `@file`, or `-` |
 | `--add <value>` | list<string> | no | Append an item to a list field, `key=value` (repeatable, idempotent) |
 | `--remove <value>` | list<string> | no | Remove matching item(s) from a list field, `key=value` (repeatable) |
 | `--add-source <value>` | list<string> | no | Add a standard source, `resource=<path-or-uri>[,kind=<extension>][,id=...,...]` |
@@ -183,7 +275,7 @@ Edit a concept losslessly and invalidate its prior verification.
 
 Output stream: `change`.
 
-`--set` accepts scalar values, not arbitrary YAML objects; a dotted key is not a nested-field update. Use `--add-source-json @file` for a complete source mapping. For unsupported complex metadata preservation, inspect the existing representation and use a narrow lossless file edit within scope, then validate. Do not flatten mappings or fabricate verification. Meaningful edits remove active `verified` events and update existing `generated.at`; preserve needed historical evidence separately. Body files contain Markdown only, without frontmatter. Section flags take heading and text as separate values. `--replace OLD NEW` replaces exactly one literal body match; `--all` replaces every match and still fails if none exist. `--rename-section OLD NEW` changes a uniquely matched heading without replacing its content. Malformed YAML must be repaired before this command can load it.
+`--set` keeps literal scalar keys; a dotted key is not traversal. `--set-yaml` replaces a complete named value. `--set-path` parses YAML and creates intermediate maps for object-only paths; `--unset-path` removes an object property. `--patch` accepts an RFC 6902 array with concrete JSON Pointer paths, including list edits and `test` guards. Inputs accept inline YAML/JSON, `@file`, or `-`; only one stdin consumer is permitted. Duplicate/non-string keys, tags, anchors, aliases, merge keys, nonfinite numbers and multiple documents fail. `--dry-run` previews without writes. Use `--add-source-json @file` for source mappings. Do not fabricate verification. Meaningful edits remove active `verified` events and update existing `generated.at`; preserve needed historical evidence separately. Body files contain Markdown only, without frontmatter. Section flags take heading and text as separate values. `--replace OLD NEW` replaces exactly one literal body match; `--all` replaces every match and still fails if none exist. `--rename-section OLD NEW` changes a uniquely matched heading without replacing its content. Malformed YAML must be repaired before this command can load it.
 
 ### `okf mv` · _mutates_
 

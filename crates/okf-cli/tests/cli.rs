@@ -468,8 +468,11 @@ fn search_supports_modes_scopes_evidence_ranking_and_limits() {
     assert_eq!(relevant[0]["id"], "/z-title");
     assert_eq!(relevant[1]["id"], "/a-body");
     let by_id = run(&["--text", "needle search", "--sort", "id", "--limit", "1"]);
-    assert_eq!(by_id.len(), 1);
+    assert_eq!(by_id.len(), 2);
     assert_eq!(by_id[0]["id"], "/a-body");
+    assert_eq!(by_id[1]["kind"], "warning");
+    assert_eq!(by_id[1]["reason"], "result-limit");
+    assert_eq!(by_id[1]["omitted"], 1);
 }
 
 #[test]
@@ -801,7 +804,14 @@ fn schema_is_valid_ndjson_with_all_commands() {
     assert_eq!(search_arg("limit")["type"], "int");
     assert_eq!(
         search_arg("bundle")["resolution"],
-        serde_json::json!(["explicit", "env:OKF_BUNDLE", "config:okf.toml", "cwd"])
+        serde_json::json!([
+            "explicit:path",
+            "env:OKF_BUNDLE:path",
+            "catalog:cwd-containing-root",
+            "config:default_bundle",
+            "catalog:sole-entry",
+            "cwd:without-catalog"
+        ])
     );
     assert!(search_arg("bundle")["default"].is_null());
     assert_eq!(

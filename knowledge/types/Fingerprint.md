@@ -6,11 +6,11 @@ module: model
 defined_in:
 - /components/model
 sources:
-- resource: ../crates/okf-core/src/model/source.rs
+- resource: crates/okf-core/src/model/source.rs
   kind: git-path
   fingerprint:
     blob_sha: ae3eabcbf52969391c8eded9a73b9e868720d1cd
-last_modified: 2026-09-07T18:22:07Z
+last_modified: 2026-10-04T20:39:29Z
 ---
 # Fingerprint
 

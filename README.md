@@ -6,7 +6,7 @@ equally by **humans** (readable text output) and **agents** (line-delimited JSON
 deterministic "hands" beneath a set of agent skills that do the judgment work.
 
 - **Deterministic core** (`okf-core`) — parse, validate, lint, query, graph, fingerprint, render.
-- **Thin CLI** (`okf-cli`) — 36 commands, grouped by verb, with a machine-discoverable schema.
+- **Thin CLI** (`okf-cli`) — commands grouped by verb, with a machine-discoverable schema.
 - **Agent skills** (`plugins/okf/skills/`) — packaged as the **`okf` plugin** for Claude Code and Codex:
   migrate, ingest, update, retrieve, manage ontology, etc. (see [Agent plugins](#agent-plugins)).
 
@@ -73,32 +73,72 @@ the [configuration](#configuration) precedence below. Meta commands take no bund
 
 ## Configuration
 
-Which bundle a command operates on is resolved in this order, **highest precedence first**:
+Bundle paths and catalog IDs use distinct selectors. Selection follows this order:
 
-1. the explicit **bundle argument** (`okf list ./mybundle`),
-2. the **`OKF_BUNDLE`** environment variable (a session-level override),
-3. the **`bundle` key of the nearest `okf.toml`** (a project default), then
-4. the **current directory**.
+1. An explicit trailing bundle path or `--bundle-id` (using both is an error).
+2. `OKF_BUNDLE`, which always means a directory path.
+3. The registered bundle containing the current directory.
+4. `default_bundle` in the nearest `okf.toml`.
+5. The sole catalog entry, if unambiguous.
+6. The current directory when no catalog is configured; otherwise select a bundle explicitly.
 
-The resolved path must exist and be a directory, or the command fails with an environment error
-(exit 3). `init` uses the same precedence but permits the selected target not to exist yet.
-
-**Environment variables**
-
-| Variable | Effect |
-|----------|--------|
-| `OKF_BUNDLE` | Default bundle directory when no bundle argument is given (overridden by an explicit arg, overrides `okf.toml`). |
-
-**`okf.toml`** — a project-scoped config file discovered by walking **up** from the current
-directory to the first `okf.toml` found. It lives *outside* the bundle so the bundle stays
-spec-pure. Unknown keys are ignored so the format can grow compatibly. Currently one key:
+The selected path must exist and be a directory. `init` permits a new target. The nearest
+`okf.toml` is discovered by walking upward from the working directory. New configurations use
+a typed default; the legacy `bundle = "knowledge"` remains a deprecated path-only alias. If both
+are supplied, only equivalent path defaults are accepted.
 
 ```toml
 # okf.toml
-bundle = "docs/kb"   # default bundle dir, relative to THIS file's directory (or absolute)
+catalog = "okf-catalog.yaml"
+default_bundle = { id = "acme.product" }
+# For single-bundle use: default_bundle = { path = "knowledge" }
+
+[bundle_settings."acme.product"]
+ontology = "tooling/product-ontology.yaml"
 ```
 
-A present-but-malformed `okf.toml` is a usage error (exit 2).
+```yaml
+# okf-catalog.yaml
+catalog_version: 1
+bundles:
+  acme.product:
+    location: {type: directory, path: knowledge/product}
+  acme.finance:
+    location: {type: directory, path: knowledge/finance}
+```
+
+Catalog and configured ontology paths are relative to `okf.toml`; directory locations are
+relative to the catalog. Available registered roots are canonicalized and must not overlap.
+Unavailable directories remain visible diagnostics. Each bundle owns its interpretation settings;
+`[bundle_settings.default]` applies to uncataloged use. The optional root `ontology.yaml` remains
+the discovery fallback and never establishes a bundle boundary.
+
+Local checkout overrides use `catalog_overrides` in `okf.toml`, or `OKF_CATALOG_OVERRIDES`
+(the environment value takes precedence). The YAML override file maps `bundles` to paths:
+
+```yaml
+bundles:
+  acme.finance: ../finance-checkout/knowledge
+```
+
+Override paths are relative to that file. Overrides cannot register new IDs or accept different
+snapshot content. The CLI reads available local files and Git objects without cloning or fetching.
+
+Selection and examination scope are separate. Catalog registration alone does not include another
+bundle in a query, graph or check. Use repeatable `--scope-bundle <id>` or deliberate `--catalog-scope` as described in the [CLI reference](docs/okf-cli-reference.md)
+and retain reported examined scope and unavailable members. Cross-bundle ordinary paths preserve
+the surrounding layout; copying one directory alone can break those references. Optional
+`bundle_ref` source metadata adds target identity and snapshot expectations while retaining
+ordinary `resource` meaning. Current candidates stay separate from requested snapshot matches;
+resolving a reference never verifies its claims or refreshes its fingerprints.
+
+`okf catalog --json` inspects effective registrations without selecting a primary. Graph targets
+can use qualified IDs such as `acme.finance:/policies/margin-standard`. `--revision <ref>` is
+available for graph, links, backlinks, resolve, affected, search and list; other reads and writes use
+current local content. Additional scope is supported by those commands plus lint; other commands reject scope options.
+
+See [multi-bundle design](docs/multi-bundle-capability.md) and
+[structured metadata design](docs/structured-metadata-capability.md) for compatibility and limits.
 
 ## Output: text vs NDJSON
 
@@ -125,7 +165,7 @@ spelling.
 
 | Group | Commands |
 |-------|----------|
-| **meta** | `schema`, `version` |
+| **meta** | `schema`, `version`, `catalog` |
 | **query** | `list`, `search`, `show`, `links`, `backlinks`, `graph`, `resolve`, `artifact list/resolve/show`, `ontology list`, `ontology show` |
 | **check** | `scan`, `source-scan`, `validate`, `lint`, `doctor`, `stale`, `affected`, `diff`, `stats`, `computation check` |
 | **mutate** | `init`, `add`, `edit`, `mv`, `rm`, `verify`, `refresh`, `ontology add/update/remove` |
@@ -142,8 +182,8 @@ Highlights:
 - **`artifact`** supports the optional `references/` convention and standard path-valued fields.
   It distinguishes concepts, opaque files, URLs, scope descriptors, missing paths, and blocked
   paths. Retrieval is bounded and never executes code.
-- **`mv`** rewrites every inbound link when it renames a concept (a concept's id *is* its path,
-  so a naive move would break references).
+- **`mv`** rebases inbound body links and standard source resources when it renames a concept.
+  It refuses unsupported declared nested-reference rewrites; cross-bundle moves require coordinated review.
 - **`edit`** changes both frontmatter and body while preserving unknown YAML values and key order.
   YAML comments and scalar presentation may normalize. Frontmatter: `--set key=value`
   (scalar), `--unset key`, `--add key=value` (append a list item, idempotent), `--remove
@@ -189,9 +229,32 @@ such as SQL, Python, schemas, and run instructions. Use `okf artifact` to inspec
 
 ## Ontology
 
-A project-local `ontology.yaml` (outside the bundle, so the bundle stays spec-pure) defines
-concept types, their typed fields, and typed reference rules with cardinality. `lint` enforces
-it advisorily; `add` scaffolds from it. Manage it with `okf ontology add/update/remove`.
+An optional tool-local ontology defines concept types, reusable field types, recursive objects and
+lists, and declared reference rules. Configure its path per bundle or use the root `ontology.yaml`
+fallback. `lint` checks it advisorily; `validate` retains only OKF conformance rules. Concept types can be managed with `okf ontology add/update/remove`; structured declarations use
+`--field-yaml`, `--ref-yaml`, `--relationship-yaml`, or a definition file with `--from`.
+`okf ontology field-type add/update/remove` manages reusable definitions. `okf ontology apply`
+validates dependent changes together, preserving omitted declarations and using explicit removals.
+
+Concept `add/edit --set-yaml` replaces a complete structured value; `--set-path` sets an object
+property while creating missing intermediate objects. `edit --unset-path` removes an object
+property, and `edit --patch` applies RFC 6902 operations to frontmatter using concrete JSON Pointer
+paths, including list edits and guarded changes. Existing `--set` keeps literal scalar keys.
+Use `--dry-run` to review mutations before writing. See the
+[structured authoring workflow](plugins/okf/skills/ontology/references/structured-authoring.md)
+for file inputs, replacement rules, and bulk removal syntax.
+
+Selectors such as `relations[].target` and `norms[].deadline.from` traverse explicit list records;
+`["policy.status"]` selects a literal dotted key. Custom path-looking strings remain opaque unless
+a reference is declared. Relationship kinds and attributes pair within the same record. Named
+inverse backlinks display incoming assertions, without proving consent or policy compliance.
+Recursive lint diagnoses exact YAML types, bounds, patterns, vocabularies, uniqueness and explicitly
+closed custom objects. Unknown extensions survive and unsupported constraints remain visible.
+
+Read-only index coverage checks report missing navigation links. Query views, projections, facets,
+pagination and related expansion preserve authored frontmatter and report completeness and scope.
+Consult the generated CLI reference for exact options and configuration examples. Declared nested
+reference rewriting and automatic cross-bundle move orchestration remain deferred.
 
 ## Agent plugins
 

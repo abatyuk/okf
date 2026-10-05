@@ -163,6 +163,7 @@ fn add_then_load_round_trip() {
     new_type.references.insert(
         "metrics".to_string(),
         ReferenceRule {
+            selector: None,
             target: Target::One("Metric".to_string()),
             cardinality: Cardinality::OneN,
             extra: Default::default(),
@@ -221,10 +222,10 @@ fn check_concept_flags_missing_and_cardinality_and_target() {
         .any(|k| matches!(k, ViolationKind::MissingRequiredBuiltin(f) if f == "description")));
     assert!(kinds
         .iter()
-        .any(|k| matches!(k, ViolationKind::MissingRequiredField(f) if f == "owner")));
+        .any(|k| matches!(k, ViolationKind::Metadata {code,path} if code == "metadata-required" && path == "owner")));
     assert!(kinds
         .iter()
-        .any(|k| matches!(k, ViolationKind::MissingRequiredField(f) if f == "effective_date")));
+        .any(|k| matches!(k, ViolationKind::Metadata {code,path} if code == "metadata-required" && path == "effective_date")));
     // computations rule allows Computation; a Metric link is a wrong target.
     assert!(kinds
         .iter()

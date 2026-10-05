@@ -31,6 +31,7 @@ pub fn run_version(json: bool) -> Result<i32> {
 
 /// `okf schema` — always NDJSON, regardless of `--json` (it is the machine-discovery surface).
 pub fn run_schema(_json: bool) -> Result<i32> {
+    let cli = Cli::command();
     // Header line describing the tool/contract.
     output::print_line(&json!({
         "kind": "schema",
@@ -38,29 +39,75 @@ pub fn run_schema(_json: bool) -> Result<i32> {
         "tool_version": env!("CARGO_PKG_VERSION"),
         "okf_spec": OKF_SPEC,
         "ndjson_schema": "2",
-        "global_args": [{
-            "name": "json",
-            "type": "bool",
-            "default": false,
-            "help": "Emit NDJSON instead of human text or a bare artifact; schema is always NDJSON",
-        }],
-        "bundle_resolution": ["explicit", "env:OKF_BUNDLE", "config:okf.toml", "cwd"],
+        "global_args": cli.get_arguments()
+            .filter(|arg| arg.is_global_set() && arg.get_id() != "help" && arg.get_id() != "version")
+            .map(|arg| arg_record("", arg)).collect::<Vec<_>>(),
+        "bundle_resolution": ["explicit:path-or-id", "env:OKF_BUNDLE:path", "catalog:cwd-containing-root", "config:default_bundle", "catalog:sole-entry", "cwd:without-catalog"],
+        "scope": {"default": "selected-bundle", "additional_bundles": "explicit", "registration_authorizes_traversal": false},
+        "output_records": output_record_contracts(),
     }))?;
 
-    let cli = Cli::command();
-    for sub in cli.get_subcommands() {
-        if sub.has_subcommands() {
-            // Nested group (e.g. `ontology`): emit one line per child.
-            let parent = sub.get_name();
-            for child in sub.get_subcommands() {
-                let full = format!("{parent} {}", child.get_name());
-                output::print_line(&command_record(&full, child))?;
+    fn emit_leaves(prefix: &str, cmd: &ClapCommand) -> Result<()> {
+        let name = if prefix.is_empty() {
+            cmd.get_name().to_owned()
+        } else {
+            format!("{prefix} {}", cmd.get_name())
+        };
+        if cmd.has_subcommands() {
+            for child in cmd.get_subcommands() {
+                emit_leaves(&name, child)?;
             }
         } else {
-            output::print_line(&command_record(sub.get_name(), sub))?;
+            output::print_line(&command_record(&name, cmd))?;
         }
+        Ok(())
+    }
+    for sub in cli.get_subcommands() {
+        emit_leaves("", sub)?;
     }
     Ok(0)
+}
+
+/// New extension records are separate from authored concept output. The field contracts
+/// identify typed identities and statuses without imposing metadata schemas on concepts.
+fn output_record_contracts() -> Value {
+    json!({
+        "qualified_identity": {"bundle": "string", "id": "string", "version": "string"},
+        "scope": {"requested": "array<string>", "examined": "array<{id:string,root:path,version:string,interpretation:interpretation-settings}>", "unavailable": "array<string>", "snapshot_examined": "array<qualified_identity> (optional)"},
+        "interpretation-settings": {"bundle": "string|null", "ontology_path": "path|null", "ontology_digest": "string|null", "settings": "object"},
+        "effective-settings": {"bundle": "string", "settings": "interpretation-settings"},
+        "concept-identity": {"schema_version": 1, "id": "string", "bundle": "string", "version": "string"},
+        "query-summary": {
+            "schema_version": 1, "total_matches": "integer|null", "observed_matches": "integer", "returned": "integer",
+            "offset": "integer", "limit": "integer|null", "has_more": "boolean", "next_offset": "integer|null",
+            "scan_complete": "boolean", "partial": "boolean", "examined_documents": "integer", "scan_limit": "integer|null",
+            "filters": "array<string>", "scope": "array<{bundle:string,root:path,version:string,mutable:boolean}>", "interpretation": "array<interpretation-settings>"
+        },
+        "projection": {
+            "schema_version": 1, "id": "string", "bundle": "string|null", "version": "string",
+            "fields": "array<{field:string,present:boolean,value?:any,occurrences?:array<{path:string,value:any}>,empty_lists?:integer}>"
+        },
+        "facet": {
+            "schema_version": 1, "field": "string", "basis": "all-matches|observed-matches", "complete": "boolean",
+            "truncated": "boolean", "omitted_values": "integer", "values": "array<{value:scalar,count:integer}>", "diagnostics": "array<object>"
+        },
+        "facet-excluded": {"schema_version": 1, "field": "string", "reason": "string", "threshold": "integer", "distinct_values": "integer", "complete": "boolean"},
+        "relationship": {"schema_version": 1, "primary": "string", "bundle": "string", "version": "string", "edge": "object", "target_identity": "string|null", "target_payload_status": "string (optional)"},
+        "related-concept": {"schema_version": 1, "identity": "string", "id": "string", "bundle": "string|null", "version": "string", "fields": "projection.fields"},
+        "expansion-summary": {"schema_version": 1, "emitted_edges": "integer", "emitted_targets": "integer", "emitted_bytes": "integer", "bounds": "{edges_per_hit:integer,targets:integer,bytes:integer}", "truncated": "boolean", "reasons": "array<string>", "total_edges": "integer|null"},
+        "warning": {"schema_version": 1, "reason": "string", "limit": "integer|null", "omitted": "integer|null", "message": "string"},
+        "bundle-registration": {"id": "string", "configured_root": "path", "root": "path", "overridden": "boolean", "available": "boolean"},
+        "bundle-backlink": {"bundle": "string", "id": "string", "version": "string"},
+        "bundle-affected": {"bundle": "string", "id": "string", "version": "string"},
+        "bundle-node": {"bundle": "string", "id": "string", "version": "string"},
+        "bundle-edge": {
+            "source": "qualified_identity", "target": "qualified_identity|null",
+            "resource": "string", "location": "string", "status": "string", "evidence": "string",
+            "snapshot": "{requested:object,status:string,evidence:string,resolved:qualified_identity|null,candidate:qualified_identity|null}|null",
+            "fingerprint_status": "string|null",
+            "relationship": "{source:string,rule:string,field_path:string,raw_reference:string,target:string,authored_kind:string|null,inverse:string|null,attributes:object,status:string}|null"
+        }
+    })
 }
 
 /// Build the `{"kind":"command",...}` record for one leaf command.
@@ -81,6 +128,12 @@ fn command_record(full_name: &str, cmd: &ClapCommand) -> Value {
     let mutates_when = match full_name {
         "doctor" => json!({"fix-safe": true, "yes": true, "dry-run": false}),
         "docs" => json!({"format": "index"}),
+        _ if cmd
+            .get_arguments()
+            .any(|arg| arg.get_long() == Some("dry-run")) =>
+        {
+            json!({"dry-run": false})
+        }
         _ => Value::Null,
     };
     let output = match full_name {
@@ -127,8 +180,15 @@ fn arg_record(command: &str, arg: &clap::Arg) -> Value {
         "list<string>".to_string()
     } else if matches!(
         (command, id),
-        ("search", "limit")
-            | ("graph", "depth")
+        (
+            "search" | "list",
+            "limit"
+                | "offset"
+                | "scan_limit"
+                | "expansion_edges"
+                | "expansion_targets"
+                | "expansion_bytes"
+        ) | ("graph", "depth")
             | ("artifact show", "max_bytes")
             | ("affected", "depth")
     ) {
@@ -196,14 +256,27 @@ fn arg_record(command: &str, arg: &clap::Arg) -> Value {
         .iter()
         .map(|value| value.get_name().to_string())
         .collect();
-    let resolution = if id == "bundle" {
-        json!(["explicit", "env:OKF_BUNDLE", "config:okf.toml", "cwd"])
-    } else {
-        Value::Null
-    };
-    let stdin = matches!((command, id), ("affected", "changed"));
-    let resolution =
-        (name == "bundle").then(|| vec!["explicit", "env:OKF_BUNDLE", "config:okf.toml", "cwd"]);
+    let stdin = matches!((command, id), ("affected", "changed"))
+        || matches!(
+            id,
+            "set_yaml"
+                | "set_path"
+                | "field_yaml"
+                | "ref_yaml"
+                | "relationship_yaml"
+                | "from"
+                | "patch"
+        );
+    let resolution = (name == "bundle").then(|| {
+        vec![
+            "explicit:path",
+            "env:OKF_BUNDLE:path",
+            "catalog:cwd-containing-root",
+            "config:default_bundle",
+            "catalog:sole-entry",
+            "cwd:without-catalog",
+        ]
+    });
 
     // The doc-comment help text, so consumers can document an arg without a `--help` round-trip.
     let help = arg.get_help().map(|s| s.to_string());
@@ -234,15 +307,15 @@ fn meta(name: &str) -> (&'static str, bool, &'static str) {
     match name {
         "schema" => ("meta", false, "schema"),
         "version" => ("meta", false, "version"),
+        "catalog" => ("meta", false, "bundle-registration,effective-settings"),
 
-        "list" => ("query", false, "concept"),
-        "search" => ("query", false, "concept"),
-        "show" => ("query", false, "concept"),
+        "list" | "search" => ("query", false, "concept,concept-identity,scope,projection,query-summary,facet,facet-excluded,relationship,related-concept,expansion-summary,warning"),
+        "show" => ("query", false, "concept,projection"),
         "browse" => ("query", false, "index"),
-        "backlinks" => ("query", false, "concept"),
-        "links" => ("query", false, "link"),
-        "graph" => ("query", false, "graph"),
-        "resolve" => ("query", false, "resolved"),
+        "backlinks" => ("query", false, "concept,relationship,scope,bundle-backlink,bundle-edge"),
+        "links" => ("query", false, "link,relationship,scope,bundle-edge"),
+        "graph" => ("query", false, "graph,scope,bundle-node,bundle-edge"),
+        "resolve" => ("query", false, "resolved,scope,bundle-edge"),
         "artifact list" => ("query", false, "artifact"),
         "artifact resolve" => ("query", false, "artifact-resolution"),
         "artifact show" => ("query", false, "artifact-content"),
@@ -254,9 +327,9 @@ fn meta(name: &str) -> (&'static str, bool, &'static str) {
         "scan" => ("check", false, "scan"),
         "source-scan" => ("check", false, "source-file"),
         "validate" => ("check", false, "violation"),
-        "lint" => ("check", false, "finding"),
+        "lint" => ("check", false, "finding,scope"),
         "stale" => ("check", false, "drift"),
-        "affected" => ("check", false, "affected"),
+        "affected" => ("check", false, "affected,scope,bundle-affected"),
         "diff" => ("check", false, "diff"),
         "stats" => ("check", false, "stats"),
         "doctor" => ("check", true, "doctor-finding,doctor-summary"),
@@ -271,6 +344,7 @@ fn meta(name: &str) -> (&'static str, bool, &'static str) {
         "ontology add" => ("mutate", true, "change"),
         "ontology update" => ("mutate", true, "change"),
         "ontology remove" => ("mutate", true, "change"),
+        "ontology apply" | "ontology field-type add" | "ontology field-type update" | "ontology field-type remove" => ("mutate", true, "change"),
 
         "docs" => ("render", true, "docs,change"),
 

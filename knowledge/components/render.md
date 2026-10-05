@@ -10,12 +10,12 @@ depends_on:
 - /components/graph
 - /components/ontology
 - /components/parse
-last_modified: 2026-09-09T13:13:43Z
+last_modified: 2026-10-04T20:39:29Z
 sources:
 - resource: crates/okf-core/src/render/index.rs
   kind: git-path
   fingerprint:
-    blob_sha: 35b21f6070042bf47f4651aed138ab2bc274f53a
+    blob_sha: 053f4712cbc9abd787902f9ba291bf1d07507889
 ---
 # render module
 

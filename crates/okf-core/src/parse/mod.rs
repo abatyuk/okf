@@ -21,3 +21,8 @@ pub fn parse_concept(id: ConceptId, content: &str) -> Result<Concept> {
         body,
     })
 }
+
+/// Parse a document with its file path retained in any error diagnostic.
+pub fn parse_concept_file(id: ConceptId, content: &str, path: &std::path::Path) -> Result<Concept> {
+    parse_concept(id, content).map_err(|error| error.at_path(path))
+}

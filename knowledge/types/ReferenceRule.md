@@ -1,29 +1,30 @@
 ---
 type: DomainType
 title: ReferenceRule
-description: 'A typed edge rule: a frontmatter key on the source concept, the allowed target type(s), and a cardinality.'
+description: A declared concept reference with target types, cardinality and optional nested selector.
 module: ontology
 defined_in:
 - /components/ontology
 sources:
-- resource: ../crates/okf-core/src/ontology/schema.rs
+- resource: crates/okf-core/src/ontology/schema.rs
   kind: git-path
   fingerprint:
-    blob_sha: 878335dafa46f950612887e5a0aad823f8a573a3
-last_modified: 2026-09-07T18:22:07Z
+    blob_sha: 0b71d797088eff17079d10e830f2150a820f3bc5
+last_modified: 2026-10-04T20:39:29Z
 ---
 # ReferenceRule
 
-A typed edge rule: a frontmatter key on the source concept, the allowed target type(s), and a [Cardinality](Cardinality.md). [okf lint](../commands/lint.md) enforces it advisorily.
+A declared edge rule with allowed target type(s), [cardinality](Cardinality.md), and an optional
+nested selector. The legacy map key continues to name a literal top-level field. With a selector,
+`relations[].target` walks explicit list occurrences, while `["policy.status"]` names a literal
+dotted key. Each occurrence retains its concrete field path for diagnostics and semantic pairing.
 
-## Schema
+[Ontology](../components/ontology.md) relationships name the reference rule and optionally supply
+kind selectors, inverse names, and attribute selectors. Those values must pair in the same
+record; a named inverse is a view of an incoming assertion, not a reverse assertion written by
+the target. Paths outside the selected examination scope remain unknown.
 
-```rust
-pub struct ReferenceRule {
-    pub target: Target,            // one type or a union of types
-    pub cardinality: Cardinality,
-    pub extra: IndexMap<String, serde_yaml::Value>,
-}
-```
+[Lint](../commands/lint.md) checks rules advisorily. Ordinary custom strings, artifact paths and
+standard source resources are not reinterpreted as typed relationships without a declaration.
 
-Defined in `okf-core`.
+Defined in `crates/okf-core/src/ontology/schema.rs`.

@@ -15,7 +15,11 @@ or rejects documented syntax, use that command's `--help` output as the runtime 
 
 ## Workflow
 
-1. Resolve the exact bundle and run the read-only preflight above before normal bulk loading.
+1. Resolve the exact bundle and effective settings and run the read-only preflight above before
+   normal bulk loading. Classify catalog/ontology configuration failures separately from document
+   conformance; inspect each affected bundle with its own settings. For nested ontology repairs,
+   use the ontology skill's [structured authoring example](../ontology/references/structured-authoring.md)
+   after the recovery step below.
    Diagnosis does not require a clean worktree, backup, or write approval.
 2. Before mutation, record Git status and preserve the affected files' current contents so user
    edits can be recovered; HEAD alone does not preserve uncommitted work. Unrelated dirty files need
@@ -84,3 +88,28 @@ artifacts otherwise. The destination is bundle-relative and the input is cwd-rel
 fingerprints remain unchanged; review citing concepts before refreshing through the update workflow.
 Inspect `source-unrecorded` warnings and `source-missing` errors even with reporting-only lint;
 use `okf lint <bundle> --fail-on warn` when a source-health gate is requested.
+
+## Bundle identity and examination scope
+
+Keep bundle paths and catalog IDs distinct. `OKF_BUNDLE` always selects a path; use the
+`--bundle-id <id>` for a registered identity. When a catalog is configured, use `okf catalog` to inspect effective local
+registrations, overrides, availability, and per-bundle settings. Catalog paths are relative to
+`okf.toml`, locations are relative to the catalog, and machine-local overrides change effective
+locations rather than accepting different snapshots. Inspect effective settings before relying on
+a per-bundle ontology or view. Equal or nested registered roots are configuration errors.
+
+Registration alone does not authorize catalog-wide traversal. Start with the selected bundle;
+request additional bundles explicitly with repeatable `--scope-bundle <id>` or deliberate
+`--catalog-scope` when the task requires them. Report requested and examined
+scope and unavailable members. Out-of-scope references remain unknown. Ordinary relative paths
+retain their meaning across registered boundaries; distributing one bundle alone can break them.
+Never infer another bundle from a matching filename or title.
+
+## Local configuration and navigation findings
+
+Separate catalog conflicts, unavailable roots, snapshot mismatches, malformed ontology definitions,
+and incomplete recursive checks from OKF conformance failures. Index coverage is advisory and
+read-only; missing navigation links do not make an optional index mandatory. Preserve curated
+prose when repairing indexes, and do not refresh source baselines to clear unresolved snapshots.
+
+When a read fails to parse concept YAML, use the file paths in its error to locate the failing documents. Full bundle reads report all malformed files they examined; bounded queries report only examined files. Use `okf validate <bundle> --json` for separate per-file conformance findings.

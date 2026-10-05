@@ -7,6 +7,7 @@ mod cli;
 mod commands;
 mod exit;
 mod output;
+mod structured;
 
 fn main() {
     reset_sigpipe();
