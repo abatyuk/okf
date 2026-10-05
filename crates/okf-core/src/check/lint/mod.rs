@@ -115,29 +115,29 @@ pub fn meets_threshold(findings: &[Finding], fail_on: FailOn) -> bool {
 /// this is just the struct + defaults). A rule fires with the severity carried here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LintConfig {
-    pub broken_link: Severity,
-    pub missing_title: Severity,
-    pub missing_description: Severity,
-    pub orphan: Severity,
-    pub ontology_violation: Severity,
+    pub broken_link: Option<Severity>,
+    pub missing_title: Option<Severity>,
+    pub missing_description: Option<Severity>,
+    pub orphan: Option<Severity>,
+    pub ontology_violation: Option<Severity>,
     pub finding_budget: usize,
-    pub spec_v02: Severity,
-    pub source_unrecorded: Severity,
-    pub source_missing: Severity,
+    pub spec_v02: Option<Severity>,
+    pub source_unrecorded: Option<Severity>,
+    pub source_missing: Option<Severity>,
 }
 
 impl Default for LintConfig {
     fn default() -> Self {
         Self {
-            broken_link: Severity::Error,
-            missing_title: Severity::Warn,
-            missing_description: Severity::Info,
-            orphan: Severity::Info,
-            ontology_violation: Severity::Warn,
+            broken_link: Some(Severity::Error),
+            missing_title: Some(Severity::Warn),
+            missing_description: Some(Severity::Info),
+            orphan: Some(Severity::Info),
+            ontology_violation: Some(Severity::Warn),
             finding_budget: 1000,
-            spec_v02: Severity::Warn,
-            source_unrecorded: Severity::Warn,
-            source_missing: Severity::Error,
+            spec_v02: Some(Severity::Warn),
+            source_unrecorded: Some(Severity::Warn),
+            source_missing: Some(Severity::Error),
         }
     }
 }

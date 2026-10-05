@@ -61,7 +61,7 @@ actual concept-content change. A concept may have more than one.
    bodies are generated or replacement is already authorized; preserve curated prose otherwise.
    Validate after index generation. Inspect lint findings despite its reporting-only exit; use
    `okf lint <bundle> --fail-on warn` for a source-health gate. Missing local sources are errors,
-   and unrecorded fingerprints are warnings; neither is repaired by conformance validation.
+   and unrecorded fingerprints are warnings by default; neither is repaired by conformance validation.
 
 For a phrase correction, use `okf edit <concept-id> <bundle> --replace "Old phrase" "New phrase"`;
 exactly one literal body match is required. Use `--all` only when every occurrence should change.
@@ -114,3 +114,17 @@ Re-run nested metadata and index-coverage lint after metadata or layout changes.
 operations do not rewrite curated indexes. Use the declared selectors to locate affected records;
 use object paths or concrete JSON Pointer patches for writes, rather than list query selectors. Review the combined repository
 diff when changes span bundles; there is no automatic cross-bundle rename transaction.
+
+## Source baseline lint configuration
+
+`source-unrecorded` defaults to `warn`. If the user wants a different policy, configure
+`source_unrecorded = "off"`, `"info"`, `"warn"`, or `"error"` under
+`[bundle_settings.default.lint]` in `okf.toml` (or `[bundle_settings."<id>".lint]`
+for a named bundle). `off` suppresses this lint finding only; missing-source errors
+(default `error`, independently configurable via `source_missing`) and `stale` findings remain active. Do not suppress findings merely to pass a gate.
+
+All lint rule settings accept `off`, `info`, `warn`, or `error` in the same table.
+Defaults: `broken_link` and `source_missing` are `error`; `missing_title`, `spec_v02`
+(finding rule `okf-v02`), `ontology_violation`, `source_unrecorded`, and `index_coverage`
+are `warn`; `missing_description` and `orphan` are `info`. Omitted settings keep these
+severities. Turning a lint rule off does not change conformance validation or stale checks.

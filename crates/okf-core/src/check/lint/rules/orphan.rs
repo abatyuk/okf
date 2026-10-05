@@ -7,6 +7,9 @@ pub const RULE: &str = "orphan";
 
 /// One finding per concept that has no inbound and no outbound edges.
 pub fn run(ctx: &RuleContext) -> Vec<Finding> {
+    let Some(severity) = ctx.config.orphan else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for concept in &ctx.bundle.concepts {
         let id = &concept.id.0;
@@ -15,7 +18,7 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
                 code: None,
                 field_path: None,
                 rule: RULE.to_string(),
-                severity: ctx.config.orphan,
+                severity,
                 concept: Some(id.clone()),
                 message: "orphan: no inbound or outbound links".to_string(),
             });

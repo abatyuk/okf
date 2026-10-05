@@ -536,6 +536,7 @@ fn run_lint_scoped(
     use std::str::FromStr;
     let fail_on = FailOn::from_str(args.fail_on.as_deref().unwrap_or("error"))?;
     let mut failed = false;
+    let mut broken_link_severities = std::collections::BTreeMap::new();
     let mut target_types = std::collections::BTreeMap::new();
     let mut target_ontologies = std::collections::BTreeMap::new();
     for examined in &graph.scope.examined {
@@ -559,8 +560,9 @@ fn run_lint_scoped(
         let bundle = okf_core::bundle::loader::load_bundle(&examined.root)?;
         let (effective, ontology) = okf_core::bundle::settings::load_for(&examined.root)?;
         let config = super::check::lint_config(&effective.settings)?;
+        broken_link_severities.insert(examined.id.clone(), config.broken_link);
         let mut findings = lint_bundle(&bundle, None, &config);
-        if let Some(ontology) = &ontology {
+        if let (Some(ontology), Some(severity)) = (&ontology, config.ontology_violation) {
             let mut qualified = ontology.clone();
             for ct in qualified.concepts.values_mut() {
                 for rule in ct.references.values_mut() {
@@ -629,7 +631,7 @@ fn run_lint_scoped(
                             rule: "ontology-violation".into(),
                             code,
                             field_path,
-                            severity: config.ontology_violation,
+                            severity,
                             concept: Some(concept.id.0.clone()),
                             message: violation.message,
                         });
@@ -689,7 +691,7 @@ fn run_lint_scoped(
                         if !allows(&reference.target)
                             || kind_target.is_some_and(|expected| !allows(expected))
                         {
-                            findings.push(okf_core::check::lint::Finding{rule:"ontology-violation".into(),code:Some("metadata-reference-target-type".into()),field_path:Some(edge.location.clone()),severity:config.ontology_violation,concept:Some(concept.id.0.clone()),message:format!("{}: reference {:?} targets {}:{actual}, outside its declared target namespace/types",edge.location,edge.resource,target.bundle)});
+                            findings.push(okf_core::check::lint::Finding{rule:"ontology-violation".into(),code:Some("metadata-reference-target-type".into()),field_path:Some(edge.location.clone()),severity,concept:Some(concept.id.0.clone()),message:format!("{}: reference {:?} targets {}:{actual}, outside its declared target namespace/types",edge.location,edge.resource,target.bundle)});
                         }
                     }
                 }
@@ -721,7 +723,7 @@ fn run_lint_scoped(
                             rule: "ontology-violation".into(),
                             code: Some("incomplete-check".into()),
                             field_path: None,
-                            severity: config.ontology_violation,
+                            severity,
                             concept: Some(concept.id.0.clone()),
                             message: "ontology finding budget exhausted; check incomplete".into(),
                         });
@@ -751,10 +753,13 @@ fn run_lint_scoped(
                 ))?;
             }
         }
-        let index_severity = super::check::lint_severity(
+        let Some(index_severity) = super::check::lint_severity(
             effective.settings.lint.index_coverage.as_deref(),
             Severity::Warn,
-        )?;
+        )?
+        else {
+            continue;
+        };
         for finding in okf_core::check::lint::rules::index_coverage::check_indexes(
             &bundle,
             &effective.settings.lint.index_exclude,
@@ -812,6 +817,14 @@ fn run_lint_scoped(
             } else {
                 "cross-bundle-reference"
             };
+            let severity = if rule == "broken-link" {
+                let Some(Some(configured)) = broken_link_severities.get(&edge.source.bundle) else {
+                    continue;
+                };
+                configured.as_str()
+            } else {
+                severity
+            };
             if json_output {
                 output::print_line(
                     &json!({"kind":"finding","rule":rule,"code":issue,"severity":severity,"concept":edge.source.id,"bundle":edge.source.bundle,"field_path":edge.location,"message":edge.evidence,"resolution":edge}),
@@ -823,8 +836,14 @@ fn run_lint_scoped(
                     edge.resource
                 ))?;
             }
-            failed |= matches!(threshold, "info" | "warn" | "any")
-                || (threshold == "error" && severity == "error");
+            let severity = match severity {
+                "error" => Severity::Error,
+                "warn" => Severity::Warn,
+                _ => Severity::Info,
+            };
+            failed |= fail_on
+                .min_severity()
+                .is_some_and(|minimum| severity >= minimum);
         }
     }
     for unavailable in &graph.scope.unavailable {

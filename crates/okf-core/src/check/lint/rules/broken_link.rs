@@ -7,6 +7,9 @@ pub const RULE: &str = "broken-link";
 
 /// One finding per outbound edge whose target does not exist in the bundle.
 pub fn run(ctx: &RuleContext) -> Vec<Finding> {
+    let Some(severity) = ctx.config.broken_link else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for concept in &ctx.bundle.concepts {
         for target in ctx.graph.outbound(&concept.id.0) {
@@ -39,7 +42,7 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
                     code: None,
                     field_path: None,
                     rule: RULE.to_string(),
-                    severity: ctx.config.broken_link,
+                    severity,
                     concept: Some(concept.id.0.clone()),
                     message: format!("links to missing concept {}", target.0),
                 });

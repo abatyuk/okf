@@ -853,7 +853,11 @@ consequences match existing concept edits. See the
 for complete examples and removal syntax.
 Lint reports detailed field paths and codes, unsupported constraints, index coverage and incomplete
 checks. Per-bundle lint settings include `index_exclude`, positive `finding_budget`, and severity
-settings `ontology_violation` and `index_coverage`. Recursive value depth is bounded at 64; the default finding budget is 1,000 per concept.
+settings for every lint rule: `broken_link`, `missing_title`, `missing_description`,
+`orphan`, `ontology_violation`, `spec_v02`, `source_unrecorded`, `source_missing`, and
+`index_coverage`. Each accepts `off`, `info`, `warn`, or `error`; omitted settings retain
+the default severity. `off` suppresses only the selected lint rule; conformance validation
+and stale checks remain independent. Recursive value depth is bounded at 64; the default finding budget is 1,000 per concept.
 Dynamic kind definitions may narrow allowed reference target types; concept-type `extends`
 accepts a string or list for ancestry used by those restrictions. Qualified target types use
 `<bundle-id>:<type>` and retain exact type spelling.

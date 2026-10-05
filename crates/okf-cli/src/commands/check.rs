@@ -104,14 +104,18 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
     let (effective, ontology) = okf_core::bundle::settings::load_for(&root)?;
     let config = lint_config(&effective.settings)?;
     let findings = lint_bundle(&bundle, ontology.as_ref(), &config);
-    let index_findings = okf_core::check::lint::rules::index_coverage::check_indexes(
-        &bundle,
-        &effective.settings.lint.index_exclude,
-    )?;
     let index_severity = lint_severity(
         effective.settings.lint.index_coverage.as_deref(),
         okf_core::check::lint::Severity::Warn,
     )?;
+    let index_findings = if index_severity.is_some() {
+        okf_core::check::lint::rules::index_coverage::check_indexes(
+            &bundle,
+            &effective.settings.lint.index_exclude,
+        )?
+    } else {
+        Vec::new()
+    };
 
     if json {
         for f in &findings {
@@ -127,7 +131,7 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
             }))?;
         }
     } else {
-        if findings.is_empty() {
+        if findings.is_empty() && index_findings.is_empty() {
             output::print_text_line(format_args!("clean: no findings"))?;
         }
         for f in &findings {
@@ -142,6 +146,9 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
     }
 
     for finding in &index_findings {
+        let Some(index_severity) = index_severity else {
+            continue;
+        };
         if json {
             let mut record =
                 serde_json::to_value(finding).map_err(|e| OkfError::Internal(e.to_string()))?;
@@ -172,7 +179,8 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
     Ok(
         if meets_threshold(&findings, fail_on)
             || (!index_findings.is_empty()
-                && fail_on.min_severity().is_some_and(|s| index_severity >= s))
+                && index_severity
+                    .is_some_and(|severity| fail_on.min_severity().is_some_and(|s| severity >= s)))
         {
             1
         } else {
@@ -416,21 +424,50 @@ pub fn run_doctor(args: &DoctorArgs, json_output: bool) -> Result<i32> {
 pub fn lint_severity(
     value: Option<&str>,
     fallback: okf_core::check::lint::Severity,
-) -> Result<okf_core::check::lint::Severity> {
+) -> Result<Option<okf_core::check::lint::Severity>> {
     use okf_core::check::lint::Severity;
     match value {
-        None => Ok(fallback),
-        Some("info") => Ok(Severity::Info),
-        Some("warn") => Ok(Severity::Warn),
-        Some("error") => Ok(Severity::Error),
+        None => Ok(Some(fallback)),
+        Some("off") => Ok(None),
+        Some("info") => Ok(Some(Severity::Info)),
+        Some("warn") => Ok(Some(Severity::Warn)),
+        Some("error") => Ok(Some(Severity::Error)),
         Some(value) => Err(OkfError::Usage(format!("invalid lint severity {value:?}"))),
     }
 }
 pub fn lint_config(settings: &okf_core::bundle::settings::BundleSettings) -> Result<LintConfig> {
     let mut config = LintConfig::default();
+    config.broken_link = lint_severity(
+        settings.lint.broken_link.as_deref(),
+        okf_core::check::lint::Severity::Error,
+    )?;
+    config.missing_title = lint_severity(
+        settings.lint.missing_title.as_deref(),
+        okf_core::check::lint::Severity::Warn,
+    )?;
+    config.missing_description = lint_severity(
+        settings.lint.missing_description.as_deref(),
+        okf_core::check::lint::Severity::Info,
+    )?;
+    config.orphan = lint_severity(
+        settings.lint.orphan.as_deref(),
+        okf_core::check::lint::Severity::Info,
+    )?;
     config.ontology_violation = lint_severity(
         settings.lint.ontology_violation.as_deref(),
-        config.ontology_violation,
+        okf_core::check::lint::Severity::Warn,
+    )?;
+    config.spec_v02 = lint_severity(
+        settings.lint.spec_v02.as_deref(),
+        okf_core::check::lint::Severity::Warn,
+    )?;
+    config.source_missing = lint_severity(
+        settings.lint.source_missing.as_deref(),
+        okf_core::check::lint::Severity::Error,
+    )?;
+    config.source_unrecorded = lint_severity(
+        settings.lint.source_unrecorded.as_deref(),
+        okf_core::check::lint::Severity::Warn,
     )?;
     config.finding_budget = settings.lint.finding_budget.unwrap_or(1000);
     Ok(config)

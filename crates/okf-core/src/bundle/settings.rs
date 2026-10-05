@@ -20,6 +20,13 @@ pub struct LintSettings {
     pub finding_budget: Option<usize>,
     pub ontology_violation: Option<String>,
     pub index_coverage: Option<String>,
+    pub source_unrecorded: Option<String>,
+    pub broken_link: Option<String>,
+    pub missing_title: Option<String>,
+    pub missing_description: Option<String>,
+    pub orphan: Option<String>,
+    pub spec_v02: Option<String>,
+    pub source_missing: Option<String>,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ViewSettings {
@@ -226,17 +233,23 @@ fn validate_settings(settings: &BundleSettings) -> Result<()> {
             .build()
             .map_err(|e| OkfError::Usage(format!("invalid index exclusion {glob:?}: {e}")))?;
     }
-    for severity in [
-        &settings.lint.ontology_violation,
-        &settings.lint.index_coverage,
-    ]
-    .into_iter()
-    .flatten()
-    {
-        if !matches!(severity.as_str(), "info" | "warn" | "error") {
-            return Err(OkfError::Usage(format!(
-                "invalid lint severity {severity:?}"
-            )));
+    for (rule, severity) in [
+        ("broken_link", &settings.lint.broken_link),
+        ("missing_title", &settings.lint.missing_title),
+        ("missing_description", &settings.lint.missing_description),
+        ("orphan", &settings.lint.orphan),
+        ("ontology_violation", &settings.lint.ontology_violation),
+        ("spec_v02", &settings.lint.spec_v02),
+        ("source_missing", &settings.lint.source_missing),
+        ("source_unrecorded", &settings.lint.source_unrecorded),
+        ("index_coverage", &settings.lint.index_coverage),
+    ] {
+        if let Some(value) = severity {
+            if !matches!(value.as_str(), "off" | "info" | "warn" | "error") {
+                return Err(OkfError::Usage(format!(
+                    "invalid {rule} lint severity {value:?}; expected off, info, warn, or error"
+                )));
+            }
         }
     }
     Ok(())

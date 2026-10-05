@@ -507,6 +507,16 @@ fn command_guidance(name: &str) -> &'static str {
         "lint" => "For sources with a fingerprint kind, `source-unrecorded` warns when no baseline exists. \
             `source-missing` errors when file, line-range, or markdown-heading sources cannot be \
             fingerprinted, even without a baseline. Lint does not fetch URLs or inspect Git sources. \
+            Configure `source_unrecorded = \"off\"` (or `info`, `warn`, `error`; default `warn`) in \
+            `[bundle_settings.default.lint]` in `okf.toml`, or `[bundle_settings.\"<id>\".lint]` for a named bundle. \
+            Disabling this rule leaves `source-missing` and `stale` checks active. \
+            All lint settings accept `off`, `info`, `warn`, or `error`. Defaults: `broken_link` \
+            and `source_missing` are `error`; `missing_title`, `spec_v02` (finding rule `okf-v02`), \
+            `ontology_violation`, `source_unrecorded`, and `index_coverage` are `warn`; \
+            `missing_description` and `orphan` are `info`. Omitted settings keep these defaults. \
+            `off` suppresses the selected lint rule only; validation and stale checks remain independent. \
+            `index_exclude` controls index coverage exclusions and `finding_budget` limits ontology \
+            findings (positive, default 1,000 per concept). \
             Use `--fail-on warn` to fail on warnings as well as errors.",
         "artifact resolve" => "**Path namespaces:** a leading `/` means bundle-root-relative, not an \
             operating-system absolute path. Other local paths resolve against the declaring concept's \
@@ -1186,7 +1196,7 @@ mod tests {
         }]);
         let commands = [&show, &add];
         let selected = commands_for_skill("retrieval", &scenarios, &commands).unwrap();
-        let header = json!({"tool_version": "0.3.1", "okf_spec": ["0.2"]});
+        let header = json!({"tool_version": "0.3.2", "okf_spec": ["0.2"]});
         let reference = cli_reference(&header, &selected, Some("retrieval"));
 
         assert!(reference.contains("# okf CLI — retrieval command reference"));

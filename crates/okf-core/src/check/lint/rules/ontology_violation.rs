@@ -17,6 +17,9 @@ pub const RULE: &str = "ontology-violation";
 
 /// One finding per ontology violation across all concepts. Empty when no ontology is present.
 pub fn run(ctx: &RuleContext) -> Vec<Finding> {
+    let Some(severity) = ctx.config.ontology_violation else {
+        return Vec::new();
+    };
     let Some(ontology) = ctx.ontology else {
         return Vec::new();
     };
@@ -51,7 +54,7 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
                     _ => None,
                 },
                 rule: RULE.to_string(),
-                severity: ctx.config.ontology_violation,
+                severity,
                 concept: Some(concept.id.0.clone()),
                 message: violation.message,
             });

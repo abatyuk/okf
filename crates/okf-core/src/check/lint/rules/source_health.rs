@@ -24,31 +24,38 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
                 continue;
             }
             if source.fingerprint.is_empty() {
-                findings.push(Finding {
-                code: None,
-                field_path: None,
-                    rule: UNRECORDED_RULE.to_string(),
-                    severity: ctx.config.source_unrecorded,
-                    concept: Some(concept.id.0.clone()),
-                    message: format!(
-                        "source {} has no recorded fingerprint; run refresh after reviewing the source",
-                        source.resource
-                    ),
-                });
+                if let Some(severity) = ctx.config.source_unrecorded {
+                    findings.push(Finding {
+                        code: None,
+                        field_path: None,
+                        rule: UNRECORDED_RULE.to_string(),
+                        severity,
+                        concept: Some(concept.id.0.clone()),
+                        message: format!(
+                            "source {} has no recorded fingerprint; run refresh after reviewing the source",
+                            source.resource
+                        ),
+                    });
+                }
             }
             if matches!(
                 source.kind,
                 SourceKind::File | SourceKind::LineRange | SourceKind::MarkdownHeading
             ) {
-                if let Err(error) = engine.fingerprint(&source) {
-                    findings.push(Finding {
-                        code: None,
-                        field_path: None,
-                        rule: MISSING_RULE.to_string(),
-                        severity: ctx.config.source_missing,
-                        concept: Some(concept.id.0.clone()),
-                        message: format!("cannot fingerprint source {}: {error}", source.resource),
-                    });
+                if let Some(severity) = ctx.config.source_missing {
+                    if let Err(error) = engine.fingerprint(&source) {
+                        findings.push(Finding {
+                            code: None,
+                            field_path: None,
+                            rule: MISSING_RULE.to_string(),
+                            severity,
+                            concept: Some(concept.id.0.clone()),
+                            message: format!(
+                                "cannot fingerprint source {}: {error}",
+                                source.resource
+                            ),
+                        });
+                    }
                 }
             }
         }

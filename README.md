@@ -318,3 +318,37 @@ reference coverage, and generated documentation.
 cargo test        # ~139 tests across okf-core and okf-cli
 cargo run -p okf-cli --bin okf -- <command>
 ```
+
+### Source baseline lint setting
+
+Sources with a fingerprint `kind` but no baseline produce `source-unrecorded` warnings by default.
+To suppress this finding, add to `okf.toml`:
+
+```toml
+[bundle_settings.default.lint]
+source_unrecorded = "off"
+```
+
+Accepted values are `off`, `info`, `warn`, and `error` (default `warn`). For a named bundle,
+use `[bundle_settings."<id>".lint]`. This setting leaves `source-missing` errors and
+`okf stale` checks active; it does not record or refresh fingerprints.
+
+All lint rules accept `off`, `info`, `warn`, or `error` under the same settings table.
+Omitted settings retain these defaults:
+
+| Setting | Finding rule | Default |
+|---------|--------------|---------|
+| `broken_link` | broken-link | error |
+| `missing_title` | missing-title | warn |
+| `missing_description` | missing-description | info |
+| `orphan` | orphan | info |
+| `ontology_violation` | ontology-violation | warn |
+| `spec_v02` | okf-v02 | warn |
+| `source_unrecorded` | source-unrecorded | warn |
+| `source_missing` | source-missing | error |
+| `index_coverage` | index-coverage | warn |
+
+`off` suppresses only the selected lint rule. Conformance validation and `stale` checks
+remain independent. `index_exclude` accepts glob patterns for index coverage exclusions.
+`finding_budget` is a positive ontology finding limit (default 1,000 per concept).
+`--fail-on` controls only the exit threshold; it does not change finding severities.

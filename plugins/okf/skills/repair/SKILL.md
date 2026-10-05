@@ -86,7 +86,7 @@ If an authorized repair includes artifact content, use `okf artifact put
 contracts/x/references/schema.json @/tmp/repaired-schema.json <bundle> --replace`. Preserve
 artifacts otherwise. The destination is bundle-relative and the input is cwd-relative. Recorded
 fingerprints remain unchanged; review citing concepts before refreshing through the update workflow.
-Inspect `source-unrecorded` warnings and `source-missing` errors even with reporting-only lint;
+Inspect `source-unrecorded` findings (warnings by default) and `source-missing` errors even with reporting-only lint;
 use `okf lint <bundle> --fail-on warn` when a source-health gate is requested.
 
 ## Bundle identity and examination scope
@@ -113,3 +113,17 @@ read-only; missing navigation links do not make an optional index mandatory. Pre
 prose when repairing indexes, and do not refresh source baselines to clear unresolved snapshots.
 
 When a read fails to parse concept YAML, use the file paths in its error to locate the failing documents. Full bundle reads report all malformed files they examined; bounded queries report only examined files. Use `okf validate <bundle> --json` for separate per-file conformance findings.
+
+## Source baseline lint configuration
+
+`source-unrecorded` defaults to `warn`. If the user wants a different policy, configure
+`source_unrecorded = "off"`, `"info"`, `"warn"`, or `"error"` under
+`[bundle_settings.default.lint]` in `okf.toml` (or `[bundle_settings."<id>".lint]`
+for a named bundle). `off` suppresses this lint finding only; missing-source errors
+(default `error`, independently configurable via `source_missing`) and `stale` findings remain active. Do not suppress findings merely to pass a gate.
+
+All lint rule settings accept `off`, `info`, `warn`, or `error` in the same table.
+Defaults: `broken_link` and `source_missing` are `error`; `missing_title`, `spec_v02`
+(finding rule `okf-v02`), `ontology_violation`, `source_unrecorded`, and `index_coverage`
+are `warn`; `missing_description` and `orphan` are `info`. Omitted settings keep these
+severities. Turning a lint rule off does not change conformance validation or stale checks.

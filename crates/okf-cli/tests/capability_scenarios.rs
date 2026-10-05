@@ -1397,3 +1397,52 @@ fn expansion_follows_only_one_hop_and_only_the_selected_primary_page() {
             .any(|v| v["kind"] == "related-concept" && v["id"] == "/c"));
     }
 }
+
+#[test]
+fn scoped_lint_honors_named_bundle_rule_settings() {
+    let d = catalog();
+    let root = d.path();
+    write(
+        root,
+        "a/one.md",
+        "---\ntype: Unknown\n---\n[Missing](/missing)\n",
+    );
+    write(
+        root,
+        "a/ontology.yaml",
+        "okf_ontology: '0.1'\nconcepts:\n  Note: {}\n",
+    );
+    for value in ["off", "info", "warn", "error"] {
+        write(root, "okf.toml", &format!(
+            "catalog='config/catalog.yaml'\ndefault_bundle={{id='acme.a'}}\n[bundle_settings.\"acme.b\".lint]\nmissing_title='off'\nmissing_description='off'\norphan='off'\nindex_coverage='off'\n[bundle_settings.\"acme.a\".lint]\nmissing_title='off'\nmissing_description='off'\norphan='off'\nindex_coverage='off'\nontology_violation='{value}'\nbroken_link='{value}'\n"
+        ));
+        let output = run(
+            root,
+            &["lint", "--json", "--catalog-scope", "--fail-on", "warn"],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(if matches!(value, "warn" | "error") {
+                1
+            } else {
+                0
+            }),
+            "{value}: {output:?}"
+        );
+        let records: Vec<Value> = String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        for rule in ["ontology-violation", "broken-link"] {
+            let findings: Vec<_> = records.iter().filter(|row| row["rule"] == rule).collect();
+            if value == "off" {
+                assert!(findings.is_empty());
+            } else {
+                assert!(!findings.is_empty(), "{rule}: {records:?}");
+                assert!(findings.iter().all(|row| row["severity"] == value));
+            }
+        }
+        assert!(!records.iter().any(|row| row["rule"] == "index-coverage"));
+    }
+}

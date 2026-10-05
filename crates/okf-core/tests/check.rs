@@ -167,7 +167,7 @@ fn lint_with_ontology_flags_violations() {
 fn lint_severity_overrides_apply() {
     let bundle = load_bundle(&fixtures().join("linked-bundle")).unwrap();
     let config = LintConfig {
-        orphan: Severity::Error,
+        orphan: Some(Severity::Error),
         ..LintConfig::default()
     }; // bump orphan from Info to Error
     let findings = lint_bundle(&bundle, None, &config);

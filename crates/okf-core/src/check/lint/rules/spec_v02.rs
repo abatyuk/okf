@@ -11,6 +11,9 @@ use crate::model::standard::{parse_timestamp, valid_actor};
 pub const RULE: &str = "okf-v02";
 
 pub fn run(ctx: &RuleContext) -> Vec<Finding> {
+    let Some(severity) = ctx.config.spec_v02 else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     let footnote = Regex::new(r"\[\^([^\]]+)\]").unwrap();
     for concept in &ctx.bundle.concepts {
@@ -20,7 +23,7 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
                 code: None,
                 field_path: None,
                 rule: RULE.to_string(),
-                severity: ctx.config.spec_v02,
+                severity,
                 concept: Some(concept.id.0.clone()),
                 message,
             })
