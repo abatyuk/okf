@@ -26,6 +26,18 @@ requirements from the reviewed model. To change rules, use `okf ontology update 
 flags use colon-separated declarations; concept `--set`/`--ref` flags use `key=value` instead. Read
 the reference before choosing other types or cardinalities.
 
+
+## CLI compatibility preflight
+
+Before CLI-dependent work, run `sh <this-skill-directory>/../../scripts/check-cli.sh`,
+resolving the path from this installed SKILL.md, not the working directory. This read-only
+check uses the plugin's `cli-compatibility.txt` range and reports the executable on PATH.
+If missing, incompatible, or unable to run, stop CLI-dependent work and show its installation
+instructions. Never invoke the installer, download a CLI, or update it from this skill.
+An explicit user request to install should be handled separately from this workflow.
+Only after this check passes may command help resolve syntax differences; help cannot waive
+compatibility. Recheck if the executable or PATH changes during the task.
+
 ## Workflow
 
 1. Select the bundle and inspect its effective ontology path/settings before authoring; a configured

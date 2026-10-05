@@ -8,6 +8,18 @@ description: Review OKF concepts against their declared sources and append docum
 `okf verify` records that a document was checked against its sources or resource. It does not
 execute an Attested Computation and is never a substitute for a deterministic run attestation.
 
+
+## CLI compatibility preflight
+
+Before CLI-dependent work, run `sh <this-skill-directory>/../../scripts/check-cli.sh`,
+resolving the path from this installed SKILL.md, not the working directory. This read-only
+check uses the plugin's `cli-compatibility.txt` range and reports the executable on PATH.
+If missing, incompatible, or unable to run, stop CLI-dependent work and show its installation
+instructions. Never invoke the installer, download a CLI, or update it from this skill.
+An explicit user request to install should be handled separately from this workflow.
+Only after this check passes may command help resolve syntax differences; help cannot waive
+compatibility. Recheck if the executable or PATH changes during the task.
+
 ## CLI and review scope
 
 Prefer `OKF_BUNDLE`; the fully qualified write is `okf verify <concept-id> <bundle> --by <actor>`.

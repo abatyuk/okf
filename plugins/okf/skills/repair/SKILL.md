@@ -13,6 +13,18 @@ Prefer `OKF_BUNDLE`; the preflight is `okf doctor <bundle> --target 0.2 --json`.
 unfamiliar command or flag, read its entry in `references/cli.md`. If the installed version differs
 or rejects documented syntax, use that command's `--help` output as the runtime authority.
 
+
+## CLI compatibility preflight
+
+Before CLI-dependent work, run `sh <this-skill-directory>/../../scripts/check-cli.sh`,
+resolving the path from this installed SKILL.md, not the working directory. This read-only
+check uses the plugin's `cli-compatibility.txt` range and reports the executable on PATH.
+If missing, incompatible, or unable to run, stop CLI-dependent work and show its installation
+instructions. Never invoke the installer, download a CLI, or update it from this skill.
+An explicit user request to install should be handled separately from this workflow.
+Only after this check passes may command help resolve syntax differences; help cannot waive
+compatibility. Recheck if the executable or PATH changes during the task.
+
 ## Workflow
 
 1. Resolve the exact bundle and effective settings and run the read-only preflight above before

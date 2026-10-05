@@ -17,6 +17,18 @@ Search text must follow `--text`; the positional argument to search is the bundl
 use `okf list <bundle> --json` for an intended inventory. Use `okf browse <bundle> --directory
 <directory>` to descend; its positional is also the bundle.
 
+
+## CLI compatibility preflight
+
+Before CLI-dependent work, run `sh <this-skill-directory>/../../scripts/check-cli.sh`,
+resolving the path from this installed SKILL.md, not the working directory. This read-only
+check uses the plugin's `cli-compatibility.txt` range and reports the executable on PATH.
+If missing, incompatible, or unable to run, stop CLI-dependent work and show its installation
+instructions. Never invoke the installer, download a CLI, or update it from this skill.
+An explicit user request to install should be handled separately from this workflow.
+Only after this check passes may command help resolve syntax differences; help cannot waive
+compatibility. Recheck if the executable or PATH changes during the task.
+
 ## Progressive disclosure
 
 1. Establish the primary bundle and the scope needed for the question before querying. For catalog

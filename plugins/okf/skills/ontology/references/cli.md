@@ -2,7 +2,7 @@
 
 > **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.3.2, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
-This focused reference contains only commands selected for the `ontology` workflow. Consult it when exact arguments or output shapes are needed. If the installed `okf` version differs from the generated tool version above, or rejects documented syntax, use that command's `--help` output as the runtime authority.
+This focused reference contains only commands selected for the `ontology` workflow. First pass the skill CLI compatibility preflight. Consult this reference when exact arguments or output shapes are needed. For a compatible CLI that rejects documented syntax, use that command's `--help` output as the runtime authority.
 
 Commands with a human form accept global `--json` for NDJSON; `schema` is always NDJSON. Bundle-aware commands take an optional trailing `bundle` path or a separate `--bundle-id` selector. Selection uses explicit path or ID, `$OKF_BUNDLE` (path), registered containing bundle, configured default, sole catalog entry, then uncataloged cwd. Catalog registration alone does not extend examination scope. Meta commands have no bundle, and `source-scan` takes an explicit arbitrary directory.
 

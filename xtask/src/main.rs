@@ -355,8 +355,8 @@ fn cli_reference(header: &Value, commands: &[&Value], skill: Option<&str>) -> St
     if let Some(name) = skill {
         out.push_str(&format!(
             "This focused reference contains only commands selected for the `{name}` workflow. \
-             Consult it when exact arguments or output shapes are needed. If the installed \
-             `okf` version differs from the generated tool version above, or rejects documented \
+             First pass the skill CLI compatibility preflight. Consult this reference when exact arguments \
+             or output shapes are needed. For a compatible CLI that rejects documented \
              syntax, use that command's `--help` output as the runtime authority.\n\n"
         ));
     } else {

@@ -8,6 +8,18 @@ description: Migrate documents or prior OKF material into one or more OKF v0.2 b
 Preserve meaning and unknown data. The CLI handles writes and validation; classification,
 granularity, attribution, and unresolved legacy semantics require judgment.
 
+
+## CLI compatibility preflight
+
+Before CLI-dependent work, run `sh <this-skill-directory>/../../scripts/check-cli.sh`,
+resolving the path from this installed SKILL.md, not the working directory. This read-only
+check uses the plugin's `cli-compatibility.txt` range and reports the executable on PATH.
+If missing, incompatible, or unable to run, stop CLI-dependent work and show its installation
+instructions. Never invoke the installer, download a CLI, or update it from this skill.
+An explicit user request to install should be handled separately from this workflow.
+Only after this check passes may command help resolve syntax differences; help cannot waive
+compatibility. Recheck if the executable or PATH changes during the task.
+
 ## CLI and conformance model
 
 Use `OKF_BUNDLE` for one path-selected destination; for catalog migrations, pass the explicit

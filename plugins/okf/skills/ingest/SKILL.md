@@ -9,6 +9,18 @@ Use `okf source-scan <directory>` when an inventory is needed, scoped to the rel
 directory. Use normal code-search tools on that external source, but query existing bundle content
 through the CLI and retrieve only targeted slices.
 
+
+## CLI compatibility preflight
+
+Before CLI-dependent work, run `sh <this-skill-directory>/../../scripts/check-cli.sh`,
+resolving the path from this installed SKILL.md, not the working directory. This read-only
+check uses the plugin's `cli-compatibility.txt` range and reports the executable on PATH.
+If missing, incompatible, or unable to run, stop CLI-dependent work and show its installation
+instructions. Never invoke the installer, download a CLI, or update it from this skill.
+An explicit user request to install should be handled separately from this workflow.
+Only after this check passes may command help resolve syntax differences; help cannot waive
+compatibility. Recheck if the executable or PATH changes during the task.
+
 ## CLI and output rules
 
 Prefer `OKF_BUNDLE` during multi-step work; one explicit form is `okf edit <concept-id> <bundle>
