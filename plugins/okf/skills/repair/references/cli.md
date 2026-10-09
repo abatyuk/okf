@@ -1,6 +1,6 @@
 # okf CLI — repair command reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.3.2, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.4.0, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 This focused reference contains only commands selected for the `repair` workflow. First pass the skill CLI compatibility preflight. Consult this reference when exact arguments or output shapes are needed. For a compatible CLI that rejects documented syntax, use that command's `--help` output as the runtime authority.
 
@@ -98,6 +98,8 @@ _No arguments._
 
 Output stream: `bundle-registration,effective-settings`.
 
+Supported global options: `--json`.
+
 ## query
 
 ### `okf artifact list`
@@ -112,6 +114,8 @@ List local artifacts and concepts under a bundle directory.
 
 Output stream: `artifact`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 The positional path selects a bundle root relative to the current directory. To filter within the selected bundle, use `--directory contracts/x`; printed paths remain relative to the bundle root.
 
 ### `okf artifact resolve`
@@ -125,6 +129,8 @@ Resolve any OKF path-valued resource with document context.
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 
 Output stream: `artifact-resolution`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 **Path namespaces:** a leading `/` means bundle-root-relative, not an operating-system absolute path. Other local paths resolve against the declaring concept's directory when `--from` is supplied, otherwise the bundle root. Keep `--from` on the subsequent read too. JSON uses `artifact_kind` (concept, artifact, reserved, external, scope, missing, or blocked), `path`, `exists`, `size`, and `message`. Missing/blocked resolution exits 1. A scope descriptor is provenance, not a missing file.
 
@@ -141,9 +147,11 @@ Retrieve a bounded local text artifact; binary files return metadata only.
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 | `--lines <value>` | string | no | Retrieve only an inclusive, one-based START:END line range |
 | `--max-bytes <value>` | int | no | Maximum bytes read into output (default: `65536`) |
-| `--fetch` | bool | no | Explicitly request remote retrieval (requires a network-enabled build and policy) (default: `false`) |
+| `--fetch` | bool | no | Request remote retrieval; unavailable unless built with url-sources and allowed by policy (default: `false`) |
 
 Output stream: `artifact-content`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 For document-relative paths, pass the same `--from` used during resolution. JSON includes `text`, `binary`, `truncated`, `size`, `sha256`, and `path`. Binary files provide metadata only. Inspect `truncated` before treating a read as complete; human output alone does not expose this flag. Use bounded line windows and a sufficient byte budget for the needed range; do not infer absence from a truncated result. Use `show` for concepts and this command for opaque or reserved files.
 
@@ -161,6 +169,8 @@ Concepts that link to a given concept.
 
 Output stream: `concept,relationship,scope,bundle-backlink,bundle-edge`.
 
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--revision`, `--scope-bundle`.
+
 ### `okf graph`
 
 Render the link graph (or a bounded rooted neighborhood) as mermaid/dot/graphml.
@@ -175,6 +185,8 @@ Render the link graph (or a bounded rooted neighborhood) as mermaid/dot/graphml.
 
 Output stream: `graph,scope,bundle-node,bundle-edge`.
 
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--revision`, `--scope-bundle`.
+
 ### `okf links`
 
 List the direct concept links defined by one concept.
@@ -183,9 +195,11 @@ List the direct concept links defined by one concept.
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
-| `--details` | bool | no | Show individual semantic incoming occurrences and configured inverse labels (default: `false`) |
+| `--details` | bool | no | Compatibility option; detailed output is not implemented for this command (default: `false`) |
 
 Output stream: `link,relationship,scope,bundle-edge`.
+
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--revision`, `--scope-bundle`.
 
 ### `okf show`
 
@@ -202,6 +216,8 @@ Show one concept's content, heading outline, or selected line range.
 | `--project <value>` | list<string> | no | Explicit metadata projection selector (repeatable) |
 
 Output stream: `concept,projection`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 Without `--json`, show includes the serialized frontmatter and full Markdown body. Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, `effective_status`, `effective_generated_at`, `latest_verified_at`, and `verification_current`. It does not include the body. `--outline --json` returns `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer to the serialized document, including frontmatter, excluding the three-line display header. `show -n` (or `--numbered`) prints the full document with these numbers and no header; its JSON uses the same line-range record. `show --body` prints only raw Markdown; with `--json` it returns a body record containing `id` and `body`. An outline or selected slice does not establish complete document-review coverage.
 
@@ -221,6 +237,8 @@ Diagnose compatibility and safely repair an existing bundle for OKF v0.2.
 
 Output stream: `doctor-finding,doctor-summary`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 ### `okf lint`
 
 Advisory checks (broken links, missing fields, orphans, ontology violations).
@@ -233,6 +251,8 @@ Advisory checks (broken links, missing fields, orphans, ontology violations).
 
 Output stream: `finding,scope`.
 
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--scope-bundle`.
+
 For sources with a fingerprint kind, `source-unrecorded` warns when no baseline exists. `source-missing` errors when file, line-range, or markdown-heading sources cannot be fingerprinted, even without a baseline. Lint does not fetch URLs or inspect Git sources. Configure `source_unrecorded = "off"` (or `info`, `warn`, `error`; default `warn`) in `[bundle_settings.default.lint]` in `okf.toml`, or `[bundle_settings."<id>".lint]` for a named bundle. Disabling this rule leaves `source-missing` and `stale` checks active. All lint settings accept `off`, `info`, `warn`, or `error`. Defaults: `broken_link` and `source_missing` are `error`; `missing_title`, `spec_v02` (finding rule `okf-v02`), `ontology_violation`, `source_unrecorded`, and `index_coverage` are `warn`; `missing_description` and `orphan` are `info`. Omitted settings keep these defaults. `off` suppresses the selected lint rule only; validation and stale checks remain independent. `index_exclude` controls index coverage exclusions and `finding_budget` limits ontology findings (positive, default 1,000 per concept). Use `--fail-on warn` to fail on warnings as well as errors.
 
 ### `okf validate`
@@ -244,6 +264,8 @@ Conformance validation — the spec's three hard rules only.
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `violation`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 ## mutate
 
@@ -260,6 +282,8 @@ Create or replace a local artifact; citing source fingerprints remain unchanged.
 | `--replace` | bool | no | Allow replacement of an existing artifact, leaving source fingerprints for drift checks (default: `false`) |
 
 Output stream: `artifact-write`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 Write bytes from `@file` to a bundle-relative opaque or reserved artifact. The default (and `--create-only`) refuses an existing destination; `--replace` permits replacement. Parent directories are created as needed. Concept and configuration files are protected, and paths must remain inside the bundle. Recorded source fingerprints are preserved so `stale` detects changes; review citing concepts before `refresh`.
 
@@ -295,6 +319,8 @@ Edit a concept losslessly and invalidate its prior verification.
 
 Output stream: `change`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 `--set` keeps literal scalar keys; a dotted key is not traversal. `--set-yaml` replaces a complete named value. `--set-path` parses YAML and creates intermediate maps for object-only paths; `--unset-path` removes an object property. `--patch` accepts an RFC 6902 array with concrete JSON Pointer paths, including list edits and `test` guards. Inputs accept inline YAML/JSON, `@file`, or `-`; only one stdin consumer is permitted. Duplicate/non-string keys, tags, anchors, aliases, merge keys, nonfinite numbers and multiple documents fail. `--dry-run` previews without writes. Use `--add-source-json @file` for source mappings. Do not fabricate verification. Meaningful edits remove active `verified` events and update existing `generated.at`; preserve needed historical evidence separately. Body files contain Markdown only, without frontmatter. Section flags take heading and text as separate values. `--replace OLD NEW` replaces exactly one literal body match; `--all` replaces every match and still fails if none exist. `--rename-section OLD NEW` changes a uniquely matched heading without replacing its content. Malformed YAML must be repaired before this command can load it.
 
 ### `okf verify` · _mutates_
@@ -309,6 +335,8 @@ Append a `verified` entry (the write-side of trust).
 
 Output stream: `change`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 ## render
 
 ### `okf docs` · _conditionally mutates_
@@ -318,8 +346,10 @@ Generate documentation from a bundle.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
-| `--format <value>` | string | no | Output format: md|html|pdf|graphml|obsidian|index (default: `md`) |
+| `--format <value>` | string | no | Output format: md|html|graphml|obsidian|index; pdf is retained but unavailable (default: `md`) |
 
 Output stream: `docs,change`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 `--format index` writes indexes throughout the bundle, replacing their bodies; it does not merge curated prose. Use it only when all affected index bodies are generated or replacement is already authorized. Preserve curated indexes and edit only necessary links otherwise. Validate after writes. Other formats emit output rather than updating indexes; the default is `md`.

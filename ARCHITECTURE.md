@@ -202,6 +202,17 @@ validates the complete prospective sidecar before one write; reusable field-type
 a whole definition. Dry-run previews use the same preflight without persistence. Presentation can
 normalize, so preserving unrelated meaning is distinct from exact YAML byte preservation.
 
-Moves must not silently strand declared nested references. General structured-reference rewriting
-and cross-bundle move transactions remain deferred. Artifact containment and inspect-only computation
+Moves must not silently strand declared nested references. Declared structured-reference rewriting is supported within one bundle.
+Cross-bundle move transactions remain deferred. Artifact containment and inspect-only computation
 semantics remain independent from cross-bundle concept traversal.
+
+
+## Coordinated changes
+
+`changeset plan/apply/recover` evaluates an explicit version 1 operation document in an isolated
+workspace, validates the final state, and publishes guarded before/after images through the same
+journal used by `mv`. Publication is atomic per file; concurrent readers may see an intermediate
+state. A durable journal and commit marker support rollback after interruption and completion of
+committed cleanup. Recovery refuses active publishers and intervening edits. A preview's base
+digest guards bundle inputs and effective interpretation settings; it does not authorize a changed
+operation document. Cross-bundle writes and configuration edits are outside this transaction.

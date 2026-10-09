@@ -2,11 +2,11 @@
 # Standalone installer: no Rust, Python, GitHub CLI, or existing okf required.
 set -eu
 fail() { echo "okf installer: $*" >&2; exit 1; }
-usage() { echo 'Usage: sh install.sh VERSION [INSTALL_DIRECTORY]'; echo 'Example: sh install.sh 0.3.2 "$HOME/.local/bin"'; }
+usage() { echo 'Usage: sh install.sh VERSION [INSTALL_DIRECTORY]'; echo 'Example: sh install.sh 0.4.0 "$HOME/.local/bin"'; }
 [ "${1:-}" != '--help' ] || { usage; exit 0; }
 [ "$#" -ge 1 ] && [ "$#" -le 2 ] || { usage >&2; exit 2; }
 version=${1#v}
-printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || fail 'Use a stable version such as 0.3.2.'
+printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || fail 'Use a stable version such as 0.4.0.'
 destination=${2:-"$HOME/.local/bin"}
 case "$destination" in /*) ;; *) destination="$PWD/$destination" ;; esac
 case "$(uname -s)/$(uname -m)" in

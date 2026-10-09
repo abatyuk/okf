@@ -59,7 +59,11 @@ pub fn browse(root: &Path, directory: Option<&str>) -> Result<BrowseResult> {
     let path = relative.join("index.md");
     let absolute_index = root.join(&path);
     if absolute_index.is_file() {
-        let content = std::fs::read_to_string(&absolute_index)
+        let canonical_index = absolute_index.canonicalize()?;
+        if !canonical_index.starts_with(&canonical_root) {
+            return Err(OkfError::Usage("index path escapes bundle".to_string()));
+        }
+        let content = std::fs::read_to_string(&canonical_index)
             .map_err(|e| OkfError::Io(format!("{}: {e}", absolute_index.display())))?;
         return Ok(BrowseResult {
             directory: display_directory(&relative),
@@ -142,5 +146,14 @@ mod tests {
         let result = browse(tmp.path(), None).unwrap();
         assert_eq!(result.source, IndexSource::File);
         assert_eq!(result.content, "# Available\n");
+    }
+    #[cfg(unix)]
+    #[test]
+    fn refuses_structural_index_symlink_outside_bundle() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(outside.path(), "private").unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.path().join("index.md")).unwrap();
+        assert!(browse(root.path(), None).is_err());
     }
 }

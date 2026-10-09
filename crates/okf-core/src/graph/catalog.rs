@@ -75,11 +75,21 @@ pub struct Scope {
     pub unavailable: Vec<String>,
     pub snapshot_examined: Vec<Node>,
 }
+/// A local source dependency retained for impact queries without making artifacts
+/// concept nodes or graph edges. Paths may name deleted or unavailable files.
+#[derive(Debug, Clone)]
+pub struct ResourceDependency {
+    pub path: PathBuf,
+    pub source: Node,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct CatalogGraph {
     pub scope: Scope,
     pub nodes: BTreeSet<Node>,
     pub edges: Vec<Edge>,
+    #[serde(skip)]
+    pub resource_dependencies: Vec<ResourceDependency>,
 }
 /// No fetch, including Git's implicit fetching in partial clones.
 fn git(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
@@ -297,6 +307,76 @@ impl CatalogGraph {
         }
         out.into_iter().collect()
     }
+    /// Impact of changed concepts or local source files, retaining ordinary graph depth.
+    /// Resource dependencies seed their consuming concepts at distance one and are not
+    /// exposed as concept graph nodes. Qualified paths select their registered bundle.
+    pub fn affected_resources(
+        &self,
+        context: &Context,
+        changed: &[String],
+        transitive: bool,
+        depth: Option<usize>,
+    ) -> Vec<Node> {
+        let entries = entries(context);
+        let seeds: BTreeSet<_> = changed
+            .iter()
+            .map(|raw| self.target(context, raw))
+            .collect();
+        let mut paths = BTreeSet::new();
+        for raw in changed {
+            let (bundle, resource) = raw
+                .split_once(":/")
+                .map(|(bundle, resource)| (bundle.to_string(), resource))
+                .unwrap_or_else(|| (primary_id(context), raw.as_str()));
+            let Some(entry) = entries.get(&bundle) else {
+                continue;
+            };
+            if classify(resource) == LinkKind::External {
+                continue;
+            }
+            let clean = resource.split(['#', '?']).next().unwrap_or(resource);
+            let path = normalize(&entry.root.join(clean.trim_start_matches('/')));
+            paths.insert(std::fs::canonicalize(&path).unwrap_or(path.clone()));
+            // Concept IDs conventionally omit .md; keep that interpretation alongside
+            // an exact path so extensionless opaque files also remain addressable.
+            if path.extension().is_none() {
+                let document = path.with_extension("md");
+                paths.insert(std::fs::canonicalize(&document).unwrap_or(document));
+            }
+        }
+        let max_hops = if transitive {
+            depth.unwrap_or(usize::MAX)
+        } else {
+            depth.unwrap_or(1).min(1)
+        };
+        let mut visited = seeds.clone();
+        let mut queue: VecDeque<_> = seeds.iter().cloned().map(|node| (node, 0usize)).collect();
+        let mut out = BTreeSet::new();
+        if max_hops > 0 {
+            for dependency in &self.resource_dependencies {
+                if paths.contains(&dependency.path) && visited.insert(dependency.source.clone()) {
+                    out.insert(dependency.source.clone());
+                    queue.push_back((dependency.source.clone(), 1));
+                }
+            }
+        }
+        while let Some((node, distance)) = queue.pop_front() {
+            if distance >= max_hops {
+                continue;
+            }
+            for edge in self.edges.iter().filter(|edge| {
+                edge.target.as_ref() == Some(&node)
+                    && matches!(edge.status.as_str(), "resolved" | "unchecked-equivalence")
+            }) {
+                if visited.insert(edge.source.clone()) {
+                    out.insert(edge.source.clone());
+                    queue.push_back((edge.source.clone(), distance + 1));
+                }
+            }
+        }
+        out.into_iter().collect()
+    }
+
     pub fn neighborhood(
         &self,
         seed: &Node,
@@ -481,6 +561,17 @@ pub fn build_catalog_graph(
                 let Some(resource) = value.get("resource").and_then(Value::as_str) else {
                     continue;
                 };
+                if let Some(path) = source_dependency_path(
+                    &bundle.root,
+                    &source.id,
+                    resource,
+                    value.get("kind").and_then(Value::as_str),
+                ) {
+                    graph.resource_dependencies.push(ResourceDependency {
+                        path,
+                        source: source.clone(),
+                    });
+                }
                 if classify(resource) == LinkKind::External && value.get("bundle_ref").is_none() {
                     continue;
                 }
@@ -660,6 +751,36 @@ pub fn build_catalog_graph(
     }
     Ok(graph)
 }
+pub(crate) fn source_dependency_path(
+    root: &Path,
+    id: &str,
+    resource: &str,
+    kind: Option<&str>,
+) -> Option<PathBuf> {
+    if classify(resource) == LinkKind::External {
+        return None;
+    }
+    if !matches!(
+        kind,
+        Some("file" | "line-range" | "markdown-heading" | "git-path" | "git-commit")
+    ) && resource.chars().any(char::is_whitespace)
+    {
+        return None;
+    }
+    let clean = resource.split('#').next().unwrap_or(resource);
+    let path = match kind {
+        Some("url") => return None,
+        Some("file" | "line-range" | "markdown-heading") => root.join(clean),
+        Some("git-path" | "git-commit") => {
+            PathBuf::from(git_text(root, &["rev-parse", "--show-toplevel"])?).join(clean)
+        }
+        _ if clean.starts_with('/') => root.join(clean.trim_start_matches('/')),
+        _ => root.join(id.trim_start_matches('/')).parent()?.join(clean),
+    };
+    let path = normalize(&path);
+    Some(std::fs::canonicalize(&path).unwrap_or(path))
+}
+
 fn fingerprint_status(source: &Source, root: &Path, id: &ConceptId) -> Option<String> {
     if source.fingerprint.is_empty() {
         return None;
@@ -1011,6 +1132,9 @@ pub fn resolve_reference(
         })
         .collect();
     let source = graph.target(context, from);
+    let source_root = entries
+        .get(&source.bundle)
+        .map(|entry| entry.root.as_path());
     let mut edge = resolve_edge(
         ResolutionContext {
             entries: &entries,
@@ -1018,11 +1142,63 @@ pub fn resolve_reference(
             bundles: &bundles,
         },
         &source,
-        &context.primary.root,
+        source_root.unwrap_or(&context.primary.root),
         resource,
         "argument",
         None,
     );
+    if source_root.is_none() {
+        edge.status = "unknown-bundle-id".into();
+        edge.evidence = "source bundle is not registered".into();
+        return edge;
+    }
+    // Structural Markdown files are resolvable documents, but remain excluded from
+    // the concept graph. Resolve them only for this explicit reference query.
+    if let Some(path) = ordinary_path(source_root.unwrap(), &source.id, resource) {
+        if matches!(
+            path.file_name().and_then(|s| s.to_str()),
+            Some("index.md" | "log.md")
+        ) {
+            if let Some(entry) = entry_for_path(&entries, &path) {
+                let id = ConceptId::from_relative(
+                    &path
+                        .strip_prefix(&entry.root)
+                        .unwrap()
+                        .with_extension("")
+                        .to_string_lossy(),
+                )
+                .0;
+                let examined = graph.scope.examined.iter().find(|e| e.id == entry.id);
+                let version = examined
+                    .map(|e| e.version.clone())
+                    .unwrap_or_else(|| "working-tree".into());
+                let exists = entry.available
+                    && graph.scope.requested.contains(&entry.id)
+                    && examined.is_some()
+                    && version
+                        .strip_prefix("git:")
+                        .map(|rev| historical_bytes(&entry.root, &path, rev).is_some())
+                        .unwrap_or_else(|| path.is_file());
+                edge.target = Some(Node {
+                    bundle: entry.id.clone(),
+                    id,
+                    version,
+                });
+                edge.status = if !entry.available {
+                    "unavailable-root"
+                } else if !graph.scope.requested.contains(&entry.id) {
+                    "out-of-scope"
+                } else if examined.is_none() {
+                    "unavailable-root-or-revision"
+                } else if exists {
+                    "resolved"
+                } else {
+                    "missing-target"
+                }
+                .into();
+            }
+        }
+    }
     if edge
         .target
         .as_ref()
@@ -1283,5 +1459,128 @@ mod tests {
         assert_eq!(graph.neighborhood(&changed, "both", None).len(), 2);
         let scoped = build_catalog_graph(&ctx, &[], false, None).unwrap();
         assert_eq!(scoped.scope.examined.len(), 1);
+    }
+    #[test]
+    fn qualified_from_resolves_in_its_registered_bundle() {
+        let dir = fixture();
+        let ctx = context(&dir);
+        let graph = build_catalog_graph(&ctx, &[], true, None).unwrap();
+        let edge = resolve_reference(&ctx, &graph, "acme.b:/policies/context", "margin.md");
+        assert_eq!(edge.status, "resolved");
+        let target = edge.target.unwrap();
+        assert_eq!(target.bundle, "acme.b");
+        assert_eq!(target.id, "/policies/margin");
+    }
+
+    #[test]
+    fn standalone_reference_resolves_structural_documents_without_graph_nodes() {
+        let dir = fixture();
+        std::fs::write(dir.path().join("a/index.md"), "# Bundle\n").unwrap();
+        let ctx = context(&dir);
+        let graph = build_catalog_graph(&ctx, &[], false, None).unwrap();
+        let edge = resolve_reference(&ctx, &graph, "/context", "/index.md");
+        assert_eq!(edge.status, "resolved");
+        let target = edge.target.unwrap();
+        assert_eq!(target.id, "/index");
+        assert!(!graph.nodes.contains(&target));
+        assert_eq!(
+            resolve_reference(&ctx, &graph, "/context", "/log.md").status,
+            "missing-target"
+        );
+    }
+    #[test]
+    fn structural_resolution_uses_examined_revision_and_respects_scope() {
+        let dir = fixture();
+        std::fs::write(dir.path().join("b/index.md"), "# Bundle\n").unwrap();
+        git_ok(dir.path(), &["init", "-q"]);
+        git_ok(dir.path(), &["config", "user.name", "Test"]);
+        git_ok(
+            dir.path(),
+            &["config", "user.email", "test@example.invalid"],
+        );
+        git_ok(dir.path(), &["add", "."]);
+        git_ok(dir.path(), &["commit", "-qm", "initial"]);
+        std::fs::remove_file(dir.path().join("b/index.md")).unwrap();
+        std::fs::write(dir.path().join("b/log.md"), "current log\n").unwrap();
+        let ctx = context(&dir);
+        let historical = build_catalog_graph(&ctx, &[], true, Some("HEAD")).unwrap();
+        assert_eq!(
+            resolve_reference(&ctx, &historical, "acme.b:/context", "/index.md").status,
+            "resolved"
+        );
+        assert_eq!(
+            resolve_reference(&ctx, &historical, "acme.b:/context", "/log.md").status,
+            "missing-target"
+        );
+        let scoped = build_catalog_graph(&ctx, &[], false, None).unwrap();
+        assert_eq!(
+            resolve_reference(&ctx, &scoped, "acme.b:/context", "/log.md").status,
+            "out-of-scope"
+        );
+        let unavailable = build_catalog_graph(&ctx, &[], true, Some("missing-revision")).unwrap();
+        assert_eq!(
+            resolve_reference(&ctx, &unavailable, "acme.b:/context", "/log.md").status,
+            "unavailable-root-or-revision"
+        );
+    }
+    #[test]
+    fn resource_impact_seeds_consumers_and_preserves_depth_and_concept_graph() {
+        let dir = fixture();
+        std::fs::write(dir.path().join("a/data.csv"), "1\n").unwrap();
+        std::fs::write(dir.path().join("a/metrics/consumer.md"),
+            "---\ntype: Metric\nsources:\n- {resource: data.csv, kind: file}\n- {resource: 'data.csv#L1', kind: line-range}\n- {resource: 'data.csv#heading', kind: markdown-heading}\n- {resource: '../data.csv'}\n---\n").unwrap();
+        std::fs::write(
+            dir.path().join("b/policies/consumer.md"),
+            "---\ntype: Policy\nsources:\n- {resource: '../a/data.csv', kind: file}\n---\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("a/metrics/dependent.md"),
+            "---\ntype: Metric\n---\n[Consumer](consumer.md)\n",
+        )
+        .unwrap();
+        let ctx = context(&dir);
+        let graph = build_catalog_graph(&ctx, &[], true, None).unwrap();
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.nodes.len(), 4);
+        let changed = vec!["acme.a:/data.csv".into()];
+        let ids = |nodes: Vec<Node>| {
+            nodes
+                .into_iter()
+                .map(|node| format!("{}:{}", node.bundle, node.id))
+                .collect::<Vec<_>>()
+        };
+        let direct = vec!["acme.a:/metrics/consumer", "acme.b:/policies/consumer"];
+        assert_eq!(
+            ids(graph.affected_resources(&ctx, &changed, false, None)),
+            direct
+        );
+        assert_eq!(
+            ids(graph.affected_resources(&ctx, &changed, true, Some(1))),
+            direct
+        );
+        assert!(graph
+            .affected_resources(&ctx, &changed, true, Some(0))
+            .is_empty());
+        assert_eq!(
+            ids(graph.affected_resources(&ctx, &changed, true, Some(2))),
+            vec![
+                "acme.a:/metrics/consumer",
+                "acme.a:/metrics/dependent",
+                "acme.b:/policies/consumer"
+            ]
+        );
+        let mixed = vec![
+            "acme.a:/data.csv".into(),
+            "acme.a:/metrics/consumer.md".into(),
+        ];
+        assert_eq!(
+            ids(graph.affected_resources(&ctx, &mixed, true, None)),
+            vec!["acme.a:/metrics/dependent", "acme.b:/policies/consumer"]
+        );
+        assert!(serde_json::to_value(&graph)
+            .unwrap()
+            .get("resource_dependencies")
+            .is_none());
     }
 }

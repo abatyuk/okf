@@ -1,5 +1,7 @@
 //! Catalog selection and scoped query dispatch; ordinary artifact operations stay confined.
-use crate::cli::{ArtifactCmd, Cli, Command, ComputationCmd, OntFieldTypeCmd, OntologyCmd};
+use crate::cli::{
+    ArtifactCmd, ChangeSetCmd, Cli, Command, ComputationCmd, OntFieldTypeCmd, OntologyCmd,
+};
 use crate::output;
 use okf_core::bundle::{
     catalog::load_catalog,
@@ -37,6 +39,10 @@ pub fn bundle_slot(command: &mut Command) -> Option<&mut Option<String>> {
         Command::Verify(a) => &mut a.bundle,
         Command::Refresh(a) => &mut a.bundle,
         Command::Docs(a) => &mut a.bundle,
+        Command::Changeset(cmd) => match cmd {
+            ChangeSetCmd::Plan(a) | ChangeSetCmd::Apply(a) => &mut a.bundle,
+            ChangeSetCmd::Recover(a) => &mut a.bundle,
+        },
         Command::Artifact(cmd) => match cmd {
             ArtifactCmd::List(a) => &mut a.bundle,
             ArtifactCmd::Resolve(a) => &mut a.bundle,
@@ -51,6 +57,8 @@ pub fn bundle_slot(command: &mut Command) -> Option<&mut Option<String>> {
             OntologyCmd::Remove(a) => &mut a.bundle,
             OntologyCmd::Apply(a) => &mut a.bundle,
             OntologyCmd::FieldType(cmd) => match cmd {
+                OntFieldTypeCmd::List(a) => &mut a.bundle,
+                OntFieldTypeCmd::Show(a) => &mut a.bundle,
                 OntFieldTypeCmd::Add(a) | OntFieldTypeCmd::Update(a) => &mut a.bundle,
                 OntFieldTypeCmd::Remove(a) => &mut a.bundle,
             },
@@ -199,6 +207,29 @@ pub fn run_catalog(json_output: bool) -> Result<i32> {
     }
     Ok(0)
 }
+pub fn writes_command(command: &Command) -> bool {
+    match command {
+        Command::Init(_)
+        | Command::Mv(_)
+        | Command::Rm(_)
+        | Command::Verify(_)
+        | Command::Refresh(_)
+        | Command::Artifact(ArtifactCmd::Put(_)) => true,
+        Command::Add(a) => !a.dry_run,
+        Command::Edit(a) => !a.dry_run,
+        Command::Doctor(a) => a.fix_safe && a.yes && !a.dry_run,
+        Command::Docs(a) => a.format == "index",
+        Command::Ontology(OntologyCmd::Add(a) | OntologyCmd::Update(a)) => !a.dry_run,
+        Command::Ontology(OntologyCmd::Remove(a)) => !a.dry_run,
+        Command::Ontology(OntologyCmd::Apply(a)) => !a.dry_run,
+        Command::Ontology(OntologyCmd::FieldType(
+            OntFieldTypeCmd::Add(a) | OntFieldTypeCmd::Update(a),
+        )) => !a.dry_run,
+        Command::Ontology(OntologyCmd::FieldType(OntFieldTypeCmd::Remove(a))) => !a.dry_run,
+        _ => false,
+    }
+}
+
 /// Returns Some when a catalog-aware query handled the command; otherwise rewrites only
 /// the selected root so existing authoring/query handlers retain their established contracts.
 pub fn prepare(cli: &mut Cli) -> Result<Option<i32>> {
@@ -216,23 +247,25 @@ pub fn prepare(cli: &mut Cli) -> Result<Option<i32>> {
     }
     let scoped = !cli.scope_bundle.is_empty() || cli.catalog_scope;
     let revision = cli.revision.is_some();
-    let supports_scope = matches!(
-        cli.command,
-        Command::Graph(_)
-            | Command::Backlinks(_)
-            | Command::Links(_)
-            | Command::Resolve(_)
-            | Command::Affected(_)
-            | Command::Lint(_)
-            | Command::Search(_)
-            | Command::List(_)
-    );
-    if (scoped || revision) && !supports_scope {
-        return Err(OkfError::Usage("scope and revision flags are supported by graph, backlinks, links, resolve, affected, lint, and search".into()));
+    let scope_command = match cli.command {
+        Command::Graph(_) => "graph",
+        Command::Backlinks(_) => "backlinks",
+        Command::Links(_) => "links",
+        Command::Resolve(_) => "resolve",
+        Command::Affected(_) => "affected",
+        Command::Lint(_) => "lint",
+        Command::Search(_) => "search",
+        Command::List(_) => "list",
+        _ => "",
+    };
+    let supports_scope = crate::cli::supports_scope(scope_command);
+    if scoped && !supports_scope {
+        return Err(OkfError::Usage("scope flags are supported only by graph, backlinks, links, resolve, affected, lint, search, and list".into()));
     }
-    if revision && matches!(cli.command, Command::Lint(_)) {
-        return Err(OkfError::Usage("--revision is supported only by graph, backlinks, links, resolve, affected, search, and list".into()));
+    if revision && !crate::cli::supports_revision(scope_command) {
+        return Err(OkfError::Usage("--revision is supported only by graph, backlinks, links, resolve, affected, search, and list; this command reads the working tree".into()));
     }
+    let writes = writes_command(&cli.command);
     let Some(slot) = bundle_slot(&mut cli.command) else {
         if cli.bundle_id.is_some() {
             return Err(OkfError::Usage(
@@ -248,6 +281,9 @@ pub fn prepare(cli: &mut Cli) -> Result<Option<i32>> {
         ));
     }
     let context = current_context(explicit.as_deref(), cli.bundle_id.as_deref())?;
+    if writes {
+        okf_core::mutate::transaction::ensure_idle(&context.primary.root)?;
+    }
     if scoped && context.catalog.is_none() {
         if let Some(catalog_path) = &context.config.catalog {
             let base = context
@@ -368,7 +404,11 @@ fn run_scoped(cli: &Cli, context: &Context, graph: &CatalogGraph) -> Result<i32>
                 &a.link,
             );
             print_edge(&edge, cli.json)?;
-            Ok(0)
+            Ok(if matches!(edge.status.as_str(), "resolved" | "external") {
+                0
+            } else {
+                1
+            })
         }
         Command::Affected(a) => {
             use std::io::{BufRead, IsTerminal};
@@ -386,11 +426,7 @@ fn run_scoped(cli: &Cli, context: &Context, graph: &CatalogGraph) -> Result<i32>
                     "affected requires --changed targets or stdin".into(),
                 ));
             }
-            let changed = raw
-                .iter()
-                .map(|s| graph.target(context, s))
-                .collect::<Vec<_>>();
-            let nodes = graph.affected(&changed, a.transitive, a.depth);
+            let nodes = graph.affected_resources(context, &raw, a.transitive, a.depth);
             for node in &nodes {
                 print_node(node, "bundle-affected", cli.json)?;
             }
@@ -537,6 +573,7 @@ fn run_lint_scoped(
     let fail_on = FailOn::from_str(args.fail_on.as_deref().unwrap_or("error"))?;
     let mut failed = false;
     let mut broken_link_severities = std::collections::BTreeMap::new();
+    let mut ontology_severities = std::collections::BTreeMap::new();
     let mut target_types = std::collections::BTreeMap::new();
     let mut target_ontologies = std::collections::BTreeMap::new();
     for examined in &graph.scope.examined {
@@ -561,6 +598,7 @@ fn run_lint_scoped(
         let (effective, ontology) = okf_core::bundle::settings::load_for(&examined.root)?;
         let config = super::check::lint_config(&effective.settings)?;
         broken_link_severities.insert(examined.id.clone(), config.broken_link);
+        ontology_severities.insert(examined.id.clone(), config.ontology_violation);
         let mut findings = lint_bundle(&bundle, None, &config);
         if let (Some(ontology), Some(severity)) = (&ontology, config.ontology_violation) {
             let mut qualified = ontology.clone();
@@ -802,36 +840,35 @@ fn run_lint_scoped(
             None
         };
         if let Some(issue) = issue {
-            let severity = if edge.status == "missing-target"
+            let local_missing = edge.status == "missing-target"
                 && edge
                     .target
                     .as_ref()
-                    .is_some_and(|target| target.bundle == edge.source.bundle)
-            {
-                "error"
-            } else {
-                "warn"
-            };
-            let rule = if severity == "error" && edge.reference_rule.is_none() {
-                "broken-link"
-            } else {
-                "cross-bundle-reference"
-            };
-            let severity = if rule == "broken-link" {
+                    .is_some_and(|target| target.bundle == edge.source.bundle);
+            let (rule, code, severity) = if local_missing && edge.reference_rule.is_some() {
+                let Some(Some(configured)) = ontology_severities.get(&edge.source.bundle) else {
+                    continue;
+                };
+                (
+                    "ontology-violation",
+                    "metadata-reference-missing",
+                    configured.as_str(),
+                )
+            } else if local_missing {
                 let Some(Some(configured)) = broken_link_severities.get(&edge.source.bundle) else {
                     continue;
                 };
-                configured.as_str()
+                ("broken-link", issue, configured.as_str())
             } else {
-                severity
+                ("cross-bundle-reference", issue, "warn")
             };
             if json_output {
                 output::print_line(
-                    &json!({"kind":"finding","rule":rule,"code":issue,"severity":severity,"concept":edge.source.id,"bundle":edge.source.bundle,"field_path":edge.location,"message":edge.evidence,"resolution":edge}),
+                    &json!({"kind":"finding","rule":rule,"code":code,"severity":severity,"concept":edge.source.id,"bundle":edge.source.bundle,"field_path":edge.location,"message":edge.evidence,"resolution":edge}),
                 )?;
             } else {
                 output::print_text_line(format_args!(
-                    "{severity}\t{issue}\t{}\t{}",
+                    "{severity}\t{code}\t{}\t{}",
                     edge.source.key(),
                     edge.resource
                 ))?;

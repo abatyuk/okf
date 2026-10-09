@@ -1,6 +1,6 @@
 # okf CLI — infer-ontology command reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.3.2, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.4.0, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 This focused reference contains only commands selected for the `infer-ontology` workflow. First pass the skill CLI compatibility preflight. Consult this reference when exact arguments or output shapes are needed. For a compatible CLI that rejects documented syntax, use that command's `--help` output as the runtime authority.
 
@@ -87,6 +87,11 @@ Authored concept metadata remains open. These computed records describe scope, i
     "schema_version": 1,
     "threshold": "integer"
   },
+  "ontology_field_type": {
+    "definition": "object",
+    "effective": "object",
+    "name": "string"
+  },
   "projection": {
     "bundle": "string|null",
     "fields": "array<{field:string,present:boolean,value?:any,occurrences?:array<{path:string,value:any}>,empty_lists?:integer}>",
@@ -159,6 +164,8 @@ _No arguments._
 
 Output stream: `bundle-registration,effective-settings`.
 
+Supported global options: `--json`.
+
 ## query
 
 ### `okf artifact resolve`
@@ -172,6 +179,8 @@ Resolve any OKF path-valued resource with document context.
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 
 Output stream: `artifact-resolution`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 **Path namespaces:** a leading `/` means bundle-root-relative, not an operating-system absolute path. Other local paths resolve against the declaring concept's directory when `--from` is supplied, otherwise the bundle root. Keep `--from` on the subsequent read too. JSON uses `artifact_kind` (concept, artifact, reserved, external, scope, missing, or blocked), `path`, `exists`, `size`, and `message`. Missing/blocked resolution exits 1. A scope descriptor is provenance, not a missing file.
 
@@ -188,9 +197,11 @@ Retrieve a bounded local text artifact; binary files return metadata only.
 | `--from <value>` | string | no | Resolve a relative resource against this declaring concept id |
 | `--lines <value>` | string | no | Retrieve only an inclusive, one-based START:END line range |
 | `--max-bytes <value>` | int | no | Maximum bytes read into output (default: `65536`) |
-| `--fetch` | bool | no | Explicitly request remote retrieval (requires a network-enabled build and policy) (default: `false`) |
+| `--fetch` | bool | no | Request remote retrieval; unavailable unless built with url-sources and allowed by policy (default: `false`) |
 
 Output stream: `artifact-content`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 For document-relative paths, pass the same `--from` used during resolution. JSON includes `text`, `binary`, `truncated`, `size`, `sha256`, and `path`. Binary files provide metadata only. Inspect `truncated` before treating a read as complete; human output alone does not expose this flag. Use bounded line windows and a sufficient byte budget for the needed range; do not infer absence from a truncated result. Use `show` for concepts and this command for opaque or reserved files.
 
@@ -208,6 +219,8 @@ Concepts that link to a given concept.
 
 Output stream: `concept,relationship,scope,bundle-backlink,bundle-edge`.
 
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--revision`, `--scope-bundle`.
+
 ### `okf links`
 
 List the direct concept links defined by one concept.
@@ -216,9 +229,11 @@ List the direct concept links defined by one concept.
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
-| `--details` | bool | no | Show individual semantic incoming occurrences and configured inverse labels (default: `false`) |
+| `--details` | bool | no | Compatibility option; detailed output is not implemented for this command (default: `false`) |
 
 Output stream: `link,relationship,scope,bundle-edge`.
+
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--revision`, `--scope-bundle`.
 
 ### `okf list`
 
@@ -253,7 +268,38 @@ List all concepts (search with no filter).
 
 Output stream: `concept,concept-identity,scope,projection,query-summary,facet,facet-excluded,relationship,related-concept,expansion-summary,warning`.
 
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--revision`, `--scope-bundle`.
+
 JSON records contain frontmatter and computed lifecycle/trust metadata, not bodies. Aggregate field occurrence counts only after checking scan completeness and output warnings. The default scan budget is 1,000 eligible documents across scope; --limit bounds output, not scan work. For exhaustive inventory use a sufficient --scan-limit or deliberate --full-scan, and aggregate metadata locally rather than loading all records into context. Each offset invocation rescans; an incomplete scan has no authoritative continuation.
+
+### `okf ontology field-type list`
+
+List reusable field-type definitions.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+
+Output stream: `ontology_field_type`.
+
+Supported global options: `--bundle-id`, `--json`.
+
+Inspect authored reusable definitions and resolved inherited constraints. JSON includes both definition and effective fields.
+
+### `okf ontology field-type show`
+
+Show a reusable field-type definition and its effective fields.
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `<name>` | positional | yes | Concept type name |
+| `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
+
+Output stream: `ontology_field_type`.
+
+Supported global options: `--bundle-id`, `--json`.
+
+Inspect authored reusable definitions and resolved inherited constraints. JSON includes both definition and effective fields.
 
 ### `okf ontology list`
 
@@ -264,6 +310,8 @@ List the defined concept types.
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `ontology_type`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 ### `okf ontology show`
 
@@ -276,6 +324,8 @@ Show one concept type and its rules.
 
 Output stream: `ontology_type`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 ### `okf resolve`
 
 Resolve a link/concept-id to a concrete bundle-relative file path.
@@ -287,6 +337,8 @@ Resolve a link/concept-id to a concrete bundle-relative file path.
 | `--from <value>` | string | no | Resolve a relative link against this containing concept id |
 
 Output stream: `resolved,scope,bundle-edge`.
+
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--revision`, `--scope-bundle`.
 
 ### `okf show`
 
@@ -304,6 +356,8 @@ Show one concept's content, heading outline, or selected line range.
 
 Output stream: `concept,projection`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 Without `--json`, show includes the serialized frontmatter and full Markdown body. Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, `effective_status`, `effective_generated_at`, `latest_verified_at`, and `verification_current`. It does not include the body. `--outline --json` returns `headings` with `line`, `level`, and `text`; `--lines START:END --json` returns `start`, actual `end`, and `lines` containing `line` and `text`. Line numbers refer to the serialized document, including frontmatter, excluding the three-line display header. `show -n` (or `--numbered`) prints the full document with these numbers and no header; its JSON uses the same line-range record. `show --body` prints only raw Markdown; with `--json` it returns a body record containing `id` and `body`. An outline or selected slice does not establish complete document-review coverage.
 
 ## check
@@ -316,9 +370,11 @@ Check and display a computation contract; never executes code.
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
-| `--details` | bool | no | Show individual semantic incoming occurrences and configured inverse labels (default: `false`) |
+| `--details` | bool | no | Compatibility option; detailed output is not implemented for this command (default: `false`) |
 
 Output stream: `computation-contract`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 Inspect-only: `execution: not-run` is not a passing runtime attestation. Document verification and inspection of executable resources never establish a run verdict.
 
@@ -334,6 +390,8 @@ Advisory checks (broken links, missing fields, orphans, ontology violations).
 
 Output stream: `finding,scope`.
 
+Supported global options: `--bundle-id`, `--catalog-scope`, `--json`, `--scope-bundle`.
+
 For sources with a fingerprint kind, `source-unrecorded` warns when no baseline exists. `source-missing` errors when file, line-range, or markdown-heading sources cannot be fingerprinted, even without a baseline. Lint does not fetch URLs or inspect Git sources. Configure `source_unrecorded = "off"` (or `info`, `warn`, `error`; default `warn`) in `[bundle_settings.default.lint]` in `okf.toml`, or `[bundle_settings."<id>".lint]` for a named bundle. Disabling this rule leaves `source-missing` and `stale` checks active. All lint settings accept `off`, `info`, `warn`, or `error`. Defaults: `broken_link` and `source_missing` are `error`; `missing_title`, `spec_v02` (finding rule `okf-v02`), `ontology_violation`, `source_unrecorded`, and `index_coverage` are `warn`; `missing_description` and `orphan` are `info`. Omitted settings keep these defaults. `off` suppresses the selected lint rule only; validation and stale checks remain independent. `index_exclude` controls index coverage exclusions and `finding_budget` limits ontology findings (positive, default 1,000 per concept). Use `--fail-on warn` to fail on warnings as well as errors.
 
 ### `okf stats`
@@ -343,9 +401,11 @@ Bundle summary: counts by type, trust distribution, orphans.
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
-| `--fail-on <value>` | string | no | Fail (exit 1) on any result: never (default) | info | warn | error | any (default: `never`) |
+| `--fail-on <value>` | string | no | Fail on any result: never (default) or any; info/warn/error are compatibility aliases (default: `never`) |
 
 Output stream: `stats`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 ### `okf validate`
 
@@ -356,6 +416,8 @@ Conformance validation — the spec's three hard rules only.
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 
 Output stream: `violation`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 ## mutate
 
@@ -382,6 +444,8 @@ Define a new concept type with structured fields, references, and relationships.
 
 Output stream: `change`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 Built-in field types: `string`, `text`, `int`, `bool`, `date`, `datetime`, `uri`, `enum`, `list`, `object`; custom type names must resolve in the existing sidecar's `field_types`. Reference cardinalities are `0..1` (optional one), `1..1` (exactly one), `0..n` (optional many), and `1..n` (at least one). For example, `--field "stage:enum:draft|active"` declares choices and `--ref "depends_on:Service:0..n"` permits zero or more Service links. Observed presence alone does not justify a required rule. Structured `--field-yaml`, `--ref-yaml`, and `--relationship-yaml` inputs replace complete named declarations. `--from` merges supplied declarations, retaining omitted ones; overlaps with flags fail. `--remove-relationship` deletes a named rule. YAML inputs accept inline values, `@file`, or `-`; JSON syntax works. Preview with `--dry-run`. These are advisory local rules, not conformance requirements.
 
 ### `okf ontology apply` · _conditionally mutates_
@@ -395,6 +459,8 @@ Apply coordinated concept and reusable field-type changes atomically.
 | `--dry-run` | bool | no | Validate and preview the change without writing (default: `false`) |
 
 Output stream: `change`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 `--from` accepts `field_types` and `concepts` maps, merging named declarations and preserving omitted ones. Top-level `remove` has `field_types` and `concepts` lists; per-concept `remove` has `fields`, `references`, and `relationships` lists. Conflicting operations fail. The complete result validates before a single write. Use `--dry-run` for a preview; null and omission do not request deletion.
 
@@ -411,6 +477,8 @@ Define a new reusable field type.
 
 Output stream: `change`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 Reusable field types are ontology-wide definitions. Add/update `--from` accepts a whole definition; update replaces it completely. Inspect consumers before removal or tightening. `--dry-run` validates the proposed ontology without writing.
 
 ### `okf ontology field-type remove` · _conditionally mutates_
@@ -419,11 +487,13 @@ Remove a reusable field type if the resulting ontology remains valid.
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<name>` | positional | yes | Concept type name to remove |
+| `<name>` | positional | yes | Reusable field-type name to remove |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--dry-run` | bool | no | Validate and preview the change without writing (default: `false`) |
 
 Output stream: `change`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 Reusable field types are ontology-wide definitions. Add/update `--from` accepts a whole definition; update replaces it completely. Inspect consumers before removal or tightening. `--dry-run` validates the proposed ontology without writing.
 
@@ -440,6 +510,8 @@ Replace an existing reusable field type completely.
 
 Output stream: `change`.
 
+Supported global options: `--bundle-id`, `--json`.
+
 Reusable field types are ontology-wide definitions. Add/update `--from` accepts a whole definition; update replaces it completely. Inspect consumers before removal or tightening. `--dry-run` validates the proposed ontology without writing.
 
 ### `okf ontology remove` · _conditionally mutates_
@@ -453,6 +525,8 @@ Remove a concept type.
 | `--dry-run` | bool | no | Validate and preview the change without writing (default: `false`) |
 
 Output stream: `change`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 ### `okf ontology update` · _conditionally mutates_
 
@@ -476,5 +550,7 @@ Modify an existing concept type and its named declarations.
 | `--attested` | bool | no | Mark the exact `Attested Computation` type as standard attested (default: `false`) |
 
 Output stream: `change`.
+
+Supported global options: `--bundle-id`, `--json`.
 
 Built-in field types: `string`, `text`, `int`, `bool`, `date`, `datetime`, `uri`, `enum`, `list`, `object`; custom type names must resolve in the existing sidecar's `field_types`. Reference cardinalities are `0..1` (optional one), `1..1` (exactly one), `0..n` (optional many), and `1..n` (at least one). For example, `--field "stage:enum:draft|active"` declares choices and `--ref "depends_on:Service:0..n"` permits zero or more Service links. Observed presence alone does not justify a required rule. Structured `--field-yaml`, `--ref-yaml`, and `--relationship-yaml` inputs replace complete named declarations. `--from` merges supplied declarations, retaining omitted ones; overlaps with flags fail. `--remove-relationship` deletes a named rule. YAML inputs accept inline values, `@file`, or `-`; JSON syntax works. Preview with `--dry-run`. These are advisory local rules, not conformance requirements.

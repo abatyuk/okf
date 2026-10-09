@@ -21,7 +21,7 @@ use crate::model::standard::valid_actor;
 use crate::ontology::field_types::resolve_field;
 use crate::ontology::schema::{ConceptType, FieldType, Ontology};
 
-use super::edit::{id_to_path, render_validated, save_concept};
+use super::edit::{id_to_path, render_validated, save_new_concept};
 use super::structured::StructuredEdits;
 
 /// Inputs to `add` beyond the target path.
@@ -123,6 +123,29 @@ pub fn add(
     }
 
     let concept_type = resolve_type_name(ontology, opts)?;
+    if opts.sets.iter().any(|(key, _)| key == "type") {
+        return Err(OkfError::Usage(
+            "add: use --type to choose the concept type, not --set type".into(),
+        ));
+    }
+    if opts.inline_computation.is_some() && (opts.body.is_some() || opts.computation.is_some()) {
+        return Err(OkfError::Usage(
+            "add: --inline-computation conflicts with --body and --computation".into(),
+        ));
+    }
+    if concept_type != "Attested Computation"
+        && (opts.runtime.is_some()
+            || !opts.parameters.is_empty()
+            || opts.computation.is_some()
+            || opts.inline_computation.is_some()
+            || opts.executor_resource.is_some()
+            || !opts.receipt.is_empty()
+            || opts.attester_resource.is_some())
+    {
+        return Err(OkfError::Usage(
+            "add: computation arguments require type 'Attested Computation'".into(),
+        ));
+    }
     let ct: Option<&ConceptType> = ontology.and_then(|o| o.concepts.get(&concept_type));
     let attested = concept_type == "Attested Computation";
 
@@ -326,7 +349,7 @@ pub fn add(
     let path = if opts.dry_run {
         path
     } else {
-        save_concept(root, &concept)?
+        save_new_concept(root, &concept)?
     };
 
     Ok(AddResult {

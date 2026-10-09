@@ -43,3 +43,8 @@
 * [okf ontology field-type add](ontology-field-type-add.md) - Adds a reusable structured field type to the ontology.
 * [okf ontology field-type update](ontology-field-type-update.md) - Replaces an existing reusable structured field type definition.
 * [okf ontology field-type remove](ontology-field-type-remove.md) - Removes a reusable structured field type from the ontology.
+* [okf changeset plan](changeset-plan.md) - Validate and preview coordinated single-bundle changes without publishing files.
+* [okf changeset apply](changeset-apply.md) - Publish validated coordinated record changes with guarded inputs and recoverable per-file writes.
+* [okf changeset recover](changeset-recover.md) - Recover interrupted publication without overwriting intervening edits.
+* [okf ontology field-type list](ontology-field-type-list.md) - List authored reusable field types and their effective definitions.
+* [okf ontology field-type show](ontology-field-type-show.md) - Inspect one authored reusable field type and its effective definition.

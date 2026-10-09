@@ -41,7 +41,7 @@ pub fn diff(bundle: &Bundle, git: &dyn Git, rev: &str) -> Result<DiffResult> {
     // Concepts at the ref, keyed by id.
     let mut at_ref: BTreeMap<String, Concept> = BTreeMap::new();
     let candidates: Vec<(PathBuf, ConceptId)> = git
-        .ls_tree_in(&git_root, rev, &prefix)?
+        .ls_regular_files_in(&git_root, rev, &prefix)?
         .into_iter()
         .filter_map(|repo_path| {
             let relative = Path::new(&repo_path).strip_prefix(&prefix).ok()?;
@@ -213,5 +213,46 @@ mod tests {
             .with_show("HEAD", "a.md", b"---\ntype: T\n---\nbody\n".to_vec());
         let d = diff(&bundle, &git, "HEAD").unwrap();
         assert_eq!(ids(&d.modified), vec!["/a"]);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn tracked_markdown_symlinks_are_not_historical_concepts() {
+        use crate::bundle::loader::load_bundle;
+        use crate::ports::git::RealGit;
+        use std::os::unix::fs::symlink;
+        use std::process::Command;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(root.join("a.md"), "---\ntype: T\n---\nsame\n").unwrap();
+        symlink("a.md", root.join("alias.md")).unwrap();
+        for args in [
+            vec!["init", "-q"],
+            vec!["add", "."],
+            vec![
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-qm",
+                "fixture",
+            ],
+        ] {
+            assert!(Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let bundle = load_bundle(root).unwrap();
+        assert_eq!(bundle.concepts.len(), 1);
+        assert!(diff(&bundle, &RealGit, "HEAD").unwrap().is_empty());
+        // Even a removed historical symlink was never a concept.
+        std::fs::remove_file(root.join("alias.md")).unwrap();
+        assert!(diff(&load_bundle(root).unwrap(), &RealGit, "HEAD")
+            .unwrap()
+            .is_empty());
     }
 }

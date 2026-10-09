@@ -4,11 +4,14 @@
 use crate::cli::Cli;
 use crate::commands;
 use clap::error::ErrorKind;
-use clap::Parser;
+use clap::FromArgMatches;
 
 /// Parse argv, dispatch, and return the process exit code.
 pub fn run() -> i32 {
-    let cli = match Cli::try_parse() {
+    let cli = match crate::cli::command_tree()
+        .try_get_matches()
+        .and_then(|m| Cli::from_arg_matches(&m))
+    {
         Ok(cli) => cli,
         Err(err) => {
             // clap prints help/version/usage itself.

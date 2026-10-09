@@ -28,7 +28,7 @@ pub fn inspect<'a>(bundle: &'a Bundle, id: &str) -> Result<ComputationContract<'
 
 /// Inspect an already-loaded computation concept.
 pub fn inspect_concept(concept: &Concept) -> ComputationContract<'_> {
-    let mut issues = Vec::new();
+    let mut issues = crate::check::lint::rules::spec_v02::computation_issues(concept);
     if concept.concept_type() != Some("Attested Computation") {
         issues.push("concept type is not exact `Attested Computation`".to_string());
     }
@@ -37,13 +37,10 @@ pub fn inspect_concept(concept: &Concept) -> ComputationContract<'_> {
         .get_str("runtime")
         .filter(|s| !s.trim().is_empty())
         .map(str::to_string);
-    if runtime.is_none() {
-        issues.push("missing required runtime".to_string());
-    }
     let mut parameters = Vec::new();
     if let Some(value) = concept.frontmatter.get("parameters") {
         if let Some(seq) = value.as_sequence() {
-            for (i, parameter) in seq.iter().enumerate() {
+            for parameter in seq {
                 let name = parameter.get("name").and_then(Value::as_str);
                 let ty = parameter.get("type").and_then(Value::as_str);
                 let required = parameter.get("required").and_then(Value::as_bool);
@@ -53,11 +50,9 @@ pub fn inspect_concept(concept: &Concept) -> ComputationContract<'_> {
                     {
                         parameters.push((name.to_string(), ty.to_string(), required));
                     }
-                    _ => issues.push(format!("parameters[{i}] must contain name, type, required")),
+                    _ => {}
                 }
             }
-        } else {
-            issues.push("parameters must be a list".to_string());
         }
     }
     let computation = concept
@@ -65,10 +60,7 @@ pub fn inspect_concept(concept: &Concept) -> ComputationContract<'_> {
         .get_str("computation")
         .filter(|s| !s.trim().is_empty())
         .map(str::to_string);
-    let inline = has_inline(&concept.body);
-    if inline == computation.is_some() {
-        issues.push("provide exactly one inline computation fence or computation path".to_string());
-    }
+    let inline = crate::check::lint::rules::spec_v02::computation_fences(&concept.body).0 > 0;
     let executor_resource = nested_string(concept, "executor", "resource");
     let receipt = concept
         .frontmatter
@@ -106,15 +98,35 @@ fn nested_string(concept: &Concept, family: &str, key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-fn has_inline(body: &str) -> bool {
-    let mut under = false;
-    for line in body.lines() {
-        let t = line.trim();
-        if t.starts_with("# ") {
-            under = t.trim_start_matches("# ").trim() == "Computation";
-        } else if under && (t.starts_with("```") || t.starts_with("~~~")) {
-            return true;
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn contract(yaml: &str, body: &str) -> Concept {
+        crate::parse::parse_concept(
+            crate::model::concept::ConceptId::from_relative("job"),
+            &format!("---\ntype: Attested Computation\nruntime: sql\n{yaml}---\n{body}"),
+        )
+        .unwrap()
     }
-    false
+
+    #[test]
+    fn inspection_reuses_lint_contract_checks() {
+        let concept = contract("executor: nope\nattester: {}\nparameters:\n- {name: x, type: string, required: true}\n- {name: x, type: string, required: false}\n", "# Computation\n```sql\n```\n```sql\n```\n");
+        let issues = inspect_concept(&concept).issues;
+        for expected in [
+            "executor",
+            "attester.resource",
+            "duplicate computation parameter",
+            "single fenced code block",
+            "fence is empty",
+        ] {
+            assert!(
+                issues.iter().any(|issue| issue.contains(expected)),
+                "{expected}: {issues:?}"
+            );
+        }
+        let valid = contract("", "# Computation\n```sql\nselect 1;\n```\n");
+        assert!(inspect_concept(&valid).issues.is_empty());
+    }
 }

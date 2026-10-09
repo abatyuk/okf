@@ -205,9 +205,16 @@ pub fn list_artifacts(
     if !scan_root.is_dir() {
         return Ok(out);
     }
-    for nested in walk_files(&scan_root)? {
+    let canonical_root = root.canonicalize()?;
+    let canonical_scan_root = scan_root.canonicalize()?;
+    if !canonical_scan_root.starts_with(&canonical_root) {
+        return Err(OkfError::Usage(
+            "artifact directory escapes bundle".to_string(),
+        ));
+    }
+    for nested in walk_files(&canonical_scan_root)? {
+        let abs = canonical_scan_root.join(&nested);
         let rel = prefix.join(nested);
-        let abs = root.join(&rel);
         let metadata =
             std::fs::metadata(&abs).map_err(|e| OkfError::Io(format!("{}: {e}", abs.display())))?;
         let kind = classify_existing(&rel);
@@ -361,35 +368,55 @@ pub fn show_artifact(
         .map(|b| format!("{b:02x}"))
         .collect();
     let truncated = total > max_bytes;
-    let (text, binary) = match std::str::from_utf8(&prefix) {
-        Ok(text) => {
-            let selected = if let Some((start, end)) = lines {
-                if start == 0 || end < start {
-                    return Err(OkfError::Usage(
-                        "lines must be a positive START:END range".to_string(),
-                    ));
-                }
-                text.lines()
-                    .enumerate()
-                    .skip(start - 1)
-                    .take(end - start + 1)
-                    .map(|(_, line)| line)
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            } else {
-                text.to_string()
-            };
-            (Some(selected), false)
-        }
-        Err(_) => (None, true),
-    };
-    Ok(ArtifactContent {
+    let (text, binary) = decode_prefix(&prefix, truncated);
+    let mut content = ArtifactContent {
         resolved,
         text,
         sha256,
         truncated,
         binary,
-    })
+    };
+    content.select_lines(lines)?;
+    Ok(content)
+}
+
+impl ArtifactContent {
+    /// Select one-based lines from the bounded text returned by local or remote retrieval.
+    pub fn select_lines(&mut self, lines: Option<(usize, usize)>) -> Result<()> {
+        if let Some((start, end)) = lines {
+            if start == 0 || end < start {
+                return Err(OkfError::Usage(
+                    "lines must be a positive START:END range".to_string(),
+                ));
+            }
+            if let Some(text) = &mut self.text {
+                *text = text
+                    .lines()
+                    .skip(start - 1)
+                    .take(end - start + 1)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+        }
+        Ok(())
+    }
+}
+
+// A byte bound can end inside a UTF-8 character. Omit that unfinished character,
+// while retaining binary classification for malformed sequences inside the prefix.
+fn decode_prefix(bytes: &[u8], truncated: bool) -> (Option<String>, bool) {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => (Some(text.to_string()), false),
+        Err(error) if truncated && error.error_len().is_none() => (
+            Some(
+                std::str::from_utf8(&bytes[..error.valid_up_to()])
+                    .unwrap()
+                    .to_string(),
+            ),
+            false,
+        ),
+        Err(_) => (None, true),
+    }
 }
 
 /// Fetch a bounded HTTP(S) artifact only when the network feature is compiled in. The caller
@@ -424,10 +451,7 @@ fn fetch_impl(resource: &str, max_bytes: usize) -> Result<ArtifactContent> {
     let truncated = bytes.len() > max_bytes;
     bytes.truncate(max_bytes);
     let sha256 = hex_sha256(&bytes);
-    let (text, binary) = match String::from_utf8(bytes) {
-        Ok(text) => (Some(text), false),
-        Err(_) => (None, true),
-    };
+    let (text, binary) = decode_prefix(&bytes, truncated);
     Ok(ArtifactContent {
         resolved: ResolvedArtifact {
             resource: resource.to_string(),
@@ -583,6 +607,40 @@ mod tests {
         assert_eq!(
             resolve_artifact(root.path(), None, "outside.txt").kind,
             ArtifactKind::Blocked
+        );
+    }
+    #[test]
+    fn bounded_utf8_text_omits_partial_character_without_becoming_binary() {
+        let root = tempfile::tempdir().unwrap();
+        let bytes = "a😀z";
+        std::fs::write(root.path().join("utf8.txt"), bytes).unwrap();
+        for max in 2..5 {
+            let content = show_artifact(root.path(), None, "utf8.txt", max, None).unwrap();
+            assert_eq!(content.text.as_deref(), Some("a"));
+            assert!(!content.binary);
+            assert!(content.truncated);
+            assert_eq!(content.sha256, hex_sha256(bytes.as_bytes()));
+        }
+        assert_eq!(decode_prefix(&[b'a', 0xff], true), (None, true));
+        assert_eq!(decode_prefix(&[b'a', 0xf0], false), (None, true));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn selected_artifact_directory_cannot_escape_through_symlink() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("private.txt"), "private").unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.path().join("outside")).unwrap();
+        assert!(list_artifacts(root.path(), Some("outside"), true).is_err());
+        std::fs::create_dir(root.path().join("inside")).unwrap();
+        std::fs::write(root.path().join("inside/public.txt"), "public").unwrap();
+        std::os::unix::fs::symlink(root.path().join("inside"), root.path().join("alias")).unwrap();
+        assert_eq!(
+            list_artifacts(root.path(), Some("alias"), true)
+                .unwrap()
+                .len(),
+            1
         );
     }
 }

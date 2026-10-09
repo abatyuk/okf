@@ -139,6 +139,7 @@ pub fn run_show(args: &ArtifactShowArgs, json_output: bool) -> Result<i32> {
             args.resource, canonical_root.display(), suggestion
         )));
     }
+    let lines = args.lines.as_deref().map(parse_lines).transpose()?;
     if resolved.kind == ArtifactKind::External {
         if !args.fetch {
             return Err(OkfError::Environment(
@@ -146,10 +147,10 @@ pub fn run_show(args: &ArtifactShowArgs, json_output: bool) -> Result<i32> {
                     .to_string(),
             ));
         }
-        let content = fetch_artifact(&args.resource, args.max_bytes)?;
+        let mut content = fetch_artifact(&args.resource, args.max_bytes)?;
+        content.select_lines(lines)?;
         return print_content(content, json_output);
     }
-    let lines = args.lines.as_deref().map(parse_lines).transpose()?;
     let content = show_artifact(
         &root,
         args.from.as_deref(),
@@ -213,7 +214,11 @@ fn print_content(
         output::print_text_line(format_args!(
             "binary\t{}\t{}",
             content.sha256,
-            content.resolved.path.unwrap().display()
+            content
+                .resolved
+                .path
+                .map(|p| p.display().to_string())
+                .unwrap_or(content.resolved.resource)
         ))?;
     } else if let Some(text) = content.text {
         output::print_text(format_args!("{text}"))?;

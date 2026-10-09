@@ -13,7 +13,7 @@ use okf_core::ontology::edit::{
     remove_reference, remove_relationship, render_ontology, save_ontology,
     validate_field_type_name,
 };
-use okf_core::ontology::field_types::resolve_field;
+use okf_core::ontology::field_types::{resolve_field, resolve_type_name};
 use okf_core::ontology::load::ontology_path;
 use okf_core::ontology::schema::{
     Cardinality, ConceptType, Field, Ontology, ReferenceRule, Target,
@@ -61,6 +61,18 @@ pub fn run_show(args: &OntShowArgs, json: bool) -> Result<i32> {
         if !ct.requires.is_empty() {
             println!("requires: {}", ct.requires.join(", "));
         }
+        if let Some(trust) = &ct.trust {
+            println!(
+                "trust:\n{}",
+                serde_yaml::to_string(trust).map_err(|e| OkfError::Yaml(e.to_string()))?
+            );
+        }
+        if !ct.extra.is_empty() {
+            print!(
+                "{}",
+                serde_yaml::to_string(&ct.extra).map_err(|e| OkfError::Yaml(e.to_string()))?
+            );
+        }
         if !ct.fields.is_empty() {
             println!("fields:");
             for (k, f) in &ct.fields {
@@ -96,7 +108,24 @@ pub fn run_show(args: &OntShowArgs, json: bool) -> Result<i32> {
                     r.target.types().join("|"),
                     r.cardinality.as_str()
                 );
+                if let Some(selector) = &r.selector {
+                    println!("    selector: {selector}");
+                }
+                if !r.extra.is_empty() {
+                    print!(
+                        "{}",
+                        serde_yaml::to_string(&r.extra)
+                            .map_err(|e| OkfError::Yaml(e.to_string()))?
+                    );
+                }
             }
+        }
+        if !ct.relationships.is_empty() {
+            println!(
+                "relationships:\n{}",
+                serde_yaml::to_string(&ct.relationships)
+                    .map_err(|e| OkfError::Yaml(e.to_string()))?
+            );
         }
     }
     Ok(0)
@@ -149,7 +178,51 @@ pub fn run_remove(args: &OntRemoveArgs, json: bool) -> Result<i32> {
 }
 
 pub fn run_field_type(cmd: &OntFieldTypeCmd, json: bool) -> Result<i32> {
+    if let OntFieldTypeCmd::List(args) = cmd {
+        let root = resolve_bundle(args.bundle.as_deref())?;
+        let ontology = require_ontology(&root)?;
+        for (name, definition) in &ontology.field_types {
+            if json {
+                output::print_line(
+                    &json!({"kind": "ontology_field_type", "name": name, "definition": definition, "effective": resolve_type_name(&ontology, name, &mut Vec::new())?}),
+                )?;
+            } else {
+                println!(
+                    "{name}\t{}",
+                    definition
+                        .extends
+                        .as_deref()
+                        .or(definition.base.as_deref())
+                        .unwrap_or("")
+                );
+            }
+        }
+        return Ok(0);
+    }
+    if let OntFieldTypeCmd::Show(args) = cmd {
+        let root = resolve_bundle(args.bundle.as_deref())?;
+        let ontology = require_ontology(&root)?;
+        let definition = ontology
+            .field_types
+            .get(&args.name)
+            .ok_or_else(|| OkfError::Usage(format!("no field type {:?}", args.name)))?;
+        let effective = resolve_type_name(&ontology, &args.name, &mut Vec::new())?;
+        if json {
+            output::print_line(
+                &json!({"kind": "ontology_field_type", "name": args.name, "definition": definition, "effective": effective}),
+            )?;
+        } else {
+            println!(
+                "# {}\n{}effective:\n{}",
+                args.name,
+                serde_yaml::to_string(definition).map_err(|e| OkfError::Yaml(e.to_string()))?,
+                serde_yaml::to_string(&effective).map_err(|e| OkfError::Yaml(e.to_string()))?
+            );
+        }
+        return Ok(0);
+    }
     let (name, bundle, dry_run, op, input) = match cmd {
+        OntFieldTypeCmd::List(_) | OntFieldTypeCmd::Show(_) => unreachable!(),
         OntFieldTypeCmd::Add(a) => (
             &a.name,
             &a.bundle,
@@ -434,13 +507,13 @@ fn concept_type_record(name: &str, ct: &ConceptType, ontology: &Ontology) -> ser
         .iter()
         .map(|(k, f)| {
             let resolved = resolve_field(ontology,f).ok();
-            json!({"key": k, "type": f.type_name, "required": f.required, "values": resolved.as_ref().map(|r|&r.ty.values), "effective":resolved})
+            json!({"key": k, "type": f.type_name, "required": f.required, "values": resolved.as_ref().map(|r|&r.ty.values), "effective":resolved, "declaration": f})
         })
         .collect();
     let references: Vec<_> = ct
         .references
         .iter()
-        .map(|(k, r)| json!({"key": k, "target": r.target.types(), "cardinality": r.cardinality.as_str(),"selector":r.selector}))
+        .map(|(k, r)| json!({"key": k, "target": r.target.types(), "cardinality": r.cardinality.as_str(),"selector":r.selector, "declaration": r}))
         .collect();
     json!({
         "kind": "ontology_type",
@@ -448,6 +521,10 @@ fn concept_type_record(name: &str, ct: &ConceptType, ontology: &Ontology) -> ser
         "description": ct.description,
         "attested": ct.attested,
         "requires": ct.requires,
+        "trust": ct.trust,
+        "extra": ct.extra,
+        "extends": ct.extra.get("extends"),
+        "declaration": ct,
         "fields": fields,
         "references": references,
         "relationships": ct.relationships,

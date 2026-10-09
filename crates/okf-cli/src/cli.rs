@@ -1,5 +1,5 @@
 //! clap command tree, groups, global `--json`. `okf schema` is derived from this tree.
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 
 /// Open Knowledge Format harness — deterministic hands over markdown + YAML bundles.
 #[derive(Debug, Parser)]
@@ -100,6 +100,10 @@ pub enum Command {
     #[command(subcommand)]
     Ontology(OntologyCmd),
 
+    /// Preview, apply, or recover coordinated single-bundle changes.
+    #[command(subcommand)]
+    Changeset(ChangeSetCmd),
+
     // ---- RENDER ----
     /// Generate documentation from a bundle.
     Docs(DocsArgs),
@@ -126,6 +130,10 @@ pub enum OntologyCmd {
 
 #[derive(Debug, Subcommand)]
 pub enum OntFieldTypeCmd {
+    /// List reusable field-type definitions.
+    List(BundleArgs),
+    /// Show a reusable field-type definition and its effective fields.
+    Show(OntShowArgs),
     /// Define a new reusable field type.
     Add(OntFieldTypeEditArgs),
     /// Replace an existing reusable field type completely.
@@ -382,7 +390,7 @@ pub struct ArtifactShowArgs {
     /// Maximum bytes read into output.
     #[arg(long, default_value_t = 65_536)]
     pub max_bytes: usize,
-    /// Explicitly request remote retrieval (requires a network-enabled build and policy).
+    /// Request remote retrieval; unavailable unless built with url-sources and allowed by policy.
     #[arg(long)]
     pub fetch: bool,
 }
@@ -424,7 +432,7 @@ pub struct LintArgs {
 pub struct FailOnArgs {
     /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
-    /// Fail (exit 1) on any result: never (default) | info | warn | error | any.
+    /// Fail on any result: never (default) or any; info/warn/error are compatibility aliases.
     #[arg(
         long = "fail-on",
         value_parser = ["never", "info", "warn", "error", "any"],
@@ -443,7 +451,7 @@ pub struct AffectedArgs {
     /// Follow the cascade past direct dependents.
     #[arg(long)]
     pub transitive: bool,
-    /// Cap the number of hops when `--transitive`.
+    /// Cap hops with --transitive; otherwise ignored with a diagnostic.
     #[arg(long)]
     pub depth: Option<usize>,
     /// Fail (exit 1) on any affected concept: never (default) | info | warn | error | any.
@@ -694,7 +702,7 @@ pub struct VerifyArgs {
 pub struct DocsArgs {
     /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
-    /// Output format: md|html|pdf|graphml|obsidian|index.
+    /// Output format: md|html|graphml|obsidian|index; pdf is retained but unavailable.
     #[arg(
         long,
         default_value = "md",
@@ -790,4 +798,96 @@ pub struct OntApplyArgs {
     /// Validate and preview the change without writing.
     #[arg(long)]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ChangeSetCmd {
+    /// Validate and preview a coordinated change document without writing bundle files.
+    Plan(ChangeSetArgs),
+    /// Validate then publish coordinated changes with a recoverable rollback journal.
+    Apply(ChangeSetArgs),
+    /// Recover an interrupted publication without overwriting intervening edits.
+    Recover(BundleArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ChangeSetArgs {
+    /// Bundle directory.
+    pub bundle: Option<String>,
+    /// Version 1 change document: inline YAML/JSON, @file, or stdin (-).
+    #[arg(long, allow_hyphen_values = true)]
+    pub from: String,
+    /// Require this base digest from a previous plan before applying.
+    #[arg(long)]
+    pub expect: Option<String>,
+    /// Validate and preview without writing (also the behavior of changeset plan).
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+/// The same capability table drives runtime admission, help and machine discovery.
+pub fn supports_scope(name: &str) -> bool {
+    matches!(
+        name,
+        "graph" | "backlinks" | "links" | "resolve" | "affected" | "lint" | "search" | "list"
+    )
+}
+pub fn supports_revision(name: &str) -> bool {
+    supports_scope(name) && name != "lint"
+}
+pub fn supports_bundle(name: &str) -> bool {
+    !matches!(name, "schema" | "catalog" | "version" | "source-scan")
+}
+
+pub fn command_tree() -> clap::Command {
+    let mut command = Cli::command();
+    let globals = command
+        .get_arguments()
+        .filter(|a| a.is_global_set())
+        .cloned()
+        .collect::<Vec<_>>();
+    fn decorate(command: &mut clap::Command, prefix: &str, globals: &[clap::Arg]) {
+        let name = if prefix.is_empty() {
+            command.get_name().to_string()
+        } else {
+            format!("{prefix} {}", command.get_name())
+        };
+        if command.has_subcommands() {
+            for child in command.get_subcommands_mut() {
+                decorate(child, &name, globals);
+            }
+            return;
+        }
+        for (arg, supported) in [
+            ("revision", supports_revision(&name)),
+            ("scope_bundle", supports_scope(&name)),
+            ("catalog_scope", supports_scope(&name)),
+            ("bundle_id", supports_bundle(&name)),
+        ] {
+            if !supported {
+                if let Some(global) = globals.iter().find(|a| a.get_id() == arg) {
+                    *command = command.clone().arg(global.clone().hide(true));
+                }
+            }
+        }
+        if name == "ontology field-type remove" {
+            *command = command.clone().mut_args(|a| {
+                if a.get_id() == "name" {
+                    a.help("Reusable field-type name to remove")
+                } else {
+                    a
+                }
+            });
+        }
+        if matches!(name.as_str(), "links" | "computation check") {
+            *command = command.clone().mut_arg("details", |a| {
+                a.help("Compatibility option; detailed output is not implemented for this command")
+            });
+        }
+    }
+    for child in command.get_subcommands_mut() {
+        decorate(child, "", &globals);
+    }
+    command.build();
+    command
 }

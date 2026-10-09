@@ -37,7 +37,7 @@ separate results. A current candidate is not an accepted substitute.
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--changed <value>` | list<string> | no | A changed link/concept-id/resource (repeatable; also read from stdin lines) |
 | `--transitive` | bool | no | Follow the cascade past direct dependents (default: `false`) |
-| `--depth <value>` | int | no | Cap the number of hops when `--transitive` |
+| `--depth <value>` | int | no | Cap hops with --transitive; otherwise ignored with a diagnostic |
 | `--fail-on <value>` | string | no | Fail (exit 1) on any affected concept: never (default) | info | warn | error | any (default: `never`) |
 
 Global `--json` requests NDJSON. The optional trailing `bundle` positional is a path; `--bundle-id` selects a catalog identity. Selection uses explicit path or ID, `$OKF_BUNDLE` (path), registered containing bundle, configured default, sole catalog entry, then uncataloged cwd. Selection and examination scope are separate.

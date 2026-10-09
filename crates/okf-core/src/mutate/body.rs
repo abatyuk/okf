@@ -40,7 +40,7 @@ pub fn set_section(body: &str, heading: &str, text: &str) -> Result<String> {
     out.extend(text.trim_matches('\n').split('\n').map(|s| s.to_string()));
     out.push(String::new());
     out.extend(lines[span.end..].iter().map(|s| s.to_string()));
-    Ok(normalize(&out.join("\n")))
+    Ok(out.join("\n"))
 }
 
 /// Append `text` to the end of the section under `heading`, separated by a blank line. Errors
@@ -60,7 +60,7 @@ pub fn append_section(body: &str, heading: &str, text: &str) -> Result<String> {
     out.extend(text.trim_matches('\n').split('\n').map(|s| s.to_string()));
     out.push(String::new());
     out.extend(lines[span.end..].iter().map(|s| s.to_string()));
-    Ok(normalize(&out.join("\n")))
+    Ok(out.join("\n"))
 }
 
 /// Remove the section under `heading` entirely, including its heading line and nested
@@ -74,7 +74,7 @@ pub fn remove_section(body: &str, heading: &str) -> Result<String> {
         .map(|s| s.to_string())
         .collect();
     out.extend(lines[span.end..].iter().map(|s| s.to_string()));
-    Ok(normalize(&out.join("\n")))
+    Ok(out.join("\n"))
 }
 
 /// Rename a section heading while preserving its level, indentation, and content. Errors if the
@@ -126,30 +126,6 @@ fn with_trailing_nl(s: &str) -> String {
         String::new()
     } else {
         format!("{}\n", s.trim_end_matches('\n'))
-    }
-}
-
-/// Collapse 3-or-more consecutive newlines to a blank-line pair and guarantee one trailing
-/// newline, so splicing never leaves ragged runs of blank lines.
-fn normalize(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 1);
-    let mut newlines = 0usize;
-    for ch in s.chars() {
-        if ch == '\n' {
-            newlines += 1;
-            if newlines <= 2 {
-                out.push('\n');
-            }
-        } else {
-            newlines = 0;
-            out.push(ch);
-        }
-    }
-    let trimmed = out.trim_end_matches('\n');
-    if trimmed.is_empty() {
-        String::new()
-    } else {
-        format!("{trimmed}\n")
     }
 }
 

@@ -102,7 +102,7 @@ fn collect(
 
     match root {
         Some(r) => {
-            let start = ConceptId::from_relative(r).0;
+            let start = crate::model::link::resolve_link(&ConceptId("/context".into()), r).0;
             let mut visited: HashSet<String> = HashSet::new();
             let mut queue = VecDeque::from([(start.clone(), 0usize)]);
             visited.insert(start);
@@ -341,6 +341,13 @@ mod tests {
         assert_eq!(
             out,
             "graph LR\n    n0[\"/a\"]\n    n1[\"/b\"]\n    n2[\"/c\"]\n    n0 --> n1\n    n1 --> n2\n"
+        );
+    }
+    #[test]
+    fn rooted_graph_normalizes_markdown_suffix_and_fragment() {
+        assert_eq!(
+            render(&graph(), RenderFormat::Mermaid, Some("./b.md#details")),
+            render(&graph(), RenderFormat::Mermaid, Some("b"))
         );
     }
 }

@@ -13,7 +13,7 @@ use okf_core::check::lint::{lint_bundle, meets_threshold, FailOn, LintConfig};
 use okf_core::check::stale::check_stale;
 use okf_core::check::validate::validate_bundle;
 use okf_core::error::{OkfError, Result};
-use okf_core::graph::affected::{affected, AffectedOptions};
+use okf_core::graph::affected::{affected_with_sources, AffectedOptions};
 use okf_core::graph::build::build_graph;
 use okf_core::ports::git::RealGit;
 use okf_core::query::diff::diff;
@@ -262,7 +262,7 @@ pub fn run_affected(args: &AffectedArgs, json: bool) -> Result<i32> {
         transitive: args.transitive,
         depth: args.depth,
     };
-    let ids = affected(&graph, &changed, &opts);
+    let ids = affected_with_sources(&bundle, &graph, &changed, &opts);
 
     if json {
         for id in &ids {

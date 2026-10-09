@@ -138,68 +138,79 @@ pub fn run(ctx: &RuleContext) -> Vec<Finding> {
         }
 
         if concept.concept_type() == Some("Attested Computation") {
-            if fm.get_str("runtime").is_none_or(|s| s.trim().is_empty()) {
-                add("Attested Computation requires non-empty `runtime`".to_string());
-            }
-            if fm.get("parameters").is_some_and(|v| !v.is_sequence()) {
-                add("Attested Computation `parameters` must be a list".to_string());
-            }
-            if let Some(parameters) = fm.get("parameters").and_then(Value::as_sequence) {
-                let mut names = HashSet::new();
-                for (i, parameter) in parameters.iter().enumerate() {
-                    let valid = parameter
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .is_some_and(|s| !s.is_empty())
-                        && parameter
-                            .get("type")
-                            .and_then(Value::as_str)
-                            .is_some_and(|s| !s.is_empty())
-                        && parameter.get("required").and_then(Value::as_bool).is_some();
-                    if !valid {
-                        add(format!(
-                            "parameters[{i}] must contain name, type, and boolean required"
-                        ));
-                    }
-                    if let Some(name) = parameter.get("name").and_then(Value::as_str) {
-                        if !names.insert(name.to_string()) {
-                            add(format!("duplicate computation parameter {name:?}"));
-                        }
-                    }
-                }
-            }
-            for family in ["executor", "attester"] {
-                if let Some(value) = fm.get(family) {
-                    if !value.is_mapping() {
-                        add(format!("`{family}` must be a mapping"));
-                    } else if value
-                        .get("resource")
-                        .and_then(Value::as_str)
-                        .is_none_or(|s| s.trim().is_empty())
-                    {
-                        add(format!(
-                            "`{family}.resource` must be a non-empty path or URI"
-                        ));
-                    }
-                }
-            }
-            let (fence_count, fence_has_content) = computation_fences(&concept.body);
-            let inline = fence_count > 0;
-            let file = fm
-                .get_str("computation")
-                .is_some_and(|s| !s.trim().is_empty());
-            if inline == file {
-                add("Attested Computation must use exactly one of inline # Computation fence or `computation` path".to_string());
-            }
-            if fence_count > 1 {
-                add("inline # Computation must contain a single fenced code block".to_string());
-            }
-            if inline && !fence_has_content {
-                add("inline computation fence is empty".to_string());
+            for issue in computation_issues(concept) {
+                add(issue);
             }
         }
     }
     out
+}
+
+/// Shared structural checks for an exact Attested Computation contract.
+pub fn computation_issues(concept: &crate::model::concept::Concept) -> Vec<String> {
+    let fm = &concept.frontmatter;
+    let mut issues = Vec::new();
+    let mut add = |message: String| issues.push(message);
+    if fm.get_str("runtime").is_none_or(|s| s.trim().is_empty()) {
+        add("Attested Computation requires non-empty `runtime`".to_string());
+    }
+    if fm.get("parameters").is_some_and(|v| !v.is_sequence()) {
+        add("Attested Computation `parameters` must be a list".to_string());
+    }
+    if let Some(parameters) = fm.get("parameters").and_then(Value::as_sequence) {
+        let mut names = HashSet::new();
+        for (i, parameter) in parameters.iter().enumerate() {
+            let valid = parameter
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|s| !s.is_empty())
+                && parameter
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .is_some_and(|s| !s.is_empty())
+                && parameter.get("required").and_then(Value::as_bool).is_some();
+            if !valid {
+                add(format!(
+                    "parameters[{i}] must contain name, type, and boolean required"
+                ));
+            }
+            if let Some(name) = parameter.get("name").and_then(Value::as_str) {
+                if !names.insert(name.to_string()) {
+                    add(format!("duplicate computation parameter {name:?}"));
+                }
+            }
+        }
+    }
+    for family in ["executor", "attester"] {
+        if let Some(value) = fm.get(family) {
+            if !value.is_mapping() {
+                add(format!("`{family}` must be a mapping"));
+            } else if value
+                .get("resource")
+                .and_then(Value::as_str)
+                .is_none_or(|s| s.trim().is_empty())
+            {
+                add(format!(
+                    "`{family}.resource` must be a non-empty path or URI"
+                ));
+            }
+        }
+    }
+    let (fence_count, fence_has_content) = computation_fences(&concept.body);
+    let inline = fence_count > 0;
+    let file = fm
+        .get_str("computation")
+        .is_some_and(|s| !s.trim().is_empty());
+    if inline == file {
+        add("Attested Computation must use exactly one of inline # Computation fence or `computation` path".to_string());
+    }
+    if fence_count > 1 {
+        add("inline # Computation must contain a single fenced code block".to_string());
+    }
+    if inline && !fence_has_content {
+        add("inline computation fence is empty".to_string());
+    }
+    issues
 }
 
 fn check_timestamp<F>(value: Option<&Value>, name: &str, add: &mut F)
@@ -252,7 +263,7 @@ where
     }
 }
 
-fn computation_fences(body: &str) -> (usize, bool) {
+pub(crate) fn computation_fences(body: &str) -> (usize, bool) {
     let mut under = false;
     let mut in_fence = false;
     let mut count = 0;

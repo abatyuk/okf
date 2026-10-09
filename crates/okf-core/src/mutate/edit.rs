@@ -74,16 +74,73 @@ pub(crate) fn load_concept(root: &Path, id: &ConceptId) -> Result<Concept> {
 
 /// Serialize `concept` semantically and atomically write its validated id-derived path.
 pub(crate) fn save_concept(root: &Path, concept: &Concept) -> Result<PathBuf> {
+    super::transaction::ensure_idle(root)?;
     let path = id_to_path(root, &concept.id)?;
     let text = render_validated(root, concept)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| OkfError::Io(format!("{}: {e}", parent.display())))?;
     }
-    let temp = path.with_extension("md.okf-tmp");
-    std::fs::write(&temp, text).map_err(|e| OkfError::Io(format!("{}: {e}", temp.display())))?;
-    std::fs::rename(&temp, &path).map_err(|e| OkfError::Io(format!("{}: {e}", path.display())))?;
+    atomic_write(&path, text.as_bytes())?;
     Ok(path)
+}
+
+/// Create a validated concept without replacing a file created by another writer.
+pub(crate) fn save_new_concept(root: &Path, concept: &Concept) -> Result<PathBuf> {
+    super::transaction::ensure_idle(root)?;
+    let path = id_to_path(root, &concept.id)?;
+    let text = render_validated(root, concept)?;
+    atomic_write_mode(&path, text.as_bytes(), true)?;
+    Ok(path)
+}
+
+/// Publish bytes through an exclusively created sibling; never follow a planted temp symlink.
+pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
+    atomic_write_mode(path, bytes, false)
+}
+
+fn atomic_write_mode(path: &Path, bytes: &[u8], create_only: bool) -> Result<()> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let parent = path
+        .parent()
+        .ok_or_else(|| OkfError::Usage("missing parent".into()))?;
+    std::fs::create_dir_all(parent)?;
+    let (temp, mut file) = loop {
+        let temp = parent.join(format!(
+            ".okf-{}-{}.tmp",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)
+        {
+            Ok(file) => break (temp, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    let result = (|| -> std::io::Result<()> {
+        if let Ok(metadata) = std::fs::metadata(path) {
+            file.set_permissions(metadata.permissions())?;
+        }
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        if create_only {
+            // A hard link publishes an already-complete sibling without a check/rename
+            // race: an existing destination, including a symlink, is never replaced.
+            std::fs::hard_link(&temp, path)?;
+            std::fs::remove_file(&temp)?;
+        } else {
+            std::fs::rename(&temp, path)?;
+        }
+        std::fs::File::open(parent)?.sync_all()
+    })();
+    let _ = std::fs::remove_file(&temp);
+    result.map_err(Into::into)
 }
 
 /// Render through the exact validation used by normal and preview writes.
@@ -520,4 +577,24 @@ fn ensure_key(key: &str) -> Result<()> {
         return Err(OkfError::Usage("edit: empty field key".to_string()));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod publication_tests {
+    use super::*;
+    #[test]
+    fn create_only_publication_preserves_an_existing_destination() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("note.md");
+        std::fs::write(&path, "independent writer").unwrap();
+        assert!(atomic_write_mode(&path, b"our bytes", true).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "independent writer"
+        );
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+        let new = root.path().join("new.md");
+        atomic_write_mode(&new, b"complete bytes", true).unwrap();
+        assert_eq!(std::fs::read(&new).unwrap(), b"complete bytes");
+    }
 }

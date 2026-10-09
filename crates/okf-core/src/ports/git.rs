@@ -63,6 +63,11 @@ pub trait Git {
                 .collect())
         }
     }
+    /// Enumerate regular files for concept discovery, excluding tracked symlinks and gitlinks.
+    /// Legacy ports that only expose paths retain their existing behavior.
+    fn ls_regular_files_in(&self, root: &Path, rev: &str, prefix: &Path) -> Result<Vec<String>> {
+        self.ls_tree_in(root, rev, prefix)
+    }
 }
 
 /// Production git, shelling out to the `git` CLI. A missing `git` on PATH surfaces as
@@ -467,6 +472,29 @@ impl Git for RealGit {
         Ok(String::from_utf8_lossy(&out.stdout)
             .lines()
             .map(str::to_string)
+            .collect())
+    }
+
+    fn ls_regular_files_in(&self, root: &Path, rev: &str, prefix: &Path) -> Result<Vec<String>> {
+        let mut command = Self::local_command();
+        command
+            .arg("-C")
+            .arg(root)
+            .args(["ls-tree", "-r", "-z", rev]);
+        if !prefix.as_os_str().is_empty() {
+            command.arg("--").arg(prefix);
+        }
+        let out = Self::run(&mut command)?;
+        Ok(out
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter_map(|entry| {
+                let tab = entry.iter().position(|byte| *byte == b'\t')?;
+                // Git uses 100644/100755 for regular blobs and 120000 for symlinks.
+                entry
+                    .starts_with(b"100")
+                    .then(|| String::from_utf8_lossy(&entry[tab + 1..]).into_owned())
+            })
             .collect())
     }
 }
