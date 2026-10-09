@@ -147,6 +147,9 @@ fn fetched_artifact_honors_line_selection() {
                 Err(e) => panic!("test HTTP client did not connect: {e}"),
             }
         };
+        // Accepted sockets may inherit the listener's nonblocking mode on macOS.
+        // Only acceptance is polled; request reads use the bounded blocking timeout.
+        stream.set_nonblocking(false).unwrap();
         stream
             .set_read_timeout(Some(std::time::Duration::from_secs(5)))
             .unwrap();
