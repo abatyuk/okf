@@ -246,11 +246,27 @@ pub fn run_search_in_scope(
     {
         expands = view.map(|v| v.expand.clone()).unwrap_or_default();
     }
-    if !columns.is_empty() && !json_output {
-        output::print_text_line(format_args!("{}", columns.join("\t")))?;
+    let human_fields = if projection.is_empty() {
+        &columns
+    } else {
+        &projection
+    };
+    let scoped_human = !json_output && scope.len() > 1;
+    if !json_output && (!columns.is_empty() || (scoped_human && !projection.is_empty())) {
+        let identity = if scoped_human {
+            "BUNDLE\tVERSION\tID\t"
+        } else {
+            ""
+        };
+        output::print_text_line(format_args!("{identity}{}", human_fields.join("\t")))?;
     }
     let plain = !json_output && projection.is_empty() && columns.is_empty();
-    if plain {
+    if plain && scoped_human {
+        output::print_text_line(format_args!(
+            "BUNDLE\tVERSION\tID\tTYPE\tTRUST\tSTATUS\tTITLE"
+        ))?;
+    }
+    if plain && !scoped_human {
         if args.text.is_empty() {
             output::print_concepts(
                 &page.iter().map(|(_, h)| h.concept).collect::<Vec<_>>(),
@@ -269,10 +285,28 @@ pub fn run_search_in_scope(
         }
     }
     for (i, hit) in page {
+        let (bundle_id, _, version) = &scope[*i];
         if plain {
+            if scoped_human {
+                output::print_text_line(format_args!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    bundle_id,
+                    version,
+                    hit.concept.id.0,
+                    hit.concept.concept_type().unwrap_or("-"),
+                    hit.concept.trust_tier().as_str(),
+                    hit.concept.effective_status(),
+                    hit.concept.title().unwrap_or("")
+                ))?;
+            }
             continue;
         }
-        let (bundle_id, _, version) = &scope[*i];
+        if scoped_human {
+            output::print_text(format_args!(
+                "{}\t{}\t{}\t",
+                bundle_id, version, hit.concept.id.0
+            ))?;
+        }
         if !projection.is_empty() {
             let record = project(hit.concept, &projection, Some(bundle_id), version)?;
             if json_output {
@@ -676,7 +710,7 @@ pub fn run_resolve(args: &ResolveArgs, json: bool) -> Result<i32> {
             if r.exists { "exists" } else { "missing" }
         );
     }
-    Ok(0)
+    Ok(if r.exists { 0 } else { 1 })
 }
 
 /// Parse `--field key=value` arguments.

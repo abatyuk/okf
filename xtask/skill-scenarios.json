@@ -38,7 +38,9 @@
       "ontology apply",
       "ontology field-type add",
       "ontology field-type update",
-      "ontology field-type remove"
+      "ontology field-type remove",
+      "ontology field-type list",
+      "ontology field-type show"
     ],
     "prohibited_claims": [
       "ontology is required by OKF",
@@ -87,7 +89,10 @@
       "stale",
       "catalog",
       "list",
-      "backlinks"
+      "backlinks",
+      "changeset plan",
+      "changeset apply",
+      "changeset recover"
     ],
     "prohibited_claims": [
       "every source requires kind",
@@ -181,7 +186,9 @@
       "catalog",
       "validate",
       "ontology list",
-      "ontology show"
+      "ontology show",
+      "ontology field-type list",
+      "ontology field-type show"
     ],
     "prohibited_claims": [
       "verification proves this run",
@@ -264,7 +271,10 @@
       "mv",
       "refresh",
       "docs",
-      "catalog"
+      "catalog",
+      "changeset plan",
+      "changeset apply",
+      "changeset recover"
     ],
     "prohibited_claims": [
       "refresh clears stale_after",
@@ -313,7 +323,9 @@
       "ontology apply",
       "ontology field-type add",
       "ontology field-type update",
-      "ontology field-type remove"
+      "ontology field-type remove",
+      "ontology field-type list",
+      "ontology field-type show"
     ],
     "prohibited_claims": [
       "ontology controls conformance",
@@ -362,7 +374,9 @@
       "ontology apply",
       "ontology field-type add",
       "ontology field-type update",
-      "ontology field-type remove"
+      "ontology field-type remove",
+      "ontology field-type list",
+      "ontology field-type show"
     ],
     "prohibited_claims": [
       "observed once means required",
@@ -404,7 +418,10 @@
       "artifact show",
       "show",
       "edit",
-      "catalog"
+      "catalog",
+      "changeset plan",
+      "changeset apply",
+      "changeset recover"
     ],
     "prohibited_claims": [
       "moves never edit referrers",

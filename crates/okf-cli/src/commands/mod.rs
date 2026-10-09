@@ -5,6 +5,7 @@
 //! [`crate::exit`]. Core never calls `process::exit`.
 pub mod artifact;
 pub mod catalog;
+pub mod changeset;
 pub mod check;
 pub mod mutate;
 pub mod ontology;
@@ -17,9 +18,40 @@ use okf_core::error::Result;
 
 /// Dispatch a parsed CLI invocation to its command handler, returning an exit code.
 pub fn run(mut cli: Cli) -> Result<i32> {
+    match &cli.command {
+        Command::Links(a) | Command::Computation(ComputationCmd::Check(a)) if a.details => eprintln!("okf: --details is retained for compatibility and has no effect for this command"),
+        Command::Lint(a) if a.fix => eprintln!("okf: --fix is retained for compatibility; no automatic lint fixes are implemented (use doctor --fix-safe for supported repairs)"),
+        Command::Affected(a) if a.depth.is_some() && !a.transitive => eprintln!("okf: --depth has no effect without --transitive"),
+        Command::Init(a) if a.title.is_some() && a.no_index => eprintln!("okf: --title has no effect with --no-index"),
+        _ => {},
+    }
+
+    let failure_alias = match &cli.command {
+        Command::Scan(a) | Command::Stale(a) | Command::Stats(a) => a.fail_on.as_deref(),
+        Command::Affected(a) => a.fail_on.as_deref(),
+        Command::Diff(a) => a.fail_on.as_deref(),
+        _ => None,
+    };
+    if matches!(failure_alias, Some("info" | "warn" | "error")) {
+        eprintln!("okf: discovery --fail-on {} is a compatibility alias for any; results have no severity", failure_alias.unwrap());
+    }
     if let Some(code) = catalog::prepare(&mut cli)? {
         return Ok(code);
     }
+    // Hold the bundle writer lock through ordinary read-modify-write handlers.
+    // mv and changeset acquire it around their guarded transactional publication.
+    let _writer = if catalog::writes_command(&cli.command) && !matches!(cli.command, Command::Mv(_))
+    {
+        let path = catalog::bundle_slot(&mut cli.command).and_then(|p| p.clone());
+        let root = okf_core::bundle::resolve::resolve_bundle_target(path.as_deref())?;
+        if root.is_dir() {
+            Some(okf_core::mutate::transaction::writer_lock(&root)?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     let json = cli.json;
     match &cli.command {
         // META
@@ -72,6 +104,7 @@ pub fn run(mut cli: Cli) -> Result<i32> {
             OntologyCmd::FieldType(cmd) => ontology::run_field_type(cmd, json),
             OntologyCmd::Apply(a) => ontology::run_apply(a, json),
         },
+        Command::Changeset(a) => changeset::run(a, json),
         // RENDER
         Command::Docs(a) => render::run_docs(a, json),
     }

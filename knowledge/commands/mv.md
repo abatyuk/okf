@@ -25,8 +25,8 @@ last_modified: 2026-10-04T20:39:29Z
 
 Moves or renames a concept and rewrites body links, ontology references, and standard internal `sources[].resource` paths. It also rebases the moved concept's relative standard paths. Repository-relative `git-path` and `git-commit` source resources remain unchanged.
 
-Moves refuse when a declared nested-reference occurrence would require unsupported rewriting.
-Automatic structured-reference rewriting and cross-bundle move orchestration remain deferred.
+Moves rewrite declared nested-reference occurrences and curated navigation within the selected bundle.
+Publication is journaled per file. Cross-bundle move orchestration remains unsupported.
 Inspect explicit-scope consumers and coordinate reviewed changes across bundles manually; a
 single-bundle move cannot establish that every external consumer was repaired.
 

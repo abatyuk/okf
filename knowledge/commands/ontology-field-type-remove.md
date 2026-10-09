@@ -32,7 +32,7 @@ Use bulk apply to update dependent definitions in the same write. `--dry-run` pr
 
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `<name>` | positional | yes | Concept type name to remove |
+| `<name>` | positional | yes | Reusable field-type name to remove |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
 | `--dry-run` | bool | no | Validate and preview the change without writing (default: `false`) |
 

@@ -25,6 +25,167 @@ fn ontology(root: &std::path::Path) -> serde_yaml::Value {
 }
 
 #[test]
+fn ontology_inspection_exposes_selectors_relationships_and_authored_properties() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    success(root, &["ontology", "apply", "--from", "{field_types: {Norm: {base: object, fields: {bearer: {type: uri}}}}, concepts: {Base: {}, Procedure: {extends: Base, trust: {min_tier: verified, local: retained}, local: authored, fields: {norms: {type: list, item: Norm, min: 1}}, references: {bearers: {selector: 'norms[].bearer', target: Team, cardinality: '1..n', local: retained}}, relationships: {obligations: {reference: bearers, kind: obliges, inverse: obligated-by}}}}}"]);
+    let out = success(root, &["ontology", "show", "Procedure"]);
+    let human = String::from_utf8(out.stdout).unwrap();
+    for expected in [
+        "selector: norms[].bearer",
+        "relationships:",
+        "obligations:",
+        "inverse: obligated-by",
+        "trust:",
+        "min_tier: verified",
+        "extends: Base",
+        "local: authored",
+    ] {
+        assert!(human.contains(expected), "missing {expected:?}: {human}");
+    }
+    let out = success(root, &["ontology", "show", "Procedure", "--json"]);
+    let record: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(record["trust"]["min_tier"], "verified");
+    assert_eq!(record["extra"]["local"], "authored");
+    assert_eq!(record["extends"], "Base");
+    assert_eq!(record["fields"][0]["declaration"]["min"], 1);
+    assert_eq!(record["references"][0]["declaration"]["local"], "retained");
+    let declared: serde_yaml::Value =
+        serde_yaml::from_str(&serde_json::to_string(&record["declaration"]).unwrap()).unwrap();
+    assert_eq!(declared, ontology(root)["concepts"]["Procedure"]);
+}
+
+#[test]
+fn reusable_field_type_inspection_shows_declarations_and_effective_constraints() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    success(root, &["ontology", "apply", "--from", "{field_types: {Text: {base: string, min: 1, local: retained}, Label: {extends: Text, max: 20}}}"]);
+    let out = success(root, &["ontology", "field-type", "list", "--json"]);
+    let records: Vec<serde_json::Value> = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[1]["name"], "Label");
+    let out = success(root, &["ontology", "field-type", "show", "Label", "--json"]);
+    let record: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(record["definition"]["extends"], "Text");
+    assert_eq!(record["effective"]["base"], "string");
+    assert_eq!(record["effective"]["constraints"]["min"], 1);
+    assert_eq!(record["effective"]["constraints"]["max"], 20);
+    assert_eq!(record["effective"]["constraints"]["local"], "retained");
+    let human = success(root, &["ontology", "field-type", "show", "Label"]);
+    assert!(String::from_utf8(human.stdout)
+        .unwrap()
+        .contains("extends: Text"));
+    let missing = run(root, &["ontology", "field-type", "show", "Missing"]);
+    assert_eq!(missing.status.code(), Some(2));
+}
+
+#[test]
+fn unrelated_ontology_update_preserves_literal_scalar_in_preview_and_write() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let original = "okf_ontology: '0.1'\nconcepts:\n  Service:\n    description: |\n      # authored description\n      status: authored prose\n    fields:\n      status: {type: string}\n";
+    std::fs::write(root.join("ontology.yaml"), original).unwrap();
+    let before = ontology(root)["concepts"]["Service"]["description"].clone();
+    let preview = success(
+        root,
+        &[
+            "ontology",
+            "update",
+            "Service",
+            "--field",
+            "owner:string",
+            "--dry-run",
+            "--json",
+        ],
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("ontology.yaml")).unwrap(),
+        original
+    );
+    let record: serde_json::Value = serde_json::from_slice(&preview.stdout).unwrap();
+    let generated = record["diff"]
+        .as_str()
+        .unwrap()
+        .lines()
+        .skip(2)
+        .filter_map(|line| line.strip_prefix('+'))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    let parsed: serde_yaml::Value = serde_yaml::from_str(&generated).unwrap();
+    assert_eq!(parsed["concepts"]["Service"]["description"], before);
+    success(
+        root,
+        &["ontology", "update", "Service", "--field", "owner:string"],
+    );
+    assert_eq!(ontology(root)["concepts"]["Service"]["description"], before);
+    assert_eq!(
+        std::fs::read_to_string(root.join("ontology.yaml")).unwrap(),
+        generated
+    );
+}
+
+#[test]
+fn doctor_uses_configured_ontology_sidecar_for_warnings_and_failures() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    std::fs::create_dir(root.join("bundle")).unwrap();
+    std::fs::write(
+        root.join("okf.toml"),
+        "bundle='bundle'\n[bundle_settings.default]\nontology='sidecar.yaml'\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("sidecar.yaml"),
+        "okf_ontology: '0.1'\nconcepts:\n  Custom: {attested: true}\n",
+    )
+    .unwrap();
+    let out = run(root, &["doctor", "--json"]);
+    let records: Vec<serde_json::Value> = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let warning = records
+        .iter()
+        .find(|record| record["rule"] == "custom-attested-ontology-type")
+        .expect("configured ontology warning");
+    assert!(warning["path"].as_str().unwrap().ends_with("sidecar.yaml"));
+    std::fs::write(root.join("sidecar.yaml"), "broken: [\n").unwrap();
+    let out = run(root, &["doctor", "--json"]);
+    let records: Vec<serde_json::Value> = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let warning = records
+        .iter()
+        .find(|record| record["rule"] == "ontology-unreadable")
+        .expect("invalid configured ontology warning");
+    assert!(warning["path"].as_str().unwrap().ends_with("sidecar.yaml"));
+    std::fs::remove_file(root.join("sidecar.yaml")).unwrap();
+    let out = run(root, &["doctor", "--json"]);
+    let records: Vec<serde_json::Value> = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let warning = records
+        .iter()
+        .find(|record| record["rule"] == "ontology-unreadable")
+        .expect("missing configured ontology warning");
+    assert!(warning["path"].as_str().unwrap().ends_with("sidecar.yaml"));
+    assert!(warning["message"]
+        .as_str()
+        .unwrap()
+        .contains("sidecar.yaml"));
+}
+
+#[test]
 fn structured_declarations_author_relationships_and_replace_named_entries() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();

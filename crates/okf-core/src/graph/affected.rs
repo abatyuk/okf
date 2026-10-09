@@ -5,9 +5,12 @@
 //! `transitive` follows the cascade, optionally capped at `depth` hops. The changed set itself
 //! is never reported (those are the things that changed, not their reviewers), and the walk is
 //! cycle-safe via a visited set.
+use crate::bundle::loader::Bundle;
 use crate::graph::build::LinkGraph;
 use crate::model::concept::ConceptId;
-use std::collections::HashSet;
+use crate::model::link::{classify, resolve_link, LinkKind};
+use serde_yaml::Value;
+use std::collections::{HashMap, HashSet};
 
 /// Options for [`affected`].
 #[derive(Debug, Clone, Default)]
@@ -61,6 +64,68 @@ pub fn affected(graph: &LinkGraph, changed: &[String], opts: &AffectedOptions) -
 
     result.sort_by(|a, b| a.0.cmp(&b.0));
     result
+}
+
+/// Include local source-resource dependencies in an impact query. These edges are private to
+/// this traversal: opaque files must not become concept edges for stats, orphans, or backlinks.
+/// File/text fingerprint kinds use bundle-root paths; other local sources use document paths.
+pub fn affected_with_sources(
+    bundle: &Bundle,
+    graph: &LinkGraph,
+    changed: &[String],
+    opts: &AffectedOptions,
+) -> Vec<ConceptId> {
+    let mut impact = graph.clone();
+    let root = std::fs::canonicalize(&bundle.root).unwrap_or_else(|_| {
+        crate::bundle::catalog::absolute(&bundle.root).unwrap_or_else(|_| bundle.root.clone())
+    });
+    let mut resource_dependents = HashMap::<std::path::PathBuf, Vec<ConceptId>>::new();
+    for concept in &bundle.concepts {
+        let Some(Value::Sequence(sources)) = concept.frontmatter.get("sources") else {
+            continue;
+        };
+        for source in sources {
+            let Some(resource) = source.get("resource").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(path) = crate::graph::catalog::source_dependency_path(
+                &root,
+                &concept.id.0,
+                resource,
+                source.get("kind").and_then(Value::as_str),
+            ) else {
+                continue;
+            };
+            let dependents = resource_dependents.entry(path).or_default();
+            if !dependents.contains(&concept.id) {
+                dependents.push(concept.id.clone());
+            }
+        }
+    }
+    for raw in changed {
+        if classify(raw) == LinkKind::External {
+            continue;
+        }
+        let clean = raw.split(['#', '?']).next().unwrap_or(raw);
+        let path = crate::bundle::catalog::normalize(&root.join(clean.trim_start_matches('/')));
+        let mut paths = vec![std::fs::canonicalize(&path).unwrap_or(path.clone())];
+        if path.extension().is_none() {
+            let document = path.with_extension("md");
+            paths.push(std::fs::canonicalize(&document).unwrap_or(document));
+        }
+        let seed = resolve_link(&ConceptId("/".into()), raw);
+        for path in paths {
+            if let Some(dependents) = resource_dependents.get(&path) {
+                let inbound = impact.reverse.entry(seed.0.clone()).or_default();
+                for dependent in dependents {
+                    if !inbound.contains(dependent) {
+                        inbound.push(dependent.clone());
+                    }
+                }
+            }
+        }
+    }
+    affected(&impact, changed, opts)
 }
 
 #[cfg(test)]
@@ -145,5 +210,67 @@ mod tests {
         };
         let got = affected(&g, &["/tables/customers".into()], &opts);
         assert_eq!(ids(got), vec!["/computations/mileage".to_string()]);
+    }
+
+    #[test]
+    fn resource_dependencies_use_kind_paths_and_preserve_depth_without_concept_edges() {
+        let bundle = Bundle {
+            root: ".".into(),
+            concepts: vec![
+                concept("notes/direct", "type: Note\nsources:\n- {kind: file, resource: data.csv}\n- {kind: line-range, resource: 'data.csv#L1-2'}\n- {resource: '../data.csv'}\n- {resource: 'https://example.com/data.csv'}"),
+                concept("notes/second", "type: Note\nsources:\n- {resource: direct.md}"),
+                concept("notes/third", "type: Note\nsources:\n- {resource: second.md}"),
+                concept("notes/unrelated", "type: Note\nsources:\n- {resource: data.csv}"),
+            ],
+        };
+        let graph = build_graph(&bundle, None);
+        let before = graph.forward.clone();
+        assert!(graph.inbound("/data.csv").is_empty());
+        let changed = vec!["./data.csv#L2".into()];
+        assert_eq!(
+            ids(affected_with_sources(
+                &bundle,
+                &graph,
+                &changed,
+                &AffectedOptions::default()
+            )),
+            vec!["/notes/direct"]
+        );
+        assert_eq!(
+            ids(affected_with_sources(
+                &bundle,
+                &graph,
+                &changed,
+                &AffectedOptions {
+                    transitive: true,
+                    depth: Some(2)
+                }
+            )),
+            vec!["/notes/direct", "/notes/second"]
+        );
+        assert_eq!(
+            ids(affected_with_sources(
+                &bundle,
+                &graph,
+                &changed,
+                &AffectedOptions {
+                    transitive: true,
+                    depth: None
+                }
+            )),
+            vec!["/notes/direct", "/notes/second", "/notes/third"]
+        );
+        assert!(affected_with_sources(
+            &bundle,
+            &graph,
+            &changed,
+            &AffectedOptions {
+                transitive: true,
+                depth: Some(0)
+            }
+        )
+        .is_empty());
+        assert_eq!(graph.forward, before);
+        assert!(graph.inbound("/data.csv").is_empty());
     }
 }

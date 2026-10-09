@@ -13,7 +13,6 @@ use crate::check::validate::{validate_document, ValidateRule, Violation};
 use crate::error::{OkfError, Result};
 use crate::model::concept::ConceptId;
 use crate::model::link::{classify, raw_links, resolve_link, LinkKind};
-use crate::ontology::load::try_load;
 use crate::parse::{markdown::split_frontmatter, parse_concept};
 use crate::query::artifact::{ArtifactKind, ArtifactResolver};
 use serde_yaml::Value;
@@ -402,14 +401,25 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
         }
     }
 
-    match try_load(root) {
+    let mut ontology_path = root.join("ontology.yaml");
+    let configured_ontology = (|| {
+        let context = crate::bundle::context::current_context(Some(&root.to_string_lossy()), None)?;
+        if let Some(path) = crate::bundle::settings::ontology_path_for(&context, root)? {
+            ontology_path = path;
+            crate::ontology::load::load_ontology(&ontology_path).map(Some)
+        } else {
+            Ok(None)
+        }
+    })();
+    let ontology_finding_path = ontology_path.strip_prefix(root).unwrap_or(&ontology_path);
+    match configured_ontology {
         Ok(Some(ontology)) => {
             for (name, concept_type) in ontology.concepts {
                 if concept_type.attested && name != "Attested Computation" {
                     push(
                         &mut findings,
                         "custom-attested-ontology-type",
-                        Some(Path::new("ontology.yaml")),
+                        Some(ontology_finding_path),
                         DoctorSeverity::Warning,
                         RepairClass::Manual,
                         &format!("ontology type {name:?} is marked attested but is not the exact standard type"),
@@ -425,7 +435,7 @@ pub fn doctor(root: &Path, target: &str, fix_safe: bool, apply: bool) -> Result<
         Err(error) => push(
             &mut findings,
             "ontology-unreadable",
-            Some(Path::new("ontology.yaml")),
+            Some(ontology_finding_path),
             DoctorSeverity::Warning,
             RepairClass::Manual,
             &error.to_string(),

@@ -32,8 +32,8 @@ compatibility. Recheck if the executable or PATH changes during the task.
    affected concepts with `okf list <bundle> --json` and direct links/backlinks. Select necessary
    cross-bundle scope before impact analysis. Check scan completeness before treating an inventory
    as exhaustive; raise `--scan-limit` or deliberately use `--full-scan` when needed. Inspect detailed
-   semantic occurrences and cross-bundle consumers before applying the mapping; the CLI does not
-   rewrite nested references or orchestrate cross-bundle moves. Use a rooted graph
+   semantic occurrences and cross-bundle consumers before applying the mapping; the CLI rewrites declared nested references within one bundle but does not
+   orchestrate cross-bundle moves. Use a rooted graph
    only when relationships need explanation; avoid a full graph for a local move. Inventory
    supporting files with `okf artifact list <bundle>` only if affected.
 2. Design and review an explicit old-id → new-id mapping. Include inbound bare relative, `./`/`../`,
@@ -47,7 +47,15 @@ compatibility. Recheck if the executable or PATH changes during the task.
 4. Treat `references/` as an optional convention: its Markdown files are concepts, while SQL,
    Python, schemas, instructions, and binaries are opaque artifacts. Do not pass opaque files to
    `okf mv`. If an artifact must move, separately review and update declaring paths/provenance.
-5. Apply small batches with `okf mv <old-id> <new-id> <bundle>`. Do not use a raw file rename.
+5. Check the installed change-set planning command's help before relying on coordinated changes.
+   If unavailable, report that transactional changes require an updated CLI; do not describe separate
+   edits as atomic. For coordinated changes, preview an explicit version 1 change document with
+   `okf changeset plan <bundle> --from @plan.yaml --json`, review every file diff, then apply the
+   same document with `okf changeset apply <bundle> --from @plan.yaml --expect <base-digest>`.
+   Use create, edit, move, retarget, remove, and put-artifact operations as needed; splits require
+   explicit retarget mappings. Publication is journaled per file, not reader-isolated. Recover an
+   interrupted write with `okf changeset recover <bundle>`. For one move use
+   `okf mv <old-id> <new-id> <bundle>`. Do not use a raw file rename.
    Inspect affected referring documents and the implementation's meaningful-change behavior;
    path-only rebasing should not be described as a content rewrite or runtime execution.
 6. After each batch, compare direct outbound links and backlinks. Use `okf graph <bundle> --root
@@ -91,8 +99,8 @@ Never infer another bundle from a matching filename or title.
 
 ## Structured and cross-bundle references
 
-Declared nested-reference rewriting and automatic cross-bundle move orchestration are deferred.
+Declared nested references are rewritten within the selected bundle. Automatic cross-bundle move orchestration remains unsupported.
 Inspect relationship occurrence paths and all requested-scope backlinks before moving. If a move
-would leave a declared structured reference or another bundle's ordinary path stale, repair the
+would leave another bundle's ordinary path stale, repair the
 reviewed references explicitly and inspect the combined diff. Do not imply that a single-bundle
 move repaired unexamined consumers. Index-coverage lint is read-only; preserve curated index prose.

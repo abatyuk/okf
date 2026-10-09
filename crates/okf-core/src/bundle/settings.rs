@@ -80,7 +80,10 @@ pub struct EffectiveSettings {
     pub ontology_digest: Option<String>,
     pub settings: BundleSettings,
 }
-pub fn for_context(context: &Context, root: &Path) -> Result<EffectiveSettings> {
+fn resolve_settings(
+    context: &Context,
+    root: &Path,
+) -> Result<(Option<String>, BundleSettings, Option<PathBuf>)> {
     let abs = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let id = context
         .catalog
@@ -117,6 +120,17 @@ pub fn for_context(context: &Context, root: &Path) -> Result<EffectiveSettings> 
     } else {
         load::find_ontology(root)
     };
+    Ok((id, settings, ontology_path))
+}
+
+/// Resolve the optional ontology path without reading it, so diagnostics can identify a
+/// configured sidecar even when it is missing or unreadable.
+pub fn ontology_path_for(context: &Context, root: &Path) -> Result<Option<PathBuf>> {
+    resolve_settings(context, root).map(|(_, _, path)| path)
+}
+
+pub fn for_context(context: &Context, root: &Path) -> Result<EffectiveSettings> {
+    let (id, settings, ontology_path) = resolve_settings(context, root)?;
     let ontology_digest = ontology_path
         .as_ref()
         .map(|p| std::fs::read(p).map(|bytes| crate::fingerprint::canonicalize::sha256_hex(&bytes)))

@@ -450,6 +450,17 @@ fn cli_reference(header: &Value, commands: &[&Value], skill: Option<&str>) -> St
                 "\n\nOutput stream: `{}`.\n\n",
                 c["output"]["stream"].as_str().unwrap_or("")
             ));
+            if let Some(globals) = c["supported_globals"].as_object() {
+                let names = globals
+                    .iter()
+                    .filter(|(_, enabled)| enabled.as_bool() == Some(true))
+                    .map(|(name, _)| format!("`--{name}`"))
+                    .collect::<Vec<_>>();
+                out.push_str(&format!(
+                    "Supported global options: {}.\n\n",
+                    names.join(", ")
+                ));
+            }
             let notes = command_guidance(c["name"].as_str().unwrap_or(""));
             if !notes.is_empty() {
                 out.push_str(notes);
@@ -464,6 +475,30 @@ fn cli_reference(header: &Value, commands: &[&Value], skill: Option<&str>) -> St
 /// observable behavior that cannot be inferred from the argument table.
 fn command_guidance(name: &str) -> &'static str {
     match name {
+        "changeset plan" | "changeset apply" => "Supply a version 1 YAML/JSON document with an ordered `operations` list. \
+            Supported operations: `create`/`replace` with `path` and complete Markdown `content`; \
+            `edit` with `concept`, optional frontmatter RFC 6902 `patch` and optional `body`; \
+            `move` with `from`/`to` concept IDs; `retarget` with `from`/`to` and optional `within` concept-ID list; \
+            `remove` with an exact bundle-relative file `path`; `put-artifact` with `path`, text `content`, and optional `replace: true`. \
+            Splits and merges combine creates, explicit retarget mappings, and removal; no semantic mapping is inferred. \
+            Operations run on an isolated copy; the final bundle must be conformant and introduce no dangling supported local references. \
+            Checks cover local Markdown/artifact links and file, line-range, and markdown-heading sources; Git, URL, and producer-specific sources are not checked. \
+            Existing unrelated broken references may remain. Concept replacement/edit invalidates verification; content cannot supply verification. \
+            Plan and `apply --dry-run` print all file diffs plus a base digest without writing bundle files. \
+            Use `apply --expect <base-digest>` to guard a reviewed baseline, with the same reviewed change document. \
+            Publication is journaled and atomic per file, not an atomic snapshot for concurrent readers. \
+            Cooperating CLI writers refuse a pending transaction. Cross-bundle writes and configuration changes are unsupported. \
+            On interrupted publication use `changeset recover`; do not remove the journal manually.",
+        "changeset recover" => "Roll back an interrupted uncommitted publication, or finish cleanup of a committed one. \
+            Recovery refuses an active publisher and refuses to overwrite intervening edits. \
+            Preserve the journal if recovery reports a conflict; reconcile those files before retrying.",
+        "mv" => "Moves rewrite inline/reference-style Markdown, self-links, declared simple/nested references, and curated index/log links within the selected bundle. \
+            File/text fingerprint sources retain bundle-root semantics; Git sources retain worktree-root semantics. \
+            Destinations must be absent. The complete write set is prevalidated and journaled for rollback. \
+            Use changeset plan/apply for coordinated moves, replacement, splits, or cleanup. Cross-bundle referrers are not rewritten.",
+        "rm" => "The backlink guard includes curated index/log navigation, declared structured references, and standard internal resources. \
+            --force deliberately permits dangling references. For coordinated cleanup, remove references and records in one changeset.",
+        "ontology field-type list" | "ontology field-type show" => "Inspect authored reusable definitions and resolved inherited constraints. JSON includes both definition and effective fields.",
         "show" => "Without `--json`, show includes the serialized frontmatter and full Markdown body. \
             Plain `show --json` returns metadata only: frontmatter plus `id`, `trust_tier`, \
             `effective_status`, `effective_generated_at`, `latest_verified_at`, and \

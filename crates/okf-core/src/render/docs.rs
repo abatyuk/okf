@@ -91,7 +91,7 @@ pub fn render_docs(
         DocsFormat::Html => Ok(render_html(bundle)),
         DocsFormat::Graphml => Ok(render_graphml(bundle, ontology)),
         DocsFormat::Pdf => Err(OkfError::Usage(
-            "pdf requires the `docs-pdf` feature / external renderer; not available in v1"
+            "pdf output is not implemented; render html and convert it with an external PDF renderer"
                 .to_string(),
         )),
         DocsFormat::Index => Err(OkfError::Usage(
@@ -314,7 +314,7 @@ mod tests {
         let err = render_docs(&b, None, DocsFormat::Pdf).unwrap_err();
         assert!(matches!(err, OkfError::Usage(_)));
         assert!(err.to_string().contains("pdf"));
-        assert!(err.to_string().contains("not available in v1"));
+        assert!(err.to_string().contains("not implemented"));
     }
 
     #[test]

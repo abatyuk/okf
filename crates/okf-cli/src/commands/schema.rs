@@ -31,7 +31,7 @@ pub fn run_version(json: bool) -> Result<i32> {
 
 /// `okf schema` — always NDJSON, regardless of `--json` (it is the machine-discovery surface).
 pub fn run_schema(_json: bool) -> Result<i32> {
-    let cli = Cli::command();
+    let cli = crate::cli::command_tree();
     // Header line describing the tool/contract.
     output::print_line(&json!({
         "kind": "schema",
@@ -48,6 +48,9 @@ pub fn run_schema(_json: bool) -> Result<i32> {
     }))?;
 
     fn emit_leaves(prefix: &str, cmd: &ClapCommand) -> Result<()> {
+        if cmd.get_name() == "help" {
+            return Ok(());
+        }
         let name = if prefix.is_empty() {
             cmd.get_name().to_owned()
         } else {
@@ -72,6 +75,10 @@ pub fn run_schema(_json: bool) -> Result<i32> {
 /// identify typed identities and statuses without imposing metadata schemas on concepts.
 fn output_record_contracts() -> Value {
     json!({
+        "changeset-file": {"path":"path","operation":"create|replace|remove","before_bytes":"integer|null","after_bytes":"integer|null","diff":"string|null"},
+        "changeset-summary": {"base_digest":"string","files":"integer","applied":"boolean","publication":"journaled-per-file"},
+        "changeset-recovery": {"paths":"array<path>"},
+        "ontology_field_type": {"name":"string","definition":"object","effective":"object"},
         "qualified_identity": {"bundle": "string", "id": "string", "version": "string"},
         "scope": {"requested": "array<string>", "examined": "array<{id:string,root:path,version:string,interpretation:interpretation-settings}>", "unavailable": "array<string>", "snapshot_examined": "array<qualified_identity> (optional)"},
         "interpretation-settings": {"bundle": "string|null", "ontology_path": "path|null", "ontology_digest": "string|null", "settings": "object"},
@@ -122,7 +129,15 @@ fn command_record(full_name: &str, cmd: &ClapCommand) -> Value {
             // Skip global/auto args (`--json`, `--help`, `--version`).
             id != "json" && id != "help" && id != "version" && !a.is_global_set()
         })
-        .map(|arg| arg_record(full_name, arg))
+        .map(|arg| {
+            let mut record = arg_record(full_name, arg);
+            record["conflicts_with"] = json!(cmd
+                .get_arg_conflicts_with(arg)
+                .iter()
+                .map(|a| a.get_long().unwrap_or(a.get_id().as_str()))
+                .collect::<Vec<_>>());
+            record
+        })
         .collect();
 
     let mutates_when = match full_name {
@@ -149,7 +164,9 @@ fn command_record(full_name: &str, cmd: &ClapCommand) -> Value {
         "name": full_name,
         "group": group,
         "mutates": mutates,
-        "mutates_when": mutates_when,
+        "mutates_when": if mutates {mutates_when} else {Value::Null},
+        "supported_globals": {"json":true,"bundle-id":crate::cli::supports_bundle(full_name),"scope-bundle":crate::cli::supports_scope(full_name),"catalog-scope":crate::cli::supports_scope(full_name),"revision":crate::cli::supports_revision(full_name)},
+        "availability": {"remote_fetch": cfg!(feature="url-sources"), "pdf":false},
         "summary": summary,
         "args": args,
         "output": output,
@@ -264,9 +281,24 @@ fn arg_record(command: &str, arg: &clap::Arg) -> Value {
                 | "field_yaml"
                 | "ref_yaml"
                 | "relationship_yaml"
-                | "from"
                 | "patch"
-        );
+                | "add_source_json"
+                | "inline_computation"
+                | "set_body"
+                | "append_body"
+                | "set_section"
+                | "append_section"
+        )
+        || (command == "add" && id == "body")
+        || (id == "from"
+            && (command.starts_with("ontology ") || command.starts_with("changeset ")));
+    let requires: &[&str] = match (command, id) {
+        ("search" | "list", "offset") => &["limit"],
+        ("graph", "depth") => &["root"],
+        ("doctor", "yes") => &["fix-safe"],
+        ("edit", "all") => &["replace"],
+        _ => &[],
+    };
     let resolution = (name == "bundle").then(|| {
         vec![
             "explicit:path",
@@ -299,6 +331,10 @@ fn arg_record(command: &str, arg: &clap::Arg) -> Value {
         "possible_values": possible_values,
         "resolution": resolution,
         "stdin": stdin,
+        "requires": requires,
+        "aliases": arg.get_all_aliases().unwrap_or_default(),
+        "value_delimiter": arg.get_value_delimiter().map(|c| c.to_string()),
+        "arity": arg.get_num_args().map(|n| json!({"min":n.min_values(),"max":n.max_values()})),
     })
 }
 
@@ -323,6 +359,10 @@ fn meta(name: &str) -> (&'static str, bool, &'static str) {
         "computation check" => ("check", false, "computation-contract"),
         "ontology list" => ("query", false, "ontology_type"),
         "ontology show" => ("query", false, "ontology_type"),
+        "ontology field-type list" | "ontology field-type show" => ("query", false, "ontology_field_type"),
+        "changeset plan" => ("query", false, "changeset-file,changeset-summary"),
+        "changeset apply" => ("mutate", true, "changeset-file,changeset-summary"),
+        "changeset recover" => ("mutate", true, "changeset-recovery"),
 
         "scan" => ("check", false, "scan"),
         "source-scan" => ("check", false, "source-file"),

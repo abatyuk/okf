@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 
 use crate::bundle::loader::load_bundle;
 use crate::error::{OkfError, Result};
-use crate::graph::backlinks::backlinks_of;
 use crate::model::concept::ConceptId;
 use crate::ontology::load::try_load;
 use crate::ontology::schema::Ontology;
@@ -41,6 +40,7 @@ pub fn rm_with_ontology(
     force: bool,
     ontology: Option<&Ontology>,
 ) -> Result<RmResult> {
+    super::transaction::ensure_idle(root)?;
     let cid = ConceptId::parse(id)?;
     let path = id_to_path(root, &cid)?;
     if !path.exists() {
@@ -51,7 +51,14 @@ pub fn rm_with_ontology(
     }
 
     let bundle = load_bundle(root)?;
-    let referrers = backlinks_of(&bundle, ontology, &cid.0);
+    let mut referrers: Vec<_> = bundle
+        .concepts
+        .iter()
+        .filter(|concept| super::mv::references_target(concept, ontology, &cid))
+        .map(|concept| concept.id.clone())
+        .collect();
+    referrers.extend(super::mv::structural_referrers(root, &cid)?);
+    referrers.retain(|id| *id != cid);
 
     if !referrers.is_empty() && !force {
         let names: Vec<&str> = referrers.iter().map(|c| c.0.as_str()).collect();

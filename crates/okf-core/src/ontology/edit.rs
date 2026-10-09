@@ -320,8 +320,13 @@ pub fn render_ontology(path: &Path, ontology: &Ontology) -> Result<String> {
     let mut text = to_yaml(ontology)?;
     match std::fs::read_to_string(path) {
         Ok(original) => {
-            text = preserve_comments(&original, &text);
-            parse_ontology(&text)?;
+            let restored = preserve_comments(&original, &text);
+            // Comment restoration must never alter authored values. YAML permits hashes and
+            // apparent mapping keys inside strings, so retain the safe serialization whenever
+            // the best-effort layout restoration changes the document's meaning.
+            if parse_ontology(&restored).is_ok_and(|parsed| parsed == *ontology) {
+                text = restored;
+            }
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => {
@@ -376,6 +381,55 @@ pub fn save_ontology(path: &Path, ontology: &Ontology) -> Result<()> {
 fn preserve_comments(original: &str, generated: &str) -> String {
     use std::collections::HashMap;
 
+    // Content below a literal/folded scalar header is data, including lines beginning with
+    // '#'. Both extraction and insertion need this guard because serde also emits blocks.
+    fn in_block(line: &str, block_indent: &mut Option<usize>) -> bool {
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        if let Some(level) = *block_indent {
+            if trimmed.is_empty() || indent > level {
+                return true;
+            }
+            *block_indent = None;
+        }
+        let content = comment_start(line).map_or(line, |pos| &line[..pos]);
+        if let Some((_, value)) = content.split_once(':') {
+            let value = value.trim();
+            if value.starts_with(['|', '>'])
+                && value[1..]
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || matches!(c, '+' | '-'))
+            {
+                *block_indent = Some(indent);
+            }
+        }
+        false
+    }
+
+    // A hash in a quoted value is part of that value, not an inline YAML comment.
+    fn comment_start(line: &str) -> Option<usize> {
+        let mut quote = None;
+        let mut escaped = false;
+        let mut previous = None;
+        for (pos, c) in line.char_indices() {
+            if escaped {
+                escaped = false;
+            } else if quote == Some('"') && c == '\\' {
+                escaped = true;
+            } else if matches!(c, '\'' | '"') {
+                if quote == Some(c) {
+                    quote = None;
+                } else if quote.is_none() {
+                    quote = Some(c);
+                }
+            } else if c == '#' && quote.is_none() && previous.is_none_or(char::is_whitespace) {
+                return Some(pos);
+            }
+            previous = Some(c);
+        }
+        None
+    }
+
     fn key_path(line: &str, stack: &mut Vec<(usize, String)>) -> Option<String> {
         let trimmed = line.trim_start();
         if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('-') {
@@ -400,7 +454,11 @@ fn preserve_comments(original: &str, generated: &str) -> String {
     let mut inline: HashMap<String, String> = HashMap::new();
     let mut pending = Vec::new();
     let mut stack = Vec::new();
+    let mut block_indent = None;
     for line in original.lines() {
+        if in_block(line, &mut block_indent) {
+            continue;
+        }
         if line.trim_start().starts_with('#') {
             pending.push(line.to_string());
             continue;
@@ -415,8 +473,8 @@ fn preserve_comments(original: &str, generated: &str) -> String {
             if !pending.is_empty() {
                 comments.insert(path.clone(), std::mem::take(&mut pending));
             }
-            if let Some(pos) = line.find(" #") {
-                inline.insert(path, line[pos..].to_string());
+            if let Some(pos) = comment_start(line) {
+                inline.insert(path, format!(" {}", &line[pos..]));
             }
         } else {
             pending.clear();
@@ -425,7 +483,12 @@ fn preserve_comments(original: &str, generated: &str) -> String {
 
     let mut out = Vec::new();
     let mut stack = Vec::new();
+    let mut block_indent = None;
     for line in generated.lines() {
+        if in_block(line, &mut block_indent) {
+            out.push(line.to_string());
+            continue;
+        }
         if let Some(path) = key_path(line, &mut stack) {
             if let Some(block) = comments.remove(&path) {
                 out.extend(block);
@@ -458,5 +521,40 @@ mod tests {
         assert!(after.contains("# bundle rationale"), "{after}");
         assert!(after.contains("# why policies exist"), "{after}");
         assert!(after.contains("status: # lifecycle rationale"), "{after}");
+    }
+
+    #[test]
+    fn render_and_save_preserve_hashes_and_keys_inside_scalars() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ontology.yaml");
+        let original = "# rationale\nokf_ontology: '0.1'\nconcepts:\n  Policy:\n    description: |\n      # authored description\n      status: retained prose # data\n    local: 'text # still data' # real comment\n    fields:\n      status: {type: string}\n";
+        std::fs::write(&path, original).unwrap();
+        let mut ontology = parse_ontology(original).unwrap();
+        ontology.concepts.get_mut("Policy").unwrap().requires = vec!["title".into()];
+        let preview = render_ontology(&path, &ontology).unwrap();
+        assert_eq!(parse_ontology(&preview).unwrap(), ontology);
+        assert_eq!(preview.matches("# authored description").count(), 1);
+        assert!(preview.contains("# rationale"));
+        assert!(preview.contains("# real comment"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        save_ontology(&path, &ontology).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), preview);
+        save_ontology(&path, &ontology).unwrap();
+        assert_eq!(
+            parse_ontology(&std::fs::read_to_string(&path).unwrap()).unwrap(),
+            ontology
+        );
+    }
+
+    #[test]
+    fn quoted_multiline_scalars_cannot_be_changed_by_comment_restoration() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ontology.yaml");
+        let original = "okf_ontology: '0.1'\nconcepts:\n  Policy:\n    description: 'first\n\n      # authored description\n\n      status: text'\n    fields:\n      status: {type: string}\n";
+        std::fs::write(&path, original).unwrap();
+        let mut ontology = parse_ontology(original).unwrap();
+        ontology.concepts.get_mut("Policy").unwrap().requires = vec!["title".into()];
+        let preview = render_ontology(&path, &ontology).unwrap();
+        assert_eq!(parse_ontology(&preview).unwrap(), ontology);
     }
 }

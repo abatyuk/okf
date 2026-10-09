@@ -30,13 +30,13 @@ okf version
 ```
 
 Alternatively, download the standalone installer from a **published release**, inspect it,
-then run it with an explicit version. This example installs or updates to 0.3.2:
+then run it with an explicit version. This example installs or updates to 0.4.0:
 
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
-  https://github.com/abatyuk/okf/releases/download/v0.3.2/install.sh -o install.sh
+  https://github.com/abatyuk/okf/releases/download/v0.4.0/install.sh -o install.sh
 # Review install.sh before running it.
-sh install.sh 0.3.2
+sh install.sh 0.4.0
 ```
 
 The optional installer detects your platform, verifies the archive checksum, checks that the
@@ -49,7 +49,7 @@ on PATH can take precedence; check `command -v okf` and `okf version`.
 
 Skills **only check compatibility** and show these instructions when necessary. They never
 run the installer or update the CLI. The current plugin supports stable CLI versions
-`>=0.3.2, <0.4.0`; the OKF document specification remains v0.2.
+`>=0.4.0, <0.5.0`; the OKF document specification remains v0.2.
 
 Initial macOS releases are not Developer ID signed or notarized, so Gatekeeper may block
 a downloaded executable. Signing/notarization is planned for a later release. macOS builds
@@ -118,6 +118,43 @@ okf docs mybundle --format index      # write progressive-disclosure index.md fi
 Bundle-aware commands take an **optional trailing positional**; when omitted it is resolved via
 the [configuration](#configuration) precedence below. Meta commands take no bundle,
 `source-scan` takes an explicit arbitrary directory, and graph roots use `--root`.
+
+## Coordinated record changes
+
+Use a versioned change document to move, replace, split, or remove records together. For example,
+`plan.yaml` can move a record and retarget its consumers before removing a superseded record:
+
+```yaml
+version: 1
+operations:
+  - op: move
+    from: plans/current
+    to: plans/revised
+  - op: retarget
+    from: plans/obsolete
+    to: plans/revised
+  - op: remove
+    path: plans/obsolete.md
+```
+
+```sh
+okf changeset plan ./knowledge --from @plan.yaml --json
+okf changeset apply ./knowledge --from @plan.yaml --expect <base-digest>
+```
+
+Review the file diffs and use the returned base digest with the same change document. Changes are
+validated on an isolated copy before publication. Dangling-reference checks cover local Markdown/artifact
+links and `file`, `line-range`, and `markdown-heading` sources; they do not check Git, URL, or
+producer-specific sources. Splits use explicit `retarget` operations with
+`within` lists to map different consumers to different new records; the tool does not infer that
+mapping. Creates/replacements take complete Markdown `content`; edits accept frontmatter JSON
+Patch and a body; `put-artifact` writes text artifacts. See the [CLI reference](docs/okf-cli-reference.md).
+
+Publication is atomic per file and journaled for recovery, rather than an atomic snapshot for
+concurrent readers. After an interrupted write, use `okf changeset recover ./knowledge`; recovery
+refuses active publishers and intervening edits. Transactions are confined to one bundle.
+Keep `.okf-transaction.lock` and `.okf-transaction/` out of version control; the lock persists
+between writes, while the journal is removed after successful publication or recovery.
 
 ## Configuration
 
@@ -216,7 +253,7 @@ spelling.
 | **meta** | `schema`, `version`, `catalog` |
 | **query** | `list`, `search`, `show`, `links`, `backlinks`, `graph`, `resolve`, `artifact list/resolve/show`, `ontology list`, `ontology show` |
 | **check** | `scan`, `source-scan`, `validate`, `lint`, `doctor`, `stale`, `affected`, `diff`, `stats`, `computation check` |
-| **mutate** | `init`, `add`, `edit`, `mv`, `rm`, `verify`, `refresh`, `ontology add/update/remove` |
+| **mutate** | `init`, `add`, `edit`, `mv`, `rm`, `verify`, `refresh`, `ontology add/update/remove`, `ontology apply`, `changeset apply/recover` |
 | **render** | `docs` (`--format html\|md\|pdf\|graphml\|obsidian\|index`; only `index` mutates) |
 
 Highlights:
