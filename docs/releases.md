@@ -43,8 +43,21 @@ for the publishing job, and tag rules must permit its `v*` tags. No personal tok
 Optionally enable release immutability in repository settings. Build/test jobs have read-only
 repository permission. Do not add signing credentials to pull-request jobs.
 
-Signing/notarization is deferred: the first macOS downloads may encounter Gatekeeper blocks.
-A later release will require Apple Developer ID credentials and secrets configured in GitHub.
+macOS release builds require these GitHub Actions secrets: `MACOS_CERTIFICATE_BASE64`
+(base64-encoded Developer ID Application certificate and private key exported as `.p12`),
+`MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`,
+and `APPLE_APP_SPECIFIC_PASSWORD`. Both architectures use the same credentials.
+Only publishing builds on `main` import credentials. Pull-request builds remain unsigned.
+`scripts/sign-macos.sh` imports the identity into a temporary keychain, signs with a
+secure timestamp and hardened runtime, and submits a temporary ZIP to Apple. Publication
+requires `Accepted` notarization status for both macOS builds. Rejected submissions print
+Apple's diagnostic log; a timeout fails the build and can be retried. The temporary
+keychain and credential files are deleted on script exit, and hosted runners are disposable.
+The signed binary is smoke-tested and packaged without further modification; checksums
+are computed from the final archives. Standalone executables and `.tar.gz` archives cannot
+have tickets stapled to them, so Gatekeeper may need internet access to check notarization.
+Test a browser-downloaded release on a clean Mac before promising Gatekeeper behavior.
+Previously published unsigned releases remain unchanged; signing requires a new version.
 Checksums detect damaged/mismatched downloads; they do not independently authenticate a
 compromised release account. Users must trust the repository and downloaded installer.
 

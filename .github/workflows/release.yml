@@ -66,6 +66,17 @@ jobs:
       - run: rustup target add "$TARGET"
       - run: cargo test --locked -p okf-cli --features url-sources --target "$TARGET"
       - run: cargo build --locked --release -p okf-cli --features url-sources --target "$TARGET"
+      - name: Sign and notarize macOS release
+        if: runner.os == 'macOS' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.validate.outputs.publish == 'true'
+        timeout-minutes: 40
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: bash scripts/sign-macos.sh "target/$TARGET/release/okf"
       - name: Smoke test and archive
         shell: bash
         run: |

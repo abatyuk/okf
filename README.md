@@ -30,13 +30,13 @@ okf version
 ```
 
 Alternatively, download the standalone installer from a **published release**, inspect it,
-then run it with an explicit version. This example installs or updates to 0.4.0:
+then run it with an explicit version. This example installs or updates to 0.4.1:
 
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
-  https://github.com/abatyuk/okf/releases/download/v0.4.0/install.sh -o install.sh
+  https://github.com/abatyuk/okf/releases/download/v0.4.1/install.sh -o install.sh
 # Review install.sh before running it.
-sh install.sh 0.4.0
+sh install.sh 0.4.1
 ```
 
 The optional installer detects your platform, verifies the archive checksum, checks that the
@@ -51,9 +51,10 @@ Skills **only check compatibility** and show these instructions when necessary. 
 run the installer or update the CLI. The current plugin supports stable CLI versions
 `>=0.4.0, <0.5.0`; the OKF document specification remains v0.2.
 
-Initial macOS releases are not Developer ID signed or notarized, so Gatekeeper may block
-a downloaded executable. Signing/notarization is planned for a later release. macOS builds
-use deployment target 13.0; see release notes for tested platforms and limitations.
+Starting with 0.4.1, macOS release binaries are Developer ID signed and notarized by Apple.
+The standalone executable has no stapled ticket, so Gatekeeper may need internet access
+to check notarization. macOS builds use deployment target 13.0; see release notes for
+tested platforms and limitations.
 Git-based operations require `git` on PATH.
 
 Official binaries include `url-sources` for explicit remote artifact retrieval with
