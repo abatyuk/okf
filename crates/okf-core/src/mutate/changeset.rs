@@ -165,10 +165,61 @@ fn write_document(root: &Path, path: &str, content: &str, replace: bool) -> Resu
     Ok(())
 }
 
+/// Check registered siblings without publishing there or reading unregistered targets.
+/// Lexical containment is checked before the sibling resolver checks canonical containment.
+fn registered_reference(
+    context: &crate::bundle::context::Context,
+    from: &str,
+    raw: &str,
+    bundle_relative: bool,
+) -> bool {
+    let Some(catalog) = &context.catalog else {
+        return false;
+    };
+    let root = &context.primary.root;
+    if !catalog
+        .entries
+        .values()
+        .any(|entry| entry.available && entry.root == *root)
+    {
+        return false;
+    }
+    let clean = raw
+        .trim()
+        .split(['#', '?'])
+        .next()
+        .unwrap_or(raw)
+        .replace('\\', "/");
+    let base = if bundle_relative || clean.starts_with('/') {
+        root.clone()
+    } else {
+        root.join(from.trim_start_matches('/'))
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    };
+    let mut target = crate::bundle::catalog::normalize(&base.join(clean.trim_start_matches('/')));
+    if !bundle_relative && target.extension().is_none() {
+        target.set_extension("md");
+    }
+    let Some(entry) = catalog
+        .entries
+        .values()
+        .find(|entry| entry.available && entry.root != *root && target.starts_with(&entry.root))
+    else {
+        return false;
+    };
+    let relative = target.strip_prefix(&entry.root).unwrap();
+    let resolved = crate::query::artifact::ArtifactResolver::new(&entry.root)
+        .resolve(None, &relative.to_string_lossy());
+    resolved.exists && resolved.kind != crate::query::artifact::ArtifactKind::Blocked
+}
+
 /// Missing local references include authored concept links and structural navigation.
 fn missing(
     root: &Path,
     ontology: Option<&crate::ontology::schema::Ontology>,
+    context: &crate::bundle::context::Context,
 ) -> Result<BTreeSet<String>> {
     let bundle = crate::bundle::loader::load_bundle(root)?;
     let resolver = crate::query::artifact::ArtifactResolver::new(root);
@@ -180,6 +231,12 @@ fn missing(
             id
         };
         let resolved = resolver.resolve(Some(from), raw);
+        if resolved.kind == crate::query::artifact::ArtifactKind::Blocked
+            && resolved.message.as_deref() == Some("usage error: artifact path escapes bundle")
+            && registered_reference(context, id, raw, bundle_relative)
+        {
+            return;
+        }
         if resolved.kind == crate::query::artifact::ArtifactKind::Missing && !bundle_relative {
             let target = crate::model::link::resolve_link(&ConceptId::from_relative(id), raw);
             if bundle.get(&target.0).is_some() {
@@ -354,7 +411,8 @@ pub fn prepare(root: &Path, set: &ChangeSet) -> Result<Plan> {
         std::fs::create_dir_all(target.parent().unwrap())?;
         std::fs::write(target, content)?;
     }
-    let previous_missing = missing(stage, ontology.as_ref())?;
+    let context = crate::bundle::context::current_context(Some(&root.to_string_lossy()), None)?;
+    let previous_missing = missing(stage, ontology.as_ref(), &context)?;
     for op in &set.operations {
         match op {
             Operation::Create { path, content } => write_document(stage, path, content, false)?,
@@ -426,7 +484,7 @@ pub fn prepare(root: &Path, set: &ChangeSet) -> Result<Plan> {
                 .join("; ")
         )));
     }
-    let after_missing = missing(stage, ontology.as_ref())?;
+    let after_missing = missing(stage, ontology.as_ref(), &context)?;
     let introduced = after_missing
         .difference(&previous_missing)
         .cloned()

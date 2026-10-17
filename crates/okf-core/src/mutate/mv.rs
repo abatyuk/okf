@@ -25,7 +25,7 @@ use crate::bundle::loader::load_bundle;
 use crate::error::{OkfError, Result};
 
 use crate::model::concept::{Concept, ConceptId};
-use crate::model::link::{classify, resolve_link, LinkKind};
+use crate::model::link::{classify, resolve_link as resolve_concept_link, LinkKind};
 use crate::ontology::load::try_load;
 use crate::ontology::schema::Ontology;
 use crate::query::selector::Selector;
@@ -356,6 +356,28 @@ where
         out.replace_range(start..end, &replacement);
     }
     (out, true)
+}
+
+// Mutation must retain traversal above the bundle root so sibling references neither
+// alias local IDs during inbound rewrites nor lose their target during outbound rebases.
+fn resolve_link(from: &ConceptId, raw: &str) -> ConceptId {
+    if !matches!(classify(raw), LinkKind::Relative | LinkKind::Bare) {
+        return resolve_concept_link(from, raw);
+    }
+    let (core, _) = split_suffix(raw.trim());
+    let core = core.strip_suffix(".md").unwrap_or(core).replace('\\', "/");
+    let joined = format!("{}/{}", parent_dir(&from.0).trim_start_matches('/'), core);
+    let mut segments = Vec::new();
+    for segment in joined.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." if segments.last().is_some_and(|last| *last != "..") => {
+                segments.pop();
+            }
+            segment => segments.push(segment),
+        }
+    }
+    ConceptId(format!("/{}", segments.join("/")))
 }
 
 /// Rebuild a link string so it points at `target`, preserving the original link's *style*

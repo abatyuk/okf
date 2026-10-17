@@ -30,13 +30,13 @@ okf version
 ```
 
 Alternatively, download the standalone installer from a **published release**, inspect it,
-then run it with an explicit version. This example installs or updates to 0.4.1:
+then run it with an explicit version. This example installs or updates to 0.4.2:
 
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
-  https://github.com/abatyuk/okf/releases/download/v0.4.1/install.sh -o install.sh
+  https://github.com/abatyuk/okf/releases/download/v0.4.2/install.sh -o install.sh
 # Review install.sh before running it.
-sh install.sh 0.4.1
+sh install.sh 0.4.2
 ```
 
 The optional installer detects your platform, verifies the archive checksum, checks that the
@@ -145,7 +145,9 @@ okf changeset apply ./knowledge --from @plan.yaml --expect <base-digest>
 
 Review the file diffs and use the returned base digest with the same change document. Changes are
 validated on an isolated copy before publication. Dangling-reference checks cover local Markdown/artifact
-links and `file`, `line-range`, and `markdown-heading` sources; they do not check Git, URL, or
+links and `file`, `line-range`, and `markdown-heading` sources. Registered sibling bundles
+are checked read-only using the original bundle location; unregistered escapes remain blocked.
+These checks do not check Git, URL, or
 producer-specific sources. Splits use explicit `retarget` operations with
 `within` lists to map different consumers to different new records; the tool does not infer that
 mapping. Creates/replacements take complete Markdown `content`; edits accept frontmatter JSON
