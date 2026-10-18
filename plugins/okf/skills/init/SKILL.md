@@ -51,7 +51,10 @@ concept, use `okf show <concept-id> <bundle> --outline`, then `okf show <concept
    directories within one bundle when these are shared. For multiple bundles, follow the
    [catalog setup example](references/multi-bundle.md) to create nonoverlapping roots, stable IDs,
    typed defaults, per-bundle settings, and optional machine-local overrides. Keep ordinary paths
-   valid; identity alone does not make cross-bundle links relocatable. Run `okf init <bundle>`; it creates an empty ontology sidecar by default. Use `okf init <bundle>
+   valid; identity alone does not make cross-bundle links relocatable. Qualified catalog IDs are
+   CLI targets, not authored Markdown link syntax. For existing separate repositories, use the
+   example's sibling-checkout layout and reuse registered IDs; setup does not clone or fetch.
+   Run `okf init <bundle>`; it creates an empty ontology sidecar by default. Use `okf init <bundle>
    --no-ontology` when no local ontology is wanted. Confirm that its root index is structurally
    valid with `okf validate <bundle>`; an empty bundle still needs a non-empty `#` heading when
    indexed.
@@ -125,3 +128,17 @@ request additional bundles explicitly with repeatable `--scope-bundle <id>` or d
 scope and unavailable members. Out-of-scope references remain unknown. Ordinary relative paths
 retain their meaning across registered boundaries; distributing one bundle alone can break them.
 Never infer another bundle from a matching filename or title.
+
+## Frontmatter order
+
+When authoring concept frontmatter, put `type` first. For the matching ontology concept type,
+follow `fields` declaration order recursively, including nested objects and objects in lists;
+reusable field types use their resolved field order. Put reference-only keys next in reference
+declaration order. Put undeclared/custom fields last at each level, preserving their relative
+order. Without a matching ontology type, keep the other fields in their authored order.
+This is an authoring convention, not an additional OKF conformance requirement.
+CLI writes normalize this order. `okf lint <bundle>` reports `frontmatter-order` at warning by
+default; `okf lint <bundle> --fix` normalizes the bundle and reports remaining findings. The
+bundle lint setting `frontmatter_order` accepts `info`, `warn`, `error`, or `off`; an off rule
+is not fixed. Normalization preserves values, list order, body text, and verification metadata;
+YAML comments and scalar presentation may normalize.

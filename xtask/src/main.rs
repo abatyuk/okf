@@ -19,6 +19,8 @@
 //! `okf schema --json`, so this is the single command that keeps them in lockstep with the CLI.
 //! Type `## Schema` sections are curated (they mix real Rust items with serialized-shape docs)
 //! and are not regenerated here.
+mod local_signing;
+
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -51,11 +53,31 @@ fn main() {
         Some("build") => {
             let mut cargo_args = vec!["build"];
             cargo_args.extend(args[1..].iter().map(String::as_str));
-            cargo(&root, &cargo_args);
+            if local_signing::enabled() {
+                local_signing::build(&root, &cargo_args);
+            } else {
+                cargo(&root, &cargo_args);
+            }
             run_docs(false);
         }
         Some("install") => {
-            cargo(&root, &["install", "--path", "crates/okf-cli", "--force"]);
+            if local_signing::enabled() {
+                let install_root = local_signing::install_root(&root);
+                cargo(
+                    &root,
+                    &[
+                        "install",
+                        "--path",
+                        "crates/okf-cli",
+                        "--force",
+                        "--root",
+                        install_root.to_str().expect("UTF-8 install root"),
+                    ],
+                );
+                local_signing::sign(&install_root.join("bin/okf"));
+            } else {
+                cargo(&root, &["install", "--path", "crates/okf-cli", "--force"]);
+            }
             run_docs(false);
         }
         _ => {

@@ -104,3 +104,17 @@ Inspect relationship occurrence paths and all requested-scope backlinks before m
 would leave another bundle's ordinary path stale, repair the
 reviewed references explicitly and inspect the combined diff. Do not imply that a single-bundle
 move repaired unexamined consumers. Index-coverage lint is read-only; preserve curated index prose.
+
+## Frontmatter order
+
+When authoring concept frontmatter, put `type` first. For the matching ontology concept type,
+follow `fields` declaration order recursively, including nested objects and objects in lists;
+reusable field types use their resolved field order. Put reference-only keys next in reference
+declaration order. Put undeclared/custom fields last at each level, preserving their relative
+order. Without a matching ontology type, keep the other fields in their authored order.
+This is an authoring convention, not an additional OKF conformance requirement.
+CLI writes normalize this order. `okf lint <bundle>` reports `frontmatter-order` at warning by
+default; `okf lint <bundle> --fix` normalizes the bundle and reports remaining findings. The
+bundle lint setting `frontmatter_order` accepts `info`, `warn`, `error`, or `off`; an off rule
+is not fixed. Normalization preserves values, list order, body text, and verification metadata;
+YAML comments and scalar presentation may normalize.

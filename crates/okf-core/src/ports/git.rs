@@ -140,12 +140,21 @@ impl RealGit {
 
 impl Git for RealGit {
     fn worktree_root(&self, anchor: &Path) -> Result<std::path::PathBuf> {
-        let out = Self::run(
-            Self::local_command()
-                .arg("-C")
-                .arg(anchor)
-                .args(["rev-parse", "--show-toplevel"]),
+        let out = super::git_read::output(anchor, &["rev-parse", "--show-toplevel"]).map_err(
+            |error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    OkfError::Environment("`git` executable not found on PATH".into())
+                } else {
+                    OkfError::Io(error.to_string())
+                }
+            },
         )?;
+        if !out.status.success() {
+            return Err(OkfError::Io(format!(
+                "git failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )));
+        }
         Ok(std::path::PathBuf::from(
             String::from_utf8_lossy(&out.stdout).trim().to_string(),
         ))

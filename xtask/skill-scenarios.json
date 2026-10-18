@@ -217,6 +217,7 @@
       "okf catalog"
     ],
     "reference_commands": [
+      "lint",
       "artifact resolve",
       "artifact show",
       "list",

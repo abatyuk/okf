@@ -23,6 +23,7 @@ pub struct LintSettings {
     pub source_unrecorded: Option<String>,
     pub broken_link: Option<String>,
     pub missing_title: Option<String>,
+    pub frontmatter_order: Option<String>,
     pub missing_description: Option<String>,
     pub orphan: Option<String>,
     pub spec_v02: Option<String>,
@@ -160,15 +161,7 @@ enum HistoricalFile {
     Bytes(Vec<u8>),
 }
 fn historical(root: &Path, path: &Path, revision: &str) -> Result<HistoricalFile> {
-    let run = |args: &[&str]| {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .env("GIT_NO_LAZY_FETCH", "1")
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .args(args)
-            .output()
-    };
+    let run = |args: &[&str]| crate::ports::git_read::output(root, args);
     let repo = run(&["rev-parse", "--show-toplevel"])?;
     if !repo.status.success() {
         return Err(OkfError::Environment(
@@ -176,6 +169,8 @@ fn historical(root: &Path, path: &Path, revision: &str) -> Result<HistoricalFile
         ));
     }
     let repo = PathBuf::from(String::from_utf8_lossy(&repo.stdout).trim());
+    // Revision and top-relative inventory reads can be shared across bundles in one repo.
+    let run = |args: &[&str]| crate::ports::git_read::output(&repo, args);
     let abs = super::catalog::absolute(path)?;
     let Ok(rel) = abs.strip_prefix(&repo) else {
         return Ok(HistoricalFile::External);
@@ -204,14 +199,13 @@ fn historical(root: &Path, path: &Path, revision: &str) -> Result<HistoricalFile
     if inventory.stdout.is_empty() {
         return Ok(HistoricalFile::Missing);
     }
-    let output = run(&["show", &format!("{revision}:{}", rel.to_string_lossy())])?;
-    if !output.status.success() {
-        return Err(OkfError::Environment(format!(
+    let bytes = crate::ports::git_read::blob(&repo, revision, rel).ok_or_else(|| {
+        OkfError::Environment(format!(
             "historical interpretation file unavailable: {} at {revision}",
             path.display()
-        )));
-    }
-    Ok(HistoricalFile::Bytes(output.stdout))
+        ))
+    })?;
+    Ok(HistoricalFile::Bytes(bytes))
 }
 fn validate_settings(settings: &BundleSettings) -> Result<()> {
     if settings.query.scan_limit == Some(0)
@@ -250,6 +244,7 @@ fn validate_settings(settings: &BundleSettings) -> Result<()> {
     for (rule, severity) in [
         ("broken_link", &settings.lint.broken_link),
         ("missing_title", &settings.lint.missing_title),
+        ("frontmatter_order", &settings.lint.frontmatter_order),
         ("missing_description", &settings.lint.missing_description),
         ("orphan", &settings.lint.orphan),
         ("ontology_violation", &settings.lint.ontology_violation),
@@ -274,6 +269,7 @@ pub fn for_context_at(
     root: &Path,
     revision: &str,
 ) -> Result<(EffectiveSettings, Option<Ontology>)> {
+    let _reads = crate::ports::git_read::ReadSession::new();
     let mut historical_context = context.clone();
     if let Some(path) = &context.config_path {
         match historical(root, path, revision)? {

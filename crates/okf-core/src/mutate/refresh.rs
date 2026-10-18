@@ -56,6 +56,20 @@ pub fn refresh(root: &Path, id: &str, engine: &Engine, clock: &dyn Clock) -> Res
 
     if let Some(sources_val) = concept.frontmatter.map.get("sources").cloned() {
         if let Value::Sequence(entries) = sources_val {
+            let git_sources: Vec<_> = entries
+                .iter()
+                .filter_map(Source::from_value)
+                .filter(|source| {
+                    !source.resource.trim().is_empty()
+                        && matches!(
+                            source.kind,
+                            crate::model::source::SourceKind::GitPath
+                                | crate::model::source::SourceKind::GitCommit
+                        )
+                })
+                .collect();
+            // Populate the engine cache once, retaining existing per-occurrence reporting below.
+            engine.fingerprint_many(&git_sources);
             let mut rebuilt = Vec::with_capacity(entries.len());
             for (index, original) in entries.into_iter().enumerate() {
                 let Some(source) = Source::from_value(&original) else {

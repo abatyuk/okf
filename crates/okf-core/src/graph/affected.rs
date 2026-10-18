@@ -75,6 +75,7 @@ pub fn affected_with_sources(
     changed: &[String],
     opts: &AffectedOptions,
 ) -> Vec<ConceptId> {
+    let _reads = crate::ports::git_read::ReadSession::new();
     let mut impact = graph.clone();
     let root = std::fs::canonicalize(&bundle.root).unwrap_or_else(|_| {
         crate::bundle::catalog::absolute(&bundle.root).unwrap_or_else(|_| bundle.root.clone())

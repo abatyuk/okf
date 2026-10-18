@@ -130,6 +130,12 @@ scope and unavailable members. Out-of-scope references remain unknown. Ordinary 
 retain their meaning across registered boundaries; distributing one bundle alone can break them.
 Never infer another bundle from a matching filename or title.
 
+For cross-repository questions, distinguish qualified CLI targets such as
+`acme.finance:/policies/margin-standard` from authored links: body links and declared custom
+metadata references use ordinary paths, not that qualified syntax. Catalog IDs do not rebase
+those paths or acquire a checkout. For registration, source mappings, and sibling-repository
+examples, consult the [multi-bundle guide](../init/references/multi-bundle.md).
+
 ## Structured retrieval and snapshot evidence
 
 Use the shared selector grammar for nested queries: `norms[].deadline.from` traverses explicit
@@ -176,3 +182,7 @@ as separate projection records and its configured expansion. Ordinary views pres
 machine concept output. Confirm that opt-in before interpreting a JSON stream as concept records.
 
 When a read fails to parse concept YAML, use the file paths in its error to locate the failing documents. Full bundle reads report all malformed files they examined; bounded queries report only examined files. Use `okf validate <bundle> --json` for separate per-file conformance findings.
+
+`frontmatter-order` is an advisory warning: writes place `type` first, then ontology-declared
+fields recursively, then custom fields. Read-only views preserve authored order. Report ordering
+findings without modifying the bundle; route requested normalization to a writing workflow.

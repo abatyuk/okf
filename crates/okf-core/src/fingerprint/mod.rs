@@ -32,7 +32,8 @@ pub struct Engine<'a> {
     pub fs: &'a dyn FileSystem,
     pub git: &'a dyn Git,
     pub net: Option<&'a dyn Net>,
-    git_root: OnceCell<PathBuf>,
+    git_root: OnceCell<Result<PathBuf>>,
+    git_fingerprints: RefCell<HashMap<(String, String), Result<Fingerprint>>>,
     files: RefCell<FileCache>,
 }
 
@@ -50,6 +51,7 @@ impl<'a> Engine<'a> {
             git,
             net,
             git_root: OnceCell::new(),
+            git_fingerprints: RefCell::new(HashMap::new()),
             files: RefCell::new(HashMap::new()),
         }
     }
@@ -70,22 +72,53 @@ impl<'a> Engine<'a> {
     /// Resolve the containing worktree once for the lifetime of this engine. Bundle-wide
     /// operations may fingerprint hundreds of sources from the same repository.
     fn git_root(&self) -> Result<&Path> {
-        if self.git_root.get().is_none() {
-            let root = self.git.worktree_root(self.root)?;
-            // This engine is single-threaded (`OnceCell` is intentionally unsynchronized), so a
-            // failed set would indicate an internal programming error.
-            self.git_root.set(root).map_err(|_| {
-                OkfError::Internal("git worktree root initialized twice".to_string())
-            })?;
+        self.git_root
+            .get_or_init(|| self.git.worktree_root(self.root))
+            .as_ref()
+            .map(PathBuf::as_path)
+            .map_err(Clone::clone)
+    }
+
+    /// Batch and deduplicate Git sources while preserving input order and per-source errors.
+    /// The cache lives only as long as this engine, including failed root discovery.
+    pub fn fingerprint_many(&self, sources: &[Source]) -> Vec<Result<Fingerprint>> {
+        let mut paths = std::collections::BTreeMap::new();
+        let mut commits = std::collections::BTreeMap::new();
+        for source in sources {
+            if !matches!(source.kind, SourceKind::GitPath | SourceKind::GitCommit) {
+                continue;
+            }
+            let key = git_key(source);
+            if self.git_fingerprints.borrow().contains_key(&key) {
+                continue;
+            }
+            if source.kind == SourceKind::GitPath {
+                paths.entry(key).or_insert_with(|| source.clone());
+            } else {
+                commits.entry(key).or_insert_with(|| source.clone());
+            }
         }
-        Ok(self
-            .git_root
-            .get()
-            .expect("git worktree root was initialized")
-            .as_path())
+        for (group, is_path) in [(paths, true), (commits, false)] {
+            let sources: Vec<_> = group.values().cloned().collect();
+            let results = if is_path {
+                self.fingerprint_git_paths(&sources)
+            } else {
+                self.fingerprint_git_commits(&sources)
+            };
+            for (key, result) in group.into_keys().zip(results) {
+                self.git_fingerprints.borrow_mut().insert(key, result);
+            }
+        }
+        sources
+            .iter()
+            .map(|source| self.fingerprint(source))
+            .collect()
     }
 
     pub(crate) fn fingerprint_git_paths(&self, sources: &[Source]) -> Vec<Result<Fingerprint>> {
+        if sources.is_empty() {
+            return Vec::new();
+        }
         let root = match self.git_root() {
             Ok(root) => root,
             Err(error) => {
@@ -106,6 +139,9 @@ impl<'a> Engine<'a> {
     }
 
     pub(crate) fn fingerprint_git_commits(&self, sources: &[Source]) -> Vec<Result<Fingerprint>> {
+        if sources.is_empty() {
+            return Vec::new();
+        }
         let root = match self.git_root() {
             Ok(root) => root,
             Err(error) => {
@@ -126,17 +162,33 @@ impl<'a> Engine<'a> {
     }
 }
 
+fn git_key(source: &Source) -> (String, String) {
+    (
+        source.kind.as_kind_str().to_string(),
+        split_fragment(&source.resource).0.to_string(),
+    )
+}
+
 impl Fingerprinter for Engine<'_> {
     fn fingerprint(&self, source: &Source) -> Result<Fingerprint> {
         let (path_part, fragment) = split_fragment(&source.resource);
         match &source.kind {
-            SourceKind::GitPath => {
-                let git_root = self.git_root()?;
-                git::git_path_fp_in(self.git, git_root, &git_root.join(path_part))
-            }
-            SourceKind::GitCommit => {
-                let git_root = self.git_root()?;
-                git::git_commit_fp_in(self.git, git_root, &git_root.join(path_part))
+            SourceKind::GitPath | SourceKind::GitCommit => {
+                let key = git_key(source);
+                if let Some(result) = self.git_fingerprints.borrow().get(&key) {
+                    return result.clone();
+                }
+                let result = self.git_root().and_then(|root| {
+                    if source.kind == SourceKind::GitPath {
+                        git::git_path_fp_in(self.git, root, &root.join(path_part))
+                    } else {
+                        git::git_commit_fp_in(self.git, root, &root.join(path_part))
+                    }
+                });
+                self.git_fingerprints
+                    .borrow_mut()
+                    .insert(key, result.clone());
+                result
             }
             SourceKind::File => {
                 let bytes = self.read(self.resolve(path_part))?;

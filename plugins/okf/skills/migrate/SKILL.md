@@ -79,7 +79,9 @@ conformance requirements.
    or `--patch` for concrete nested edits after inspecting the original and establishing recovery.
    Preview with `--dry-run` and validate the result. For reusable nested types and semantic selectors, follow the ontology skill's
    [structured authoring example](../ontology/references/structured-authoring.md); for cross-bundle
-   source mappings use the init skill's [catalog example](../init/references/multi-bundle.md).
+   source mappings use the init skill's [catalog example](../init/references/multi-bundle.md),
+   including separate-repository layouts. Preserve catalog IDs as identities, but rebase authored
+   body and custom metadata links as ordinary paths; qualified CLI targets are not authored link syntax.
    Preserve existing verification as historical evidence outside the active `verified`
    field if conversion changes meaning; do not create a new verification event from old evidence.
    For v0.1 material, translate `timestamp` to `generated.at` only when the producer actor is known.
@@ -155,3 +157,17 @@ request additional bundles explicitly with repeatable `--scope-bundle <id>` or d
 scope and unavailable members. Out-of-scope references remain unknown. Ordinary relative paths
 retain their meaning across registered boundaries; distributing one bundle alone can break them.
 Never infer another bundle from a matching filename or title.
+
+## Frontmatter order
+
+When authoring concept frontmatter, put `type` first. For the matching ontology concept type,
+follow `fields` declaration order recursively, including nested objects and objects in lists;
+reusable field types use their resolved field order. Put reference-only keys next in reference
+declaration order. Put undeclared/custom fields last at each level, preserving their relative
+order. Without a matching ontology type, keep the other fields in their authored order.
+This is an authoring convention, not an additional OKF conformance requirement.
+CLI writes normalize this order. `okf lint <bundle>` reports `frontmatter-order` at warning by
+default; `okf lint <bundle> --fix` normalizes the bundle and reports remaining findings. The
+bundle lint setting `frontmatter_order` accepts `info`, `warn`, `error`, or `off`; an off rule
+is not fixed. Normalization preserves values, list order, body text, and verification metadata;
+YAML comments and scalar presentation may normalize.

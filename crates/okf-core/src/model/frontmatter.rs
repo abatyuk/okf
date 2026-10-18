@@ -1,7 +1,7 @@
 //! Order-preserving, unknown-key-preserving frontmatter — the round-trip linchpin.
 //!
 //! Backed by `indexmap::IndexMap<String, serde_yaml::Value>` so key order and unknown
-//! keys survive read → write semantically and in top-level order, and so NDJSON can mirror
+//! keys survive parsing in authored order and writing semantically, and so NDJSON can mirror
 //! the frontmatter verbatim.
 use indexmap::IndexMap;
 use serde_yaml::Value;

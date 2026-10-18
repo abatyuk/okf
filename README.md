@@ -30,13 +30,13 @@ okf version
 ```
 
 Alternatively, download the standalone installer from a **published release**, inspect it,
-then run it with an explicit version. This example installs or updates to 0.4.2:
+then run it with an explicit version. This example installs or updates to 0.4.3:
 
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
-  https://github.com/abatyuk/okf/releases/download/v0.4.2/install.sh -o install.sh
+  https://github.com/abatyuk/okf/releases/download/v0.4.3/install.sh -o install.sh
 # Review install.sh before running it.
-sh install.sh 0.4.2
+sh install.sh 0.4.3
 ```
 
 The optional installer detects your platform, verifies the archive checksum, checks that the
@@ -49,7 +49,7 @@ on PATH can take precedence; check `command -v okf` and `okf version`.
 
 Skills **only check compatibility** and show these instructions when necessary. They never
 run the installer or update the CLI. The current plugin supports stable CLI versions
-`>=0.4.0, <0.5.0`; the OKF document specification remains v0.2.
+`>=0.4.3, <0.5.0`; the OKF document specification remains v0.2.
 
 Starting with 0.4.1, macOS release binaries are Developer ID signed and notarized by Apple.
 The standalone executable has no stapled ticket, so Gatekeeper may need internet access
@@ -79,6 +79,14 @@ cargo build --release        # plain build, no doc regeneration
 # optional remote artifact retrieval (`artifact show --fetch`):
 cargo build --release -p okf-cli --features url-sources
 ```
+
+On macOS outside CI, `cargo xtask build` and `cargo xtask install` ad-hoc sign local
+Mach-O executables with `codesign --force --sign -` and verify the resulting signatures.
+Build signing follows Cargo's reported artifact paths, including custom profiles and target
+directories. Install signing honors `CARGO_INSTALL_ROOT`, Cargo's `install.root` configuration,
+and `CARGO_HOME`. Signing is skipped whenever `CI` is set, on other operating systems,
+and for cross-compiled non-Mach-O executables. Release signing and notarization stay in
+the release workflow. Plain `cargo build` and `cargo install` do not run this signing step.
 
 Requires a recent stable Rust. `git` on `PATH` is needed only for git-based source kinds and
 `okf diff`; everything else works without it.
@@ -212,6 +220,13 @@ bundles:
 Override paths are relative to that file. Overrides cannot register new IDs or accept different
 snapshot content. The CLI reads available local files and Git objects without cloning or fetching.
 
+Git discovery, revision resolution, and historical object reads are shared within each CLI
+command, including failed lookups. Historical concepts, settings, snapshot checks, and related
+record expansion reuse a `git cat-file --batch` reader per repository. Caches are discarded
+when the command finishes; later commands observe new repository state. Refresh and catalog
+source-edge checks batch and deduplicate Git fingerprints while retaining each source occurrence
+and its individual comparison or error. These optimizations preserve explicit examination scope.
+
 Selection and examination scope are separate. Catalog registration alone does not include another
 bundle in a query, graph or check. Use repeatable `--scope-bundle <id>` or deliberate `--catalog-scope` as described in the [CLI reference](docs/okf-cli-reference.md)
 and retain reported examined scope and unavailable members. Cross-bundle ordinary paths preserve
@@ -272,7 +287,8 @@ Highlights:
   paths. Retrieval is bounded and never executes code.
 - **`mv`** rebases inbound body links and standard source resources when it renames a concept.
   It refuses unsupported declared nested-reference rewrites; cross-bundle moves require coordinated review.
-- **`edit`** changes both frontmatter and body while preserving unknown YAML values and key order.
+- **`lint --fix`** normalizes frontmatter order throughout a bundle. The `frontmatter-order` lint defaults to warning; configure `frontmatter_order = "info" | "warn" | "error" | "off"` in bundle lint settings. Fixes preserve body text and verification metadata; YAML presentation may normalize. Lint reports remaining findings after fixing.
+- **`edit`** changes both frontmatter and body while preserving unknown YAML values. Writes put `type` first, then ontology `fields` in declaration order (recursively through objects and list items), then reference-only keys in declaration order, then undeclared fields in their relative authored order. Without an ontology or matching type, only `type` moves first.
   YAML comments and scalar presentation may normalize. Frontmatter: `--set key=value`
   (scalar), `--unset key`, `--add key=value` (append a list item, idempotent), `--remove
   key=value` (drop list items). Body: `--set-body` / `--append-body` / `--clear-body`, or the

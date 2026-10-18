@@ -5,6 +5,27 @@ Use ordinary subdirectories when those boundaries are shared; extra bundles add 
 layout costs. Independently maintained forks get new IDs; mirrors retain their ID. Select stable,
 namespaced IDs from the user's domain, not machine-specific directory names.
 
+## Catalog IDs and authored links
+
+Cross-repository references work when the target bundle is available locally and registered in
+the selected catalog. Registration maps a bundle ID to a directory; it does not clone or fetch a
+repository. Reuse predefined catalog IDs when registering existing bundles.
+
+| Context | Reference form |
+| --- | --- |
+| CLI graph target, for example `backlinks` | `acme.finance:/policies/margin-standard` |
+| Markdown body link or declared custom metadata reference | Ordinary path relative to the declaring document, such as `../../finance/policies/margin-standard.md` |
+| Standard source entry | Ordinary `resource`, optionally paired with `bundle_ref.id` and target-root-relative `bundle_ref.path` |
+
+Qualified CLI targets are not supported syntax for authored Markdown or custom metadata concept
+links. Do not write `[policy](acme.finance:/policies/margin-standard)` expecting a concept edge:
+the link parser treats that scheme-shaped string as external. A leading `/` in an ordinary link
+starts at the declaring bundle's root, not at another catalog entry. Catalog identity alone does
+not make authored links independent of checkout layout. Add `--scope-bundle acme.finance` when
+examining that target from another primary bundle; registration alone does not expand scope.
+
+## Bundles in one workspace
+
 This example has product material referencing a finance policy. Run commands from the workspace
 root. Initialize only new roots; preserve existing configuration and concepts when adapting it:
 
@@ -107,6 +128,57 @@ Running links without the added scope should retain an out-of-scope target, not 
 policy. Never pass extra scope to single-bundle mutators or `validate`. Use explicit `--bundle-id`
 throughout multi-step catalog work; `OKF_BUNDLE` stays path-only and overrides implicit selection.
 An explicit bundle path conflicts with `--bundle-id`.
+
+## Separate repositories
+
+For existing sibling checkouts, the same rules apply. Suppose the files are:
+
+```text
+work/
+  product-repo/
+    okf.toml
+    okf-catalog.yaml
+    knowledge/metrics/revenue.md
+  finance-repo/
+    knowledge/policies/margin-standard.md
+```
+
+From `product-repo`, use the `okf.toml` above and register the existing roots:
+
+```yaml
+catalog_version: 1
+bundles:
+  acme.product:
+    location: {type: directory, path: knowledge}
+  acme.finance:
+    location: {type: directory, path: ../finance-repo/knowledge}
+```
+
+In `knowledge/metrics/revenue.md`, use this source mapping and body link:
+
+```yaml
+sources:
+  - id: margin-standard
+    resource: ../../../finance-repo/knowledge/policies/margin-standard.md
+    bundle_ref:
+      id: acme.finance
+      path: policies/margin-standard.md
+```
+
+```markdown
+See the [margin standard](../../../finance-repo/knowledge/policies/margin-standard.md).
+```
+
+Verify from `product-repo`:
+
+```sh
+okf catalog --json
+okf resolve ../../../finance-repo/knowledge/policies/margin-standard.md --from metrics/revenue --bundle-id acme.product --scope-bundle acme.finance --json
+okf backlinks acme.finance:/policies/margin-standard --bundle-id acme.product --scope-bundle acme.finance --details --json
+```
+
+The qualified target stays the same across checkouts. The ordinary authored paths must still
+match the local layout; changing only a catalog location or override does not rebase those paths.
 
 ## Optional machine-local override
 

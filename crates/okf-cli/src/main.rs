@@ -11,7 +11,10 @@ mod structured;
 
 fn main() {
     reset_sigpipe();
-    std::process::exit(exit::run());
+    let reads = okf_core::ports::git_read::ReadSession::new();
+    let code = exit::run();
+    drop(reads);
+    std::process::exit(code);
 }
 
 /// Restore the default SIGPIPE disposition so `okf … | head` (and other truncated

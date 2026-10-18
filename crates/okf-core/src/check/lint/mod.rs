@@ -117,6 +117,7 @@ pub fn meets_threshold(findings: &[Finding], fail_on: FailOn) -> bool {
 pub struct LintConfig {
     pub broken_link: Option<Severity>,
     pub missing_title: Option<Severity>,
+    pub frontmatter_order: Option<Severity>,
     pub missing_description: Option<Severity>,
     pub orphan: Option<Severity>,
     pub ontology_violation: Option<Severity>,
@@ -131,6 +132,7 @@ impl Default for LintConfig {
         Self {
             broken_link: Some(Severity::Error),
             missing_title: Some(Severity::Warn),
+            frontmatter_order: Some(Severity::Warn),
             missing_description: Some(Severity::Info),
             orphan: Some(Severity::Info),
             ontology_violation: Some(Severity::Warn),
@@ -170,6 +172,7 @@ pub fn lint_bundle(
     let mut findings = Vec::new();
     findings.extend(rules::broken_link::run(&ctx));
     findings.extend(rules::missing_title::run(&ctx));
+    findings.extend(rules::frontmatter_order::run(&ctx));
     findings.extend(rules::missing_description::run(&ctx));
     findings.extend(rules::orphan::run(&ctx));
     findings.extend(rules::ontology_violation::run(&ctx));

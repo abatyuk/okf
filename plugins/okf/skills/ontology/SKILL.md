@@ -112,3 +112,17 @@ Dynamic relationship kinds may narrow their reference rule's allowed target type
 `extends` declarations supply ancestry for those restrictions; check effective target ancestry
 without treating a local subtype as another standard Attested Computation type. Invalid widening
 or incompatible target declarations remain configuration or advisory reference findings.
+
+## Frontmatter order
+
+When authoring concept frontmatter, put `type` first. For the matching ontology concept type,
+follow `fields` declaration order recursively, including nested objects and objects in lists;
+reusable field types use their resolved field order. Put reference-only keys next in reference
+declaration order. Put undeclared/custom fields last at each level, preserving their relative
+order. Without a matching ontology type, keep the other fields in their authored order.
+This is an authoring convention, not an additional OKF conformance requirement.
+CLI writes normalize this order. `okf lint <bundle>` reports `frontmatter-order` at warning by
+default; `okf lint <bundle> --fix` normalizes the bundle and reports remaining findings. The
+bundle lint setting `frontmatter_order` accepts `info`, `warn`, `error`, or `off`; an off rule
+is not fixed. Normalization preserves values, list order, body text, and verification metadata;
+YAML comments and scalar presentation may normalize.

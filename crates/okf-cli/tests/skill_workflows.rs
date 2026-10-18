@@ -249,7 +249,7 @@ fn nested_authoring(doc: &str) {
 
 fn scoped_cross_bundle(doc: &str) {
     let root = tempfile::tempdir().unwrap();
-    let commands = example_commands(doc);
+    let commands = example_commands(doc.split("## Separate repositories").next().unwrap());
     for args in commands.iter().take(2) {
         run(root.path(), args);
     }
@@ -300,6 +300,62 @@ fn scoped_cross_bundle(doc: &str) {
         .iter()
         .all(|id| id != "acme.unrelated"));
     assert!(scope["unavailable"].as_array().unwrap().is_empty());
+}
+
+fn separate_repository_references(doc: &str) {
+    let root = tempfile::tempdir().unwrap();
+    let product = root.path().join("product-repo");
+    let finance = root.path().join("finance-repo/knowledge/policies");
+    materialize(&product, doc);
+    fs::create_dir_all(&finance).unwrap();
+    fs::rename(
+        product.join("knowledge/finance/policies/margin-standard.md"),
+        finance.join("margin-standard.md"),
+    )
+    .unwrap();
+    fs::rename(
+        product.join("knowledge/product/metrics"),
+        product.join("knowledge/metrics"),
+    )
+    .unwrap();
+    let section = doc
+        .split_once("## Separate repositories")
+        .unwrap()
+        .1
+        .split("## Optional machine-local override")
+        .next()
+        .unwrap();
+    let yaml: Vec<_> = section
+        .split("```yaml\n")
+        .skip(1)
+        .map(|block| block.split_once("```").unwrap().0)
+        .collect();
+    fs::write(product.join("okf-catalog.yaml"), yaml[0]).unwrap();
+    let body = section
+        .split_once("```markdown\n")
+        .unwrap()
+        .1
+        .split_once("```")
+        .unwrap()
+        .0;
+    fs::write(
+        product.join("knowledge/metrics/revenue.md"),
+        format!(
+            "---\ntype: Metric\ntitle: Revenue reporting\ndescription: Uses margin.\n{}---\n{}",
+            yaml[1], body
+        ),
+    )
+    .unwrap();
+    for args in example_commands(section) {
+        let rows = run(&product, &args);
+        if args[0] == "resolve" || args[0] == "backlinks" {
+            let edge = record(&rows, "bundle-edge");
+            assert_eq!(edge["status"], "resolved");
+            assert_eq!(edge["target"]["bundle"], "acme.finance");
+            assert_eq!(edge["target"]["id"], "/policies/margin-standard");
+            assert_eq!(edge["source"]["id"], "/metrics/revenue");
+        }
+    }
 }
 
 fn expansion_and_pagination_cost(doc: &str) {
@@ -686,7 +742,10 @@ fn skill_behavior_scenarios() {
             "cross-record-conditions" => cross_record_conditions(&doc),
             "nested-authoring" => nested_authoring(&doc),
             "structured-mutation" => structured_mutation(),
-            "scoped-cross-bundle" => scoped_cross_bundle(&doc),
+            "scoped-cross-bundle" => {
+                scoped_cross_bundle(&doc);
+                separate_repository_references(&doc);
+            }
             "expansion-and-pagination-cost" => expansion_and_pagination_cost(&doc),
             "resumable-structured-migration" => resumable_structured_migration(&doc),
             _ => panic!("scenario {id} has no executable workflow"),

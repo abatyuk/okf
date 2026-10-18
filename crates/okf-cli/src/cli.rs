@@ -416,7 +416,7 @@ pub struct ArtifactPutArgs {
 pub struct LintArgs {
     /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
-    /// Apply auto-fixable findings (v1: none are auto-fixable — reports what it would do).
+    /// Normalize frontmatter order bundle-wide for the enabled frontmatter-order rule.
     #[arg(long)]
     pub fix: bool,
     /// Severity threshold that makes the run fail (exit 1): never|info|warn|error|any.

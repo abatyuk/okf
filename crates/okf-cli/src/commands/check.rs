@@ -99,10 +99,33 @@ pub fn run_validate(args: &BundleArgs, json: bool) -> Result<i32> {
 
 /// `okf lint [bundle] [--fix] [--fail-on <sev>]`.
 pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
+    let fail_on = match &args.fail_on {
+        Some(s) => FailOn::from_str(s)?,
+        None => FailOn::default(), // error
+    };
     let root = resolve_bundle(args.bundle.as_deref())?;
     let bundle = load_bundle(&root)?;
     let (effective, ontology) = okf_core::bundle::settings::load_for(&root)?;
     let config = lint_config(&effective.settings)?;
+    if args.fix && config.frontmatter_order.is_some() {
+        let fixed = okf_core::check::lint::rules::frontmatter_order::fix(
+            &bundle,
+            &root,
+            ontology.as_ref(),
+        )?;
+        if json {
+            output::print_line(
+                &json!({"kind": "fix", "rule": "frontmatter-order", "fixed": fixed}),
+            )?;
+        } else {
+            eprintln!("--fix: normalized frontmatter order in {fixed} concepts");
+        }
+    }
+    let bundle = if args.fix {
+        load_bundle(&root)?
+    } else {
+        bundle
+    };
     let findings = lint_bundle(&bundle, ontology.as_ref(), &config);
     let index_severity = lint_severity(
         effective.settings.lint.index_coverage.as_deref(),
@@ -167,15 +190,6 @@ pub fn run_lint(args: &LintArgs, json: bool) -> Result<i32> {
         }
     }
 
-    // `--fix` is a documented v1 no-op: no lint rule is auto-fixable yet (core has no fixer).
-    if args.fix && !json {
-        eprintln!("--fix: 0 findings auto-fixable in v1 (no fixer implemented)");
-    }
-
-    let fail_on = match &args.fail_on {
-        Some(s) => FailOn::from_str(s)?,
-        None => FailOn::default(), // error
-    };
     Ok(
         if meets_threshold(&findings, fail_on)
             || (!index_findings.is_empty()
@@ -440,6 +454,10 @@ pub fn lint_config(settings: &okf_core::bundle::settings::BundleSettings) -> Res
     config.broken_link = lint_severity(
         settings.lint.broken_link.as_deref(),
         okf_core::check::lint::Severity::Error,
+    )?;
+    config.frontmatter_order = lint_severity(
+        settings.lint.frontmatter_order.as_deref(),
+        okf_core::check::lint::Severity::Warn,
     )?;
     config.missing_title = lint_severity(
         settings.lint.missing_title.as_deref(),

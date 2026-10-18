@@ -93,14 +93,7 @@ pub struct CatalogGraph {
 }
 /// No fetch, including Git's implicit fetching in partial clones.
 fn git(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .env("GIT_NO_LAZY_FETCH", "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .args(args)
-        .output()
-        .ok()?;
+    let out = crate::ports::git_read::output(root, args).ok()?;
     out.status.success().then_some(out.stdout)
 }
 fn git_text(root: &Path, args: &[&str]) -> Option<String> {
@@ -121,14 +114,12 @@ fn historical_bytes(root: &Path, path: &Path, requested: &str) -> Option<(String
     let commit = revision(root, requested)?;
     let repo = PathBuf::from(git_text(root, &["rev-parse", "--show-toplevel"])?);
     let rel = path.strip_prefix(&repo).ok()?;
-    let bytes = git(
-        root,
-        &["show", &format!("{commit}:{}", rel.to_string_lossy())],
-    )?;
+    let bytes = crate::ports::git_read::blob(&repo, &commit, rel)?;
     Some((commit, bytes))
 }
 /// Read exactly one concept from an available local Git revision, without a bundle walk.
 pub fn read_concept_at(root: &Path, id: &str, revision: &str) -> Result<Option<Concept>> {
+    let _reads = crate::ports::git_read::ReadSession::new();
     let id = ConceptId::parse(id)?;
     let root = std::fs::canonicalize(root)?;
     let path = root.join(format!("{}.md", id.0.trim_start_matches('/')));
@@ -147,6 +138,7 @@ pub fn load_revision_limited(
     requested: &str,
     limit: Option<usize>,
 ) -> Result<Option<(Bundle, String, usize)>> {
+    let _reads = crate::ports::git_read::ReadSession::new();
     let mut failures = Vec::new();
     let mut encoding_error = None;
     let loaded = (|| {
@@ -186,10 +178,7 @@ pub fn load_revision_limited(
             if limit.is_some_and(|limit| total > limit) {
                 continue;
             }
-            let bytes = git(
-                &repo,
-                &["show", &format!("{commit}:{}", path.to_string_lossy())],
-            )?;
+            let bytes = crate::ports::git_read::blob(&repo, &commit, &path)?;
             let id = ConceptId::from_relative(rel.to_string_lossy().strip_suffix(".md").unwrap());
             let text = match std::str::from_utf8(&bytes) {
                 Ok(text) => text,
@@ -453,6 +442,7 @@ pub fn resolve_scope_at(
     all: bool,
     requested_revision: Option<&str>,
 ) -> Result<Scope> {
+    let _reads = crate::ports::git_read::ReadSession::new();
     let mut scope = resolve_scope(context, scope_ids, all)?;
     if let Some(requested) = requested_revision {
         let mut examined = Vec::new();
@@ -476,6 +466,7 @@ pub fn build_catalog_graph(
     all: bool,
     requested_revision: Option<&str>,
 ) -> Result<CatalogGraph> {
+    let _reads = crate::ports::git_read::ReadSession::new();
     let entries = entries(context);
     let mut requested = BTreeSet::from([primary_id(context)]);
     if all {
@@ -496,6 +487,7 @@ pub fn build_catalog_graph(
         ..Default::default()
     };
     let mut bundles = BTreeMap::new();
+    let mut ontologies = BTreeMap::new();
     for id in &requested {
         let entry = &entries[id];
         if !entry.available {
@@ -520,11 +512,18 @@ pub fn build_catalog_graph(
                 version: version.clone(),
             });
         }
-        let interpretation = if let Some(rev) = version.strip_prefix("git:") {
-            crate::bundle::settings::for_context_at(context, &entry.root, rev)?.0
+        let (interpretation, ontology) = if let Some(rev) = version.strip_prefix("git:") {
+            crate::bundle::settings::for_context_at(context, &entry.root, rev)?
         } else {
-            crate::bundle::settings::for_context(context, &entry.root)?
+            let settings = crate::bundle::settings::for_context(context, &entry.root)?;
+            let ontology = settings
+                .ontology_path
+                .as_ref()
+                .map(|path| crate::ontology::load::load_ontology(path))
+                .transpose()?;
+            (settings, ontology)
         };
+        ontologies.insert(id.clone(), ontology);
         graph.scope.examined.push(ExaminedBundle {
             id: id.clone(),
             root: entry.root.clone(),
@@ -534,16 +533,11 @@ pub fn build_catalog_graph(
         bundles.insert(id.clone(), (bundle, version));
     }
     for (id, (bundle, version)) in &bundles {
-        let ontology = if let Some(rev) = version.strip_prefix("git:") {
-            crate::bundle::settings::for_context_at(context, &bundle.root, rev)?.1
-        } else {
-            let interpretation = crate::bundle::settings::for_context(context, &bundle.root)?;
-            interpretation
-                .ontology_path
-                .as_ref()
-                .map(|path| crate::ontology::load::load_ontology(path))
-                .transpose()?
-        };
+        let ontology = &ontologies[id];
+        // Git-backed sources share the same worktree root. Cache failed discovery too:
+        // non-Git bundles must not spawn one subprocess per source occurrence.
+        let worktree_root = std::cell::OnceCell::new();
+        let mut pending_git_fingerprints = Vec::new();
         for concept in &bundle.concepts {
             let source = Node {
                 bundle: id.clone(),
@@ -561,11 +555,27 @@ pub fn build_catalog_graph(
                 let Some(resource) = value.get("resource").and_then(Value::as_str) else {
                     continue;
                 };
-                if let Some(path) = source_dependency_path(
+                let kind = value.get("kind").and_then(Value::as_str);
+                let git_kind = matches!(kind, Some("git-path" | "git-commit"));
+                let git_root = if git_kind
+                    && (classify(resource) != LinkKind::External
+                        || value.get("bundle_ref").is_some())
+                {
+                    worktree_root
+                        .get_or_init(|| {
+                            git_text(&bundle.root, &["rev-parse", "--show-toplevel"])
+                                .map(PathBuf::from)
+                        })
+                        .as_deref()
+                } else {
+                    None
+                };
+                if let Some(path) = source_dependency_path_with_git_root(
                     &bundle.root,
                     &source.id,
                     resource,
-                    value.get("kind").and_then(Value::as_str),
+                    kind,
+                    git_root,
                 ) {
                     graph.resource_dependencies.push(ResourceDependency {
                         path,
@@ -586,15 +596,6 @@ pub fn build_catalog_graph(
                 let declared = value
                     .get("bundle_ref")
                     .map(|v| serde_yaml::from_value::<BundleRef>(v.clone()));
-                let git_kind = value
-                    .get("kind")
-                    .and_then(Value::as_str)
-                    .is_some_and(|kind| matches!(kind, "git-path" | "git-commit"));
-                let git_root = if git_kind {
-                    git_text(&bundle.root, &["rev-parse", "--show-toplevel"]).map(PathBuf::from)
-                } else {
-                    None
-                };
                 let path_source = if git_kind {
                     Node {
                         id: "/context".into(),
@@ -610,7 +611,7 @@ pub fn build_catalog_graph(
                         bundles: &bundles,
                     },
                     &path_source,
-                    git_root.as_deref().unwrap_or(&bundle.root),
+                    git_root.unwrap_or(&bundle.root),
                     resource,
                     &format!("sources[{index}].resource"),
                     declared.as_ref().and_then(|r| r.as_ref().ok()),
@@ -624,8 +625,18 @@ pub fn build_catalog_graph(
                 }
                 if edge.status == "resolved" {
                     if let Some(source_value) = Source::from_value(value) {
-                        edge.fingerprint_status =
-                            fingerprint_status(&source_value, &bundle.root, &concept.id);
+                        if !source_value.fingerprint.is_empty()
+                            && matches!(
+                                source_value.kind,
+                                crate::model::source::SourceKind::GitPath
+                                    | crate::model::source::SourceKind::GitCommit
+                            )
+                        {
+                            pending_git_fingerprints.push((graph.edges.len(), source_value));
+                        } else {
+                            edge.fingerprint_status =
+                                fingerprint_status(&source_value, &bundle.root, &concept.id);
+                        }
                     }
                 }
                 graph.edges.push(edge);
@@ -738,6 +749,39 @@ pub fn build_catalog_graph(
                 }
             }
         }
+        if !pending_git_fingerprints.is_empty() {
+            let engine = crate::fingerprint::Engine::new(
+                &bundle.root,
+                &crate::ports::fs::RealFs,
+                &crate::ports::git::RealGit,
+                None,
+            );
+            let sources: Vec<_> = pending_git_fingerprints
+                .iter()
+                .map(|(_, source)| source.clone())
+                .collect();
+            for ((index, source), current) in pending_git_fingerprints
+                .into_iter()
+                .zip(engine.fingerprint_many(&sources))
+            {
+                graph.edges[index].fingerprint_status = Some(
+                    match current {
+                        Ok(current)
+                            if source
+                                .fingerprint
+                                .fields
+                                .iter()
+                                .all(|(key, value)| current.get(key) == Some(value)) =>
+                        {
+                            "unchanged"
+                        }
+                        Ok(_) => "changed",
+                        Err(_) => "unavailable",
+                    }
+                    .into(),
+                );
+            }
+        }
     }
     for edge in &graph.edges {
         if let Some(snapshot) = &edge.snapshot {
@@ -757,6 +801,23 @@ pub(crate) fn source_dependency_path(
     resource: &str,
     kind: Option<&str>,
 ) -> Option<PathBuf> {
+    let git_root = if matches!(kind, Some("git-path" | "git-commit"))
+        && classify(resource) != LinkKind::External
+    {
+        git_text(root, &["rev-parse", "--show-toplevel"]).map(PathBuf::from)
+    } else {
+        None
+    };
+    source_dependency_path_with_git_root(root, id, resource, kind, git_root.as_deref())
+}
+
+fn source_dependency_path_with_git_root(
+    root: &Path,
+    id: &str,
+    resource: &str,
+    kind: Option<&str>,
+    git_root: Option<&Path>,
+) -> Option<PathBuf> {
     if classify(resource) == LinkKind::External {
         return None;
     }
@@ -771,9 +832,7 @@ pub(crate) fn source_dependency_path(
     let path = match kind {
         Some("url") => return None,
         Some("file" | "line-range" | "markdown-heading") => root.join(clean),
-        Some("git-path" | "git-commit") => {
-            PathBuf::from(git_text(root, &["rev-parse", "--show-toplevel"])?).join(clean)
-        }
+        Some("git-path" | "git-commit") => git_root?.join(clean),
         _ if clean.starts_with('/') => root.join(clean.trim_start_matches('/')),
         _ => root.join(id.trim_start_matches('/')).parent()?.join(clean),
     };
@@ -1131,6 +1190,7 @@ pub fn resolve_reference(
             )
         })
         .collect();
+    let _reads = crate::ports::git_read::ReadSession::new();
     let source = graph.target(context, from);
     let source_root = entries
         .get(&source.bundle)

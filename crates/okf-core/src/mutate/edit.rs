@@ -1,9 +1,8 @@
 //! Semantically preserve unknown frontmatter while editing a concept and body.
 //!
-//! `edit` applies a batch of operations while preserving unknown frontmatter keys and their
-//! on-disk order: an existing key is updated *in place* (its position is retained), a new key
-//! is appended, and everything else round-trips semantically through
-//! [`parse_concept`]/[`write_concept`].
+//! `edit` preserves unknown frontmatter keys and values. Serialization puts `type` first,
+//! then ontology-declared fields in recursive declaration order, then undeclared keys in
+//! their relative authored order, through [`parse_concept`]/[`write_concept_with_ontology`].
 //!
 //! **Frontmatter ops.** `--set key=value` sets a scalar (`true`/`false` → bool, canonical
 //! ints/floats → number, `null` → null, else string; values that would lose information when
@@ -31,7 +30,7 @@ use crate::model::concept::{Concept, ConceptId};
 use crate::model::frontmatter::Frontmatter;
 use crate::model::source::{Source, SourceKind};
 use crate::mutate::body;
-use crate::parse::{parse_concept, writer::write_concept};
+use crate::parse::{parse_concept, writer::write_concept_with_ontology};
 use crate::ports::clock::{Clock, SystemClock};
 
 /// The on-disk path a concept id maps to (`/policies/travel` → `<root>/policies/travel.md`).
@@ -146,7 +145,8 @@ fn atomic_write_mode(path: &Path, bytes: &[u8], create_only: bool) -> Result<()>
 /// Render through the exact validation used by normal and preview writes.
 pub(crate) fn render_validated(root: &Path, concept: &Concept) -> Result<String> {
     let path = id_to_path(root, &concept.id)?;
-    let text = write_concept(concept)?;
+    let (_, ontology) = crate::bundle::settings::load_for(root)?;
+    let text = write_concept_with_ontology(concept, ontology.as_ref())?;
     let rel = path
         .strip_prefix(root)
         .map_err(|e| OkfError::Internal(e.to_string()))?
