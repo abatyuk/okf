@@ -1,22 +1,6 @@
 ---
 type: Skill
-title: okf:update skill
-description: Separately triages lifecycle expiry, standard source evidence, fingerprint drift, and content changes, then reconciles concepts without overstating refresh.
 trigger: resync concepts after source changes
-sources:
-- resource: plugins/okf/skills/update/references/cli.md
-  kind: git-path
-  fingerprint:
-    blob_sha: 1e7c90b6402eb1049ab473676c1854b36839c553
-- resource: plugins/okf/skills/update/SKILL.md
-  kind: git-path
-  fingerprint:
-    blob_sha: 4bfb51c82066ffea9f0dfc772ece8afbc201a686
-- resource: https://github.com/abatyuk/okf/blob/main/plugins/okf/skills/update/SKILL.md
-- resource: plugins/okf/skills/ontology/references/structured-authoring.md
-  kind: git-path
-  fingerprint:
-    blob_sha: a05ec02fcc363f85ee522cef43b0662a0d05b256
 uses:
 - /commands/catalog
 - /commands/stale
@@ -32,7 +16,23 @@ uses:
 - /commands/validate
 - /commands/lint
 - /commands/docs
-last_modified: 2026-10-05T10:16:06Z
+title: okf:update skill
+description: Separately triages lifecycle expiry, standard source evidence, fingerprint drift, and content changes, then reconciles concepts without overstating refresh.
+sources:
+- resource: plugins/okf/skills/update/references/cli.md
+  kind: git-path
+  fingerprint:
+    blob_sha: 36a13edd125265863bb477e613aedd75713f04af
+- resource: plugins/okf/skills/update/SKILL.md
+  kind: git-path
+  fingerprint:
+    blob_sha: 8cc677b94e18947e30c18d2621a87b9594471f99
+- resource: https://github.com/abatyuk/okf/blob/main/plugins/okf/skills/update/SKILL.md
+- resource: plugins/okf/skills/ontology/references/structured-authoring.md
+  kind: git-path
+  fingerprint:
+    blob_sha: ca5061b432fd75493a90a7ec7be73c96d74f1cdc
+last_modified: 2026-10-19T03:58:59Z
 ---
 # okf:update skill
 
@@ -51,6 +51,9 @@ The workflow connects [stale](../commands/stale.md), [affected](../commands/affe
 Use [catalog](../commands/catalog.md) inspection to establish effective identity, local locations
 and interpretation settings. Additional bundle examination is explicit; report unavailable members
 and keep current candidates separate from requested snapshot evidence.
+
+When outbound metadata changes, inspect `links --details --json` and compare occurrence paths,
+kinds, inverse labels and attributes rather than only deduplicated targets.
 
 Structured authoring follows the ontology skill's shared example. Use structured declaration
 YAML/file inputs and bulk apply for dependent schemas; use concept `--set-yaml`, object paths,

@@ -45,7 +45,8 @@ actual concept-content change. A concept may have more than one.
    semantic occurrences for nested relationships and retain unknown consumers outside scope. Inspect the concept with targeted `okf show` reads and the changed evidence. For a path-valued
    source, use `okf artifact resolve <resource> <bundle> --from <concept-id>` and bounded `okf
    artifact show`; use `okf show` when it resolves to a concept. Use `okf links <concept-id>
-   <bundle> --json` when the concept's direct outbound relationships may have changed.
+   <bundle> --details --json` when the concept's direct outbound relationships may have changed.
+   Compare occurrence paths, kinds, inverse labels and attributes, not just deduplicated targets.
 2. If meaning changed, supply an explicit edit operation: `okf edit <concept-id> <bundle> --set
    "description=Updated summary"` for a scalar, `okf edit <concept-id> <bundle> --set-body
    @/tmp/revised-body.md` for the whole Markdown body, or `okf edit <concept-id> <bundle>

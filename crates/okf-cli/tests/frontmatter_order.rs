@@ -163,3 +163,98 @@ fn writes_and_previews_follow_configured_external_ontology() {
         "---\ntype: Note\ntitle: Updated\npriority: 1\nrelated: []\ncustom: keep\n---\nBody\n"
     );
 }
+
+#[test]
+fn catalog_lint_fix_respects_scope_and_each_bundles_ontology_and_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("okf.toml"), "catalog = 'catalog.yaml'\ndefault_bundle = {id = 'test.a'}\n[bundle_settings.\"test.off\".lint]\nfrontmatter_order = 'off'\n").unwrap();
+    std::fs::write(root.join("catalog.yaml"), "catalog_version: 1\nbundles:\n  test.a:\n    location: {type: directory, path: a}\n  test.b:\n    location: {type: directory, path: b}\n  test.off:\n    location: {type: directory, path: off}\n").unwrap();
+    let original = "---\ncustom: keep\nsecond: B\nfirst: A\ntype: Note\nverified:\n- by: human:reviewer\n  at: '2026-10-18T12:00:00Z'\n---\nKeep body.\n";
+    for (name, fields) in [
+        (
+            "a",
+            "      first: {type: string}\n      second: {type: string}\n",
+        ),
+        (
+            "b",
+            "      second: {type: string}\n      first: {type: string}\n",
+        ),
+        ("off", "      first: {type: string}\n"),
+    ] {
+        std::fs::create_dir(root.join(name)).unwrap();
+        std::fs::write(
+            root.join(name).join("ontology.yaml"),
+            format!("okf_ontology: '0.1'\nconcepts:\n  Note:\n    fields:\n{fields}"),
+        )
+        .unwrap();
+        std::fs::write(root.join(name).join("note.md"), original).unwrap();
+    }
+    let run = |extra: &[&str]| {
+        let output = Command::cargo_bin("okf")
+            .unwrap()
+            .current_dir(root)
+            .args(["lint", "--json", "--fail-on", "never"])
+            .args(extra)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>()
+    };
+    assert!(run(&[]).iter().any(|r| r["rule"] == "frontmatter-order"));
+    assert_eq!(
+        std::fs::read_to_string(root.join("a/note.md")).unwrap(),
+        original
+    );
+    let selected = run(&["--fix"]);
+    assert!(selected
+        .iter()
+        .any(|r| r["kind"] == "fix" && r["bundle"] == "test.a" && r["fixed"] == 1));
+    assert!(!selected
+        .iter()
+        .any(|r| r["kind"] == "finding" && r["rule"] == "frontmatter-order"));
+    let a = std::fs::read_to_string(root.join("a/note.md")).unwrap();
+    assert!(a.starts_with("---\ntype: Note\nfirst: A\nsecond: B\ncustom: keep\n"));
+    assert_eq!(
+        std::fs::read_to_string(root.join("b/note.md")).unwrap(),
+        original
+    );
+    let all = run(&["--fix", "--catalog-scope"]);
+    assert!(all
+        .iter()
+        .any(|r| r["kind"] == "fix" && r["bundle"] == "test.b" && r["fixed"] == 1));
+    assert!(!all
+        .iter()
+        .any(|r| r["kind"] == "finding" && r["rule"] == "frontmatter-order"));
+    let b = std::fs::read_to_string(root.join("b/note.md")).unwrap();
+    assert!(b.starts_with("---\ntype: Note\nsecond: B\nfirst: A\ncustom: keep\n"));
+    assert_eq!(
+        std::fs::read_to_string(root.join("off/note.md")).unwrap(),
+        original
+    );
+    let old = okf_core::parse::parse_concept(
+        okf_core::model::concept::ConceptId::from_relative("note"),
+        original,
+    )
+    .unwrap();
+    for text in [&a, &b] {
+        let new = okf_core::parse::parse_concept(old.id.clone(), text).unwrap();
+        assert_eq!(new.body, old.body);
+        assert_eq!(
+            new.frontmatter.get("verified"),
+            old.frontmatter.get("verified")
+        );
+    }
+    assert!(run(&["--fix", "--scope-bundle", "test.b"])
+        .iter()
+        .filter(|r| r["kind"] == "fix")
+        .all(|r| r["fixed"] == 0));
+}

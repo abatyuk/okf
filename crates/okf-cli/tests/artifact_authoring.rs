@@ -42,6 +42,86 @@ fn show_cwd_relative_path_explains_bundle_resolution_and_suggests_the_path() {
 }
 
 #[test]
+fn list_excludes_concepts_but_retains_artifacts_and_reserved_files() {
+    let project = tempfile::tempdir().unwrap();
+    let bundle = project.path().join("b");
+    std::fs::create_dir_all(bundle.join("references/nested")).unwrap();
+    for path in [
+        "concept.md",
+        "nested/other.md",
+        "nested/data.json",
+        "index.md",
+        "log.md",
+    ] {
+        std::fs::write(bundle.join("references").join(path), "content\n").unwrap();
+    }
+
+    // The default inventory continues to include concepts.
+    okf(project.path())
+        .args(["artifact", "list", "b"])
+        .assert()
+        .success()
+        .stdout(contains("references/concept.md"))
+        .stdout(contains("references/nested/other.md"));
+
+    for json in [false, true] {
+        let mut command = okf(project.path());
+        command.args(["artifact", "list", "b", "--exclude-concepts"]);
+        if json {
+            command.arg("--json");
+        }
+        let output = command.assert().success().get_output().stdout.clone();
+        let text = String::from_utf8(output).unwrap();
+        assert!(!text.contains("concept.md"));
+        assert!(!text.contains("other.md"));
+        for path in [
+            "references/nested/data.json",
+            "references/index.md",
+            "references/log.md",
+        ] {
+            assert!(text.contains(path), "missing {path}: {text}");
+        }
+        if json {
+            let records: Vec<serde_json::Value> = text
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect();
+            assert_eq!(records.len(), 3);
+            assert!(records
+                .iter()
+                .all(|record| record["artifact_kind"] != "concept"));
+        }
+    }
+
+    std::fs::remove_file(bundle.join("references/nested/data.json")).unwrap();
+    okf(project.path())
+        .args([
+            "artifact",
+            "list",
+            "b",
+            "--directory",
+            "references/nested",
+            "--exclude-concepts",
+        ])
+        .assert()
+        .success()
+        .stdout("(no artifacts)\n");
+    okf(project.path())
+        .args([
+            "artifact",
+            "list",
+            "b",
+            "--directory",
+            "references/nested",
+            "--exclude-concepts",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .stdout("");
+}
+
+#[test]
 fn list_subdirectory_positionals_point_to_directory_flag() {
     let project = tempfile::tempdir().unwrap();
     okf(project.path())

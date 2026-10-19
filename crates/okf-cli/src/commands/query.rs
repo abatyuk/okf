@@ -624,6 +624,73 @@ pub fn run_links(args: &IdArgs, json: bool) -> Result<i32> {
         .ok_or_else(|| OkfError::Usage(format!("concept not found: {}", args.concept)))?;
     let links = outbound_links(&concept, ontology.as_ref());
 
+    if args.details {
+        let mut matched = std::collections::BTreeSet::new();
+        let mut count = 0;
+        if let Some(ontology) = &ontology {
+            let (effective, _) = okf_core::bundle::settings::load_for(&root)?;
+            for mut edge in okf_core::graph::relationships::relationships(&concept, ontology) {
+                if edge.status == "unresolved" {
+                    edge.status = if concept_exists(
+                        &root,
+                        &okf_core::model::concept::ConceptId(edge.target.clone()),
+                    ) {
+                        "resolved"
+                    } else {
+                        "missing"
+                    }
+                    .into();
+                }
+                matched.insert(edge.target.clone());
+                count += 1;
+                if json {
+                    output::print_line(
+                        &json!({"kind":"relationship","schema_version":1,"direction":"outgoing","bundle":effective.bundle,"version":"working-tree","edge":edge}),
+                    )?;
+                } else {
+                    output::print_text_line(format_args!(
+                        "{} —{}→ {} ({})",
+                        edge.source,
+                        edge.authored_kind.as_deref().unwrap_or("unknown"),
+                        edge.target,
+                        edge.status
+                    ))?;
+                    output::print_text_line(format_args!("  source field: {}", edge.field_path))?;
+                    if let Some(inverse) = &edge.inverse {
+                        output::print_text_line(format_args!("  inverse: {inverse}"))?;
+                    }
+                    for (key, value) in &edge.attributes {
+                        output::print_text_line(format_args!(
+                            "  {}: {}",
+                            key,
+                            serde_json::to_string(value).unwrap_or_default()
+                        ))?;
+                    }
+                }
+            }
+        }
+        for target in links.iter().filter(|target| !matched.contains(&target.0)) {
+            count += 1;
+            let exists = concept_exists(&root, target);
+            if json {
+                output::print_line(
+                    &json!({"kind":"link","source":concept.id.0,"target":target.0,"exists":exists}),
+                )?;
+            } else {
+                output::print_text_line(format_args!(
+                    "{} → {} ({})",
+                    concept.id.0,
+                    target.0,
+                    if exists { "exists" } else { "missing" }
+                ))?;
+            }
+        }
+        if count == 0 && !json {
+            output::print_text_line(format_args!("(no links)"))?;
+        }
+        return Ok(0);
+    }
+
     if json {
         for target in &links {
             output::print_line(&json!({

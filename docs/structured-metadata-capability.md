@@ -441,7 +441,7 @@ Each edge retains source identity/version, rule, metadata path, raw reference, k
 attributes, and resolution evidence. Semantic self-edges remain available even where legacy
 adjacency excludes self-links; concept-neighbor views can continue deduplicating targets.
 
-The `backlinks` command explicitly exposes configured inverse names. Proposed detailed mode:
+The `backlinks` command explicitly exposes configured inverse names in detailed mode:
 
 ```sh
 okf backlinks /policies/access-control knowledge/product --details
@@ -470,6 +470,16 @@ resolution evidence and distinct incoming occurrences. Legacy concept-only backl
 compatible. Ordinary body/source backlinks and references without inverse names remain
 available, labeled with their forward kind when known, without invented reverse kinds.
 Inverse labels are derived views, not reverse links authored into target documents.
+
+Use `okf links /procedures/onboarding knowledge/product --details` to inspect authored outgoing
+occurrences. Each occurrence exposes its authored kind, configured inverse label, concrete source
+field path, attributes, and status. Repeated targets remain separate when their occurrences differ.
+The default local output still deduplicates targets; ordinary links remain available in detailed
+output. Local `--details --json` emits versioned `relationship` records with `direction: outgoing`
+and an `edge` payload, alongside `link` records for remaining ordinary targets. Catalog queries
+retain `scope` and `bundle-edge` records with optional nested `relationship` metadata; detailed
+text also shows that metadata. Inverse labels do not create additional outgoing edges.
+
 
 Cross-bundle backlinks report examined bundles and versions. Unexamined consumers remain
 unknown. Matching kind labels from different bundle ontologies do not establish equivalent
@@ -834,7 +844,8 @@ change them within 1–100, 1–1,000 and 1–1,048,576 respectively. Edge condi
 occurrence identity; target payloads deduplicate by qualified bundle/concept/version. Bounds,
 truncation and reasons remain visible in expansion-summary records.
 
-`backlinks --details` presents individual semantic incoming occurrences and inverse names.
+`links --details` presents individual authored outgoing occurrences, field paths, attributes,
+statuses and inverse labels. `backlinks --details` presents incoming occurrences and inverse names.
 Ontology YAML supports nested reusable definitions, reference selectors and relationship rules;
 `ontology show` exposes effective recursive definitions. Structured authoring is implemented: `ontology add/update --field-yaml`, `--ref-yaml`, and
 `--relationship-yaml` replace named declarations; `--from` accepts a type definition. Reusable

@@ -551,7 +551,8 @@ fn command_guidance(name: &str) -> &'static str {
             and facet truncation are independent of primary scan completeness.",
         "artifact list" => "The positional path selects a bundle root relative to the current directory. \
             To filter within the selected bundle, use `--directory contracts/x`; printed paths remain \
-            relative to the bundle root.",
+            relative to the bundle root. Use `--directory .` for the entire bundle and \
+            `--exclude-concepts` to retain only opaque artifacts and reserved files.",
         "artifact put" => "Write bytes from `@file` to a bundle-relative opaque or reserved artifact. \
             The default (and `--create-only`) refuses an existing destination; `--replace` permits \
             replacement. Parent directories are created as needed. Concept and configuration files \

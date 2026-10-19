@@ -13,6 +13,7 @@ Add named bundles when the question needs them; catalog registration alone does 
 | Unknown vocabulary/distribution | One query with selected JSON facets; inspect exclusions/completeness |
 | A few fields on primary hits | `--project`; handle separate projection records |
 | Metadata on outbound targets | Selected `--expand` rules and `--target-field` selectors |
+| Authored outgoing assertions and their conditions | `links --details`; preserve distinct occurrences to the same target |
 | Incoming assertions and their conditions | `backlinks --details` in the necessary scope |
 | Supporting prose | Open only relevant concepts after metadata identifies them |
 

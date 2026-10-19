@@ -215,6 +215,7 @@ pub fn writes_command(command: &Command) -> bool {
         | Command::Verify(_)
         | Command::Refresh(_)
         | Command::Artifact(ArtifactCmd::Put(_)) => true,
+        Command::Lint(a) => a.fix,
         Command::Add(a) => !a.dry_run,
         Command::Edit(a) => !a.dry_run,
         Command::Doctor(a) => a.fix_safe && a.yes && !a.dry_run,
@@ -370,6 +371,28 @@ fn run_scoped(cli: &Cli, context: &Context, graph: &CatalogGraph) -> Result<i32>
             }
             for edge in graph.edges.iter().filter(|e| e.source == target) {
                 print_edge(edge, cli.json)?;
+                if a.details && !cli.json {
+                    if let Some(relationship) = &edge.relationship {
+                        output::print_text_line(format_args!(
+                            "  kind: {}",
+                            relationship.authored_kind.as_deref().unwrap_or("unknown")
+                        ))?;
+                        output::print_text_line(format_args!(
+                            "  source field: {}",
+                            relationship.field_path
+                        ))?;
+                        if let Some(inverse) = &relationship.inverse {
+                            output::print_text_line(format_args!("  inverse: {inverse}"))?;
+                        }
+                        for (key, value) in &relationship.attributes {
+                            output::print_text_line(format_args!(
+                                "  {}: {}",
+                                key,
+                                serde_json::to_string(value).unwrap_or_default()
+                            ))?;
+                        }
+                    }
+                }
             }
             Ok(0)
         }
@@ -568,14 +591,41 @@ fn run_lint_scoped(
     json_output: bool,
     graph: &CatalogGraph,
 ) -> Result<i32> {
-    use okf_core::check::lint::{lint_bundle, meets_threshold, FailOn, Severity};
+    use okf_core::check::lint::{lint_bundle, meets_threshold, FailOn, Finding, Severity};
     use std::str::FromStr;
     let fail_on = FailOn::from_str(args.fail_on.as_deref().unwrap_or("error"))?;
+    // Scoped dispatch returns before the ordinary command writer lock is acquired.
+    // Lock every examined bundle in a stable order and retain the guards through linting.
+    let mut writer_guards = Vec::new();
+    if args.fix {
+        let mut roots = graph
+            .scope
+            .examined
+            .iter()
+            .map(|bundle| &bundle.root)
+            .collect::<Vec<_>>();
+        roots.sort();
+        roots.dedup();
+        for root in roots {
+            writer_guards.push(okf_core::mutate::transaction::writer_lock(root)?);
+        }
+    }
     let mut failed = false;
     let mut broken_link_severities = std::collections::BTreeMap::new();
     let mut ontology_severities = std::collections::BTreeMap::new();
     let mut target_types = std::collections::BTreeMap::new();
     let mut target_ontologies = std::collections::BTreeMap::new();
+    // Only the qualified graph can distinguish cross-bundle targets from local IDs.
+    // Keep broken concept edges, but exclude self-links and opaque artifact resources.
+    let mut connected = std::collections::BTreeSet::new();
+    for edge in &graph.edges {
+        if let Some(target) = &edge.target {
+            if edge.source != *target {
+                connected.insert(edge.source.clone());
+                connected.insert(target.clone());
+            }
+        }
+    }
     for examined in &graph.scope.examined {
         if let Some(ontology) = okf_core::bundle::settings::load_for(&examined.root)?.1 {
             target_ontologies.insert(examined.id.clone(), ontology);
@@ -597,9 +647,63 @@ fn run_lint_scoped(
         let bundle = okf_core::bundle::loader::load_bundle(&examined.root)?;
         let (effective, ontology) = okf_core::bundle::settings::load_for(&examined.root)?;
         let config = super::check::lint_config(&effective.settings)?;
+        let bundle = if args.fix && config.frontmatter_order.is_some() {
+            let fixed = okf_core::check::lint::rules::frontmatter_order::fix(
+                &bundle,
+                &examined.root,
+                ontology.as_ref(),
+            )?;
+            if json_output {
+                output::print_line(
+                    &json!({"kind":"fix","rule":"frontmatter-order","bundle":examined.id,"fixed":fixed}),
+                )?;
+            } else {
+                eprintln!(
+                    "--fix: normalized frontmatter order in {fixed} concepts ({})",
+                    examined.id
+                );
+            }
+            okf_core::bundle::loader::load_bundle(&examined.root)?
+        } else {
+            bundle
+        };
         broken_link_severities.insert(examined.id.clone(), config.broken_link);
         ontology_severities.insert(examined.id.clone(), config.ontology_violation);
-        let mut findings = lint_bundle(&bundle, None, &config);
+        let document_config = okf_core::check::lint::LintConfig {
+            orphan: None,
+            frontmatter_order: None,
+            ..config
+        };
+        let mut findings = lint_bundle(&bundle, None, &document_config);
+        // Ordering uses the bundle's ontology; reference validation below uses catalog identity.
+        let local_graph = okf_core::graph::build::build_graph(&bundle, None);
+        findings.extend(okf_core::check::lint::rules::frontmatter_order::run(
+            &okf_core::check::lint::RuleContext {
+                bundle: &bundle,
+                graph: &local_graph,
+                ontology: ontology.as_ref(),
+                config: &config,
+            },
+        ));
+        if let Some(severity) = config.orphan {
+            for concept in &bundle.concepts {
+                let node = Node {
+                    bundle: examined.id.clone(),
+                    id: concept.id.0.clone(),
+                    version: examined.version.clone(),
+                };
+                if !connected.contains(&node) {
+                    findings.push(Finding {
+                        rule: "orphan".into(),
+                        code: None,
+                        field_path: None,
+                        severity,
+                        concept: Some(concept.id.0.clone()),
+                        message: "orphan: no inbound or outbound links".into(),
+                    });
+                }
+            }
+        }
         if let (Some(ontology), Some(severity)) = (&ontology, config.ontology_violation) {
             let mut qualified = ontology.clone();
             for ct in qualified.concepts.values_mut() {

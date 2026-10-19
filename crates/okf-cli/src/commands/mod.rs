@@ -19,11 +19,16 @@ use okf_core::error::Result;
 /// Dispatch a parsed CLI invocation to its command handler, returning an exit code.
 pub fn run(mut cli: Cli) -> Result<i32> {
     match &cli.command {
-        Command::Links(a) | Command::Computation(ComputationCmd::Check(a)) if a.details => eprintln!("okf: --details is retained for compatibility and has no effect for this command"),
-        Command::Lint(a) if a.fix => eprintln!("okf: --fix is retained for compatibility; no automatic lint fixes are implemented (use doctor --fix-safe for supported repairs)"),
-        Command::Affected(a) if a.depth.is_some() && !a.transitive => eprintln!("okf: --depth has no effect without --transitive"),
-        Command::Init(a) if a.title.is_some() && a.no_index => eprintln!("okf: --title has no effect with --no-index"),
-        _ => {},
+        Command::Computation(ComputationCmd::Check(a)) if a.details => eprintln!(
+            "okf: --details is retained for compatibility and has no effect for this command"
+        ),
+        Command::Affected(a) if a.depth.is_some() && !a.transitive => {
+            eprintln!("okf: --depth has no effect without --transitive")
+        }
+        Command::Init(a) if a.title.is_some() && a.no_index => {
+            eprintln!("okf: --title has no effect with --no-index")
+        }
+        _ => {}
     }
 
     let failure_alias = match &cli.command {

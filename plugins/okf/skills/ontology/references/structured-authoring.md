@@ -192,10 +192,12 @@ okf ontology show Procedure knowledge/product --json
 okf validate knowledge/product --json
 okf lint knowledge/product --fail-on never --json
 okf search knowledge/product --type Procedure --project norms --expand obligations --target-field title --full-scan --json
+okf links procedures/onboarding knowledge/product --details --json
 okf backlinks teams/platform knowledge/product --details --json
 ```
 
-Check that Platform's semantic edge carries 72 hours and Security's carries 24; inverse output
+Check outgoing details for each record's target, authored kind, inverse label, concrete field path,
+and attributes. Check that Platform's semantic edge carries 72 hours and Security's carries 24; inverse output
 must preserve the same conditions. A nested filter matching Platform and 24 hours can still match
 this document through different records. The retrieval skill's
 [query planning example](../../retrieval/references/query-planning.md) explains that distinction.

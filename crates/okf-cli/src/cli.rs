@@ -282,7 +282,7 @@ pub struct IdArgs {
     pub concept: String,
     /// Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory).
     pub bundle: Option<String>,
-    /// Show individual semantic incoming occurrences and configured inverse labels.
+    /// Show individual semantic relationship occurrences and configured inverse labels.
     #[arg(long)]
     pub details: bool,
 }
@@ -359,6 +359,9 @@ pub struct ArtifactListArgs {
     /// Bundle-relative directory to inventory.
     #[arg(long, default_value = "references")]
     pub directory: String,
+    /// Exclude concepts, retaining opaque artifacts and reserved files.
+    #[arg(long)]
+    pub exclude_concepts: bool,
     /// Compute SHA-256 digests (reads each file).
     #[arg(long)]
     pub digest: bool,
@@ -879,7 +882,7 @@ pub fn command_tree() -> clap::Command {
                 }
             });
         }
-        if matches!(name.as_str(), "links" | "computation check") {
+        if name == "computation check" {
             *command = command.clone().mut_arg("details", |a| {
                 a.help("Compatibility option; detailed output is not implemented for this command")
             });

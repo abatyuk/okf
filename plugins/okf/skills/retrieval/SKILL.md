@@ -46,8 +46,8 @@ compatibility. Recheck if the executable or PATH changes during the task.
    discovering a vocabulary/distribution, and `--project` for selected metadata. Inspect the
    effective ontology with `okf ontology show <name> <bundle>` for relationship rule names, then
    use `--expand` with `--target-field` for
-   one-hop outbound metadata instead of opening each target. Use `backlinks --details` for incoming
-   assertions; open bodies only for evidence missing from metadata. For worked decisions, scan
+   one-hop outbound metadata instead of opening each target. Use `links --details` for authored
+   outgoing assertions and `backlinks --details` for incoming assertions; open bodies only for evidence missing from metadata. For worked decisions, scan
    recovery, and correlated-record pitfalls, read [query planning](references/query-planning.md).
    Check query summaries and warnings before using results: the default scan budget is 1,000
    eligible documents across scope, independent of result `--limit`. Incomplete scans cannot
@@ -67,7 +67,11 @@ compatibility. Recheck if the executable or PATH changes during the task.
 5. Follow portable body links and standard internal `sources[].resource` lineage when needed to
    support the answer; these work without ontology. Start with `okf links <concept-id> <bundle>
    --json` for direct outbound targets and `okf backlinks <concept-id> <bundle>` for direct inbound
-   concepts. Render only the useful neighborhood with `okf graph <bundle> --root <concept-id>
+   concepts. Add `--details` to `links` when kinds, inverse labels, attributes, or concrete field paths
+   matter. Local detailed JSON mixes semantic `relationship` records with ordinary `link` records;
+   catalog output uses `bundle-edge` records with optional `relationship` metadata. Retain repeated
+   semantic occurrences to the same target. Inverse labels describe the incoming view of an
+   authored assertion; they do not add another outgoing edge. Render only the useful neighborhood with `okf graph <bundle> --root <concept-id>
    --direction <outgoing|incoming|both> --depth <N> --format mermaid`; omit the root only when the
    entire graph is genuinely needed. Use `okf resolve <link> <bundle> --from <concept-id>` for a
    particular raw link.

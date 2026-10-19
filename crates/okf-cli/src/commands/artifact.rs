@@ -19,7 +19,10 @@ use serde_json::json;
 pub fn run_list(args: &ArtifactListArgs, json_output: bool) -> Result<i32> {
     check_list_bundle_argument(args.bundle.as_deref())?;
     let root = resolve_bundle(args.bundle.as_deref())?;
-    let entries = list_artifacts(&root, Some(&args.directory), args.digest)?;
+    let mut entries = list_artifacts(&root, Some(&args.directory), args.digest)?;
+    if args.exclude_concepts {
+        entries.retain(|entry| entry.kind != ArtifactKind::Concept);
+    }
     if json_output {
         for entry in entries {
             output::print_line(&json!({

@@ -1,22 +1,6 @@
 ---
 type: Skill
-title: okf:ontology skill
-description: Manages an optional advisory ontology while keeping portable OKF fields and exact Attested Computation semantics separate from custom rules.
 trigger: author and manage the ontology
-sources:
-- resource: plugins/okf/skills/ontology/references/cli.md
-  kind: git-path
-  fingerprint:
-    blob_sha: 28de3d63d8e2851ff0812d38cacd9a6d1f9c01ee
-- resource: plugins/okf/skills/ontology/SKILL.md
-  kind: git-path
-  fingerprint:
-    blob_sha: 28bc0ec6b7e320ec05975fcab74582840cc04e30
-- resource: https://github.com/abatyuk/okf/blob/5cf5e6773e137d30f61d21e6a680aec0f8478448/plugins/okf/skills/ontology/SKILL.md
-- resource: plugins/okf/skills/ontology/references/structured-authoring.md
-  kind: git-path
-  fingerprint:
-    blob_sha: a05ec02fcc363f85ee522cef43b0662a0d05b256
 uses:
 - /commands/ontology-apply
 - /commands/ontology-field-type-add
@@ -31,7 +15,23 @@ uses:
 - /commands/ontology-remove
 - /commands/validate
 - /commands/artifact-resolve
-last_modified: 2026-10-05T10:16:06Z
+title: okf:ontology skill
+description: Manages an optional advisory ontology while keeping portable OKF fields and exact Attested Computation semantics separate from custom rules.
+sources:
+- resource: plugins/okf/skills/ontology/references/cli.md
+  kind: git-path
+  fingerprint:
+    blob_sha: 5cbd028c4e97cee99a4ac6adb0137927786d4d83
+- resource: plugins/okf/skills/ontology/SKILL.md
+  kind: git-path
+  fingerprint:
+    blob_sha: 3cfc90142c8eb631bff7bdb13303eab9cb6b2110
+- resource: https://github.com/abatyuk/okf/blob/5cf5e6773e137d30f61d21e6a680aec0f8478448/plugins/okf/skills/ontology/SKILL.md
+- resource: plugins/okf/skills/ontology/references/structured-authoring.md
+  kind: git-path
+  fingerprint:
+    blob_sha: ca5061b432fd75493a90a7ec7be73c96d74f1cdc
+last_modified: 2026-10-19T03:58:59Z
 ---
 # okf:ontology skill
 
@@ -47,6 +47,10 @@ The workflow connects [ontology list](../commands/ontology-list.md),
 Use [catalog](../commands/catalog.md) inspection to establish effective identity, local locations
 and interpretation settings. Additional bundle examination is explicit; report unavailable members
 and keep current candidates separate from requested snapshot evidence.
+
+Check modeled relationships with `links --details` on the declaring concept and
+`backlinks --details` on the target. Confirm both views preserve each record's attributes and
+configured inverse without introducing additional authored edges.
 
 Structured authoring follows the ontology skill's shared example. Use structured declaration
 YAML/file inputs and bulk apply for dependent schemas; use concept `--set-yaml`, object paths,

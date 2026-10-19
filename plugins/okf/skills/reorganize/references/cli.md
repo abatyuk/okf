@@ -1,6 +1,6 @@
 # okf CLI — reorganize command reference
 
-> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.4.3, OKF spec 0.2). Do not hand-edit; regenerate instead.
+> **Generated** by `cargo xtask docs` from `okf schema --json` and curated usage notes (tool 0.4.4, OKF spec 0.2). Do not hand-edit; regenerate instead.
 
 This focused reference contains only commands selected for the `reorganize` workflow. First pass the skill CLI compatibility preflight. Consult this reference when exact arguments or output shapes are needed. For a compatible CLI that rejects documented syntax, use that command's `--help` output as the runtime authority.
 
@@ -192,13 +192,14 @@ List local artifacts and concepts under a bundle directory.
 |----------|------|----------|-------------|
 | `<bundle>` | positional | no | Bundle root directory; use --directory to select a directory within the bundle |
 | `--directory <value>` | string | no | Bundle-relative directory to inventory (default: `references`) |
+| `--exclude-concepts` | bool | no | Exclude concepts, retaining opaque artifacts and reserved files (default: `false`) |
 | `--digest` | bool | no | Compute SHA-256 digests (reads each file) (default: `false`) |
 
 Output stream: `artifact`.
 
 Supported global options: `--bundle-id`, `--json`.
 
-The positional path selects a bundle root relative to the current directory. To filter within the selected bundle, use `--directory contracts/x`; printed paths remain relative to the bundle root.
+The positional path selects a bundle root relative to the current directory. To filter within the selected bundle, use `--directory contracts/x`; printed paths remain relative to the bundle root. Use `--directory .` for the entire bundle and `--exclude-concepts` to retain only opaque artifacts and reserved files.
 
 ### `okf artifact resolve`
 
@@ -247,7 +248,7 @@ Concepts that link to a given concept.
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
-| `--details` | bool | no | Show individual semantic incoming occurrences and configured inverse labels (default: `false`) |
+| `--details` | bool | no | Show individual semantic relationship occurrences and configured inverse labels (default: `false`) |
 
 Output stream: `concept,relationship,scope,bundle-backlink,bundle-edge`.
 
@@ -294,7 +295,7 @@ List the direct concept links defined by one concept.
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
-| `--details` | bool | no | Compatibility option; detailed output is not implemented for this command (default: `false`) |
+| `--details` | bool | no | Show individual semantic relationship occurrences and configured inverse labels (default: `false`) |
 
 Output stream: `link,relationship,scope,bundle-edge`.
 

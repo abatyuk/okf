@@ -30,13 +30,13 @@ okf version
 ```
 
 Alternatively, download the standalone installer from a **published release**, inspect it,
-then run it with an explicit version. This example installs or updates to 0.4.3:
+then run it with an explicit version. This example installs or updates to 0.4.4:
 
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
-  https://github.com/abatyuk/okf/releases/download/v0.4.3/install.sh -o install.sh
+  https://github.com/abatyuk/okf/releases/download/v0.4.4/install.sh -o install.sh
 # Review install.sh before running it.
-sh install.sh 0.4.3
+sh install.sh 0.4.4
 ```
 
 The optional installer detects your platform, verifies the archive checksum, checks that the
@@ -49,7 +49,7 @@ on PATH can take precedence; check `command -v okf` and `okf version`.
 
 Skills **only check compatibility** and show these instructions when necessary. They never
 run the installer or update the CLI. The current plugin supports stable CLI versions
-`>=0.4.3, <0.5.0`; the OKF document specification remains v0.2.
+`>=0.4.4, <0.5.0`; the OKF document specification remains v0.2.
 
 Starting with 0.4.1, macOS release binaries are Developer ID signed and notarized by Apple.
 The standalone executable has no stapled ticket, so Gatekeeper may need internet access

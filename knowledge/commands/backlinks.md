@@ -37,7 +37,7 @@ consumers remain unknown.
 |----------|------|----------|-------------|
 | `<concept>` | positional | yes | Concept id (leading slash optional), e.g. `tables/customers` |
 | `<bundle>` | positional | no | Bundle directory (explicit, then $OKF_BUNDLE, nearest okf.toml, or current directory) |
-| `--details` | bool | no | Show individual semantic incoming occurrences and configured inverse labels (default: `false`) |
+| `--details` | bool | no | Show individual semantic relationship occurrences and configured inverse labels (default: `false`) |
 
 Global `--json` requests NDJSON. The optional trailing `bundle` positional is a path; `--bundle-id` selects a catalog identity. Selection uses explicit path or ID, `$OKF_BUNDLE` (path), registered containing bundle, configured default, sole catalog entry, then uncataloged cwd. Selection and examination scope are separate.
 
